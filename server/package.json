@@ -1,0 +1,12 @@
+{
+  "name": "aios-hermes-proxy",
+  "version": "1.0.0",
+  "description": "Backend proxy nối AI OS Dashboard với Hermes Agent (chat) và Mem0 (knowledge). Không phụ thuộc gói ngoài — chỉ dùng Node.js built-in.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

@@ -1,0 +1,12 @@
+# Bí mật — không bao giờ commit
+server/.env
+
+# Dependencies (nếu sau này thêm gói ngoài)
+node_modules/
+
+# OS / editor cruft
+.DS_Store
+Thumbs.db
+
+# File tạm nặng — không đưa lên git
+temp_skills/

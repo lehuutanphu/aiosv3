@@ -1,0 +1,15 @@
+{
+  "hermesHost": "127.0.0.1",
+  "mem0UserId": "aios-company",
+  "agents": {
+    "sales-1": { "name": "Sales Agent", "port": 8643 },
+    "mkt-1": { "name": "Content Agent", "port": 8644 },
+    "mkt-2": { "name": "Social Agent", "port": 8645 },
+    "hr-1": { "name": "HR Agent", "port": 8646 },
+    "fin-1": { "name": "Finance Agent", "port": 8647 },
+    "fin-2": { "name": "Audit Agent", "port": 8648 },
+    "legal-1": { "name": "Legal Agent", "port": 8649 },
+    "cskh-1": { "name": "Support Agent", "port": 8650 },
+    "cskh-2": { "name": "Care Agent", "port": 8651 }
+  }
+}

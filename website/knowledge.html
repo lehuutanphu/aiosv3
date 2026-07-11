@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Song Sinh Số — Kiến trúc tri thức doanh nghiệp | AI OS</title>
+<meta name="description" content="Kiến trúc 4 tầng tri thức, 5 nguyên tắc cấu trúc dữ liệu và cây thư mục chuẩn — nền móng Song Sinh Số Doanh Nghiệp cho đội AI Agent." />
+<link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+
+<header class="site-header">
+  <div class="container nav">
+    <a class="logo" href="index.html">
+      <span class="logo-mark">OS</span> AI&nbsp;OS <span style="color:var(--muted);font-weight:500">· Song Sinh Số</span>
+    </a>
+    <nav class="nav-links" id="navLinks">
+      <a href="index.html">Trang chủ</a>
+      <a href="#tang">4 tầng tri thức</a>
+      <a href="#nguyentac">Nguyên tắc</a>
+      <a href="#thumuc">Cây thư mục</a>
+      <a class="btn btn-primary btn-sm" href="dashboard.html">🚀 AI OS Dashboard</a>
+    </nav>
+    <button class="nav-toggle" id="navToggle" aria-label="Menu">☰</button>
+  </div>
+</header>
+
+<main class="container">
+
+  <section class="hero" style="grid-template-columns:1fr;padding-bottom:2.5rem">
+    <div>
+      <span class="eyebrow">🗂️ Nền móng của đội AI Agent</span>
+      <h1>Song Sinh Số bắt đầu từ <span class="grad">dữ liệu có cấu trúc</span></h1>
+      <p class="lead" style="max-width:44rem">
+        AI Agent chỉ thông minh bằng đúng chất lượng tri thức mà nó được tiếp cận.
+        Trước khi "tuyển" Agent, doanh nghiệp cần tổ chức toàn bộ dữ liệu theo kiến trúc 4 tầng —
+        đây chính là nguồn xây Knowledge Base cho từng Agent phòng ban.
+      </p>
+    </div>
+  </section>
+
+  <!-- 4 TẦNG -->
+  <section class="block" id="tang" style="padding-top:1rem">
+    <div class="section-head">
+      <span class="eyebrow">Kiến trúc 4 tầng</span>
+      <h2>Không phải mọi thông tin đều giống nhau</h2>
+      <p>Có thông tin dùng hàng ngày, có thông tin chỉ dùng khi cần. Có thông tin ít thay đổi, có thông tin cập nhật liên tục — mỗi loại cần một "tầng" riêng.</p>
+    </div>
+    <div class="tier-grid">
+      <div class="card tier-card">
+        <span class="tier-no">1</span>
+        <div class="icon">🏛️</div>
+        <h3>Tầng 1 — Nền tảng</h3>
+        <p>Sứ mệnh & giá trị, cơ cấu tổ chức, quy trình nền tảng, chính sách nhân sự, pháp lý & compliance.</p>
+        <div class="meta">
+          <span class="badge">Thay đổi 1–2 lần/năm</span>
+          <span class="badge">~10–15 file</span>
+          <span class="badge stage-hocviec">Lãnh đạo phê duyệt</span>
+        </div>
+        <div class="example">Ví dụ: "Chính sách bảo mật thông tin" ban hành 2023, cập nhật khi quy định GDPR thay đổi.</div>
+      </div>
+      <div class="card tier-card">
+        <span class="tier-no">2</span>
+        <div class="icon">⚙️</div>
+        <h3>Tầng 2 — Vận hành</h3>
+        <p>SOP từng loại công việc, checklist chất lượng, mẫu báo cáo & template, FAQ xử lý tình huống.</p>
+        <div class="meta">
+          <span class="badge">Cập nhật tháng/quý</span>
+          <span class="badge">50–100 file</span>
+          <span class="badge stage-thaoviec">Dùng nhiều nhất</span>
+        </div>
+        <div class="example">Ví dụ: SOP "Xử lý khiếu nại khách hàng" 15 bước, kèm template email và checklist thông tin.</div>
+      </div>
+      <div class="card tier-card">
+        <span class="tier-no">3</span>
+        <div class="icon">💎</div>
+        <h3>Tầng 3 — Trí tuệ</h3>
+        <p>Case study dự án, best practice đúc kết, phân tích thành công/thất bại, bài học từ sự cố.</p>
+        <div class="meta">
+          <span class="badge">100–500 file</span>
+          <span class="badge stage-chuyengia">Giá trị nhất</span>
+          <span class="badge">Khuyến khích đóng góp</span>
+        </div>
+        <div class="example">Ví dụ: Case study "Nhà máy X — xử lý delay thiếu vật tư": nguyên nhân, giải pháp, chi phí, bài học.</div>
+      </div>
+      <div class="card tier-card">
+        <span class="tier-no">4</span>
+        <div class="icon">📦</div>
+        <h3>Tầng 4 — Lưu trữ</h3>
+        <p>Hồ sơ dự án đã đóng, báo cáo năm trước, phiên bản cũ tài liệu, trao đổi quan trọng cần giữ.</p>
+        <div class="meta">
+          <span class="badge">Ít truy cập</span>
+          <span class="badge">Không giới hạn</span>
+          <span class="badge">Cần đặt tên chuẩn</span>
+        </div>
+        <div class="example">Ví dụ: Folder "Archive_2023" chứa toàn bộ báo cáo tài chính và biên bản họp năm 2023.</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 5 NGUYÊN TẮC -->
+  <section class="block" id="nguyentac">
+    <div class="section-head">
+      <span class="eyebrow">Để AI và con người cùng tìm được</span>
+      <h2>Năm nguyên tắc cấu trúc dữ liệu</h2>
+    </div>
+    <div class="principle-list">
+      <div class="principle">
+        <div>
+          <h3>Phân cấp rõ ràng</h3>
+          <p>Nhìn đường dẫn folder phải biết ngay file nằm ở đâu, không cần mở ra xem.</p>
+          <div class="ex">
+            <code class="good">02_Du_An_Hoat_Dong/Nha_May_X/03_Bao_Cao_Tien_Do/</code>
+            <code class="bad">Anh Minh/Du an/BC/</code>
+          </div>
+        </div>
+      </div>
+      <div class="principle">
+        <div>
+          <h3>Tên chuẩn và nhất quán</h3>
+          <p>Format <b>[SốThứTự][Loại][Tên_Mô_Tả]</b> — số thứ tự giữ đúng trật tự, loại tài liệu giúp phân biệt nhanh.</p>
+          <div class="ex"><code class="good">01_SOP_XuLyKhieuNai.docx</code></div>
+        </div>
+      </div>
+      <div class="principle">
+        <div>
+          <h3>Không trùng lặp — Single Source of Truth</h3>
+          <p>Mỗi thông tin chỉ có một nguồn chính. Cần tham chiếu từ nhiều nơi? Tạo shortcut/link thay vì copy bản sao.</p>
+        </div>
+      </div>
+      <div class="principle">
+        <div>
+          <h3>Dễ mở rộng</h3>
+          <p>Đánh số 01, 02, 03 (không phải 1, 2, 3) và để khoảng trống để chèn mục mới. Folder theo chức năng (Active/Archive), không theo năm.</p>
+        </div>
+      </div>
+      <div class="principle">
+        <div>
+          <h3>Gắn với quy trình thực tế</h3>
+          <p>Phân loại theo cách tổ chức làm việc, không theo thời gian hay người tạo.</p>
+          <div class="ex">
+            <code class="good">Van_Hanh / Kinh_Doanh / Nhan_Su</code>
+            <code class="bad">Folder_Anh_Minh</code>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- CÂY THƯ MỤC -->
+  <section class="block" id="thumuc">
+    <div class="section-head">
+      <span class="eyebrow">Áp dụng ngay</span>
+      <h2>Cấu trúc thư mục đề xuất</h2>
+      <p>Cân bằng giữa đơn giản và khả năng mở rộng. Bấm vào thư mục để mở/đóng — rê chuột và bấm <b style="color:var(--brand-2)">⧉</b> để copy đường dẫn, dán thẳng vào Knowledge/Workflow của từng Agent trong <a href="dashboard.html" style="color:var(--brand-2)">Dashboard</a>.</p>
+    </div>
+    <div class="tree-panel">
+      <div class="tree" id="folderTree"></div>
+    </div>
+
+    <div class="grid-2" style="margin-top:1.5rem">
+      <div class="card">
+        <div class="icon">🏷️</div>
+        <h3>Quy tắc đặt tên file</h3>
+        <p style="margin-bottom:.9rem">Format: <code style="color:var(--brand-2)">[YYYYMMDD]_[Loai]_[Noi_Dung]_[Phien_Ban].ext</code></p>
+        <table class="cmp-table">
+          <thead><tr><th>❌ Tên xấu</th><th>✅ Tên tốt</th></tr></thead>
+          <tbody>
+            <tr><td class="bad">baocaodoanhthu.docx</td><td class="good">20250103_BaoCao_DoanhThu_Q4_v2.docx</td></tr>
+            <tr><td class="bad">final_FINAL_revised.pdf</td><td class="good">20250115_Proposal_KhachHang_ABC_v3.pdf</td></tr>
+            <tr><td class="bad">meeting notes.doc</td><td class="good">20250120_BienBan_HopDoanhSo_Tuan03.doc</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="card">
+        <div class="icon">🧭</div>
+        <h3>Từ kho dữ liệu đến Knowledge Base của Agent</h3>
+        <p>Mỗi Agent phòng ban trên <a href="dashboard.html" style="color:var(--brand-2)">Dashboard</a> được "nạp" Knowledge Base trích từ đúng nhánh thư mục của phòng mình:</p>
+        <ul style="margin-top:.8rem">
+          <li style="padding:.3rem 0;color:var(--muted);font-size:.88rem">💼 Sales Agent ← <code>03_Van_Hanh/03_Kinh_Doanh/</code> + hồ sơ khách hàng</li>
+          <li style="padding:.3rem 0;color:var(--muted);font-size:.88rem">📊 Finance Agent ← <code>03_Van_Hanh/02_Tai_Chinh/</code> + <code>05_Bao_Cao/</code></li>
+          <li style="padding:.3rem 0;color:var(--muted);font-size:.88rem">🧑‍💼 HR Agent ← <code>03_Van_Hanh/01_Nhan_Su/</code> + khung năng lực</li>
+          <li style="padding:.3rem 0;color:var(--muted);font-size:.88rem">🎧 Support Agent ← <code>04_Kho_Tri_Thuc/04_FAQ/</code></li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- NÊN / KHÔNG NÊN -->
+  <section class="block">
+    <div class="section-head">
+      <span class="eyebrow">Chọn lọc có chủ đích</span>
+      <h2>Dữ liệu nào nên đưa vào Knowledge Base?</h2>
+      <p>Lưu quá nhiều thông tin vô nghĩa còn tệ hơn lưu quá ít — AI sẽ bị "nhiễu" bởi những gì không liên quan.</p>
+    </div>
+    <div class="dodont">
+      <div class="card">
+        <h3>✅ Nên lưu trữ</h3>
+        <ul class="do">
+          <li><b>Biểu mẫu & quy trình chuẩn</b> — nền tảng cho sự nhất quán, dù ai làm.</li>
+          <li><b>Case study & best practice</b> — kinh nghiệm mất nhiều công sức mới có.</li>
+          <li><b>Bài học kinh nghiệm</b> — cả thành công lẫn thất bại đau đớn.</li>
+          <li><b>Biên bản họp có quyết định quan trọng.</b></li>
+          <li><b>FAQ & kiến thức đã đúc kết</b> — để AI trả lời tự động.</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3>❌ Không nên lưu trữ</h3>
+        <ul class="dont">
+          <li><b>Chat phiếm</b> — "Ăn gì trưa nay?" không có giá trị cho AI.</li>
+          <li><b>Email forward thiếu ngữ cảnh</b> — không tóm tắt, không bình luận.</li>
+          <li><b>File trùng lặp, phiên bản cũ</b> — đã có v3 thì bỏ v1, v2.</li>
+          <li><b>Ghi chú cá nhân</b> — to-do riêng không thuộc hệ thống chung.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- CTA -->
+  <section class="block">
+    <div class="cta-band">
+      <h2>Dữ liệu đã có cấu trúc — giờ là lúc đội Agent làm việc</h2>
+      <p>Quay lại Dashboard để ra lệnh cho Orches Agent và xem tri thức 4 tầng được từng Agent phòng ban sử dụng thế nào.</p>
+      <a class="btn btn-primary" href="dashboard.html">Mở AI OS Dashboard →</a>
+    </div>
+  </section>
+
+</main>
+
+<footer class="site-footer">
+  <div class="container">
+    <span>© 2026 AI OS cho SMEs — Xây dựng AI Workforce trên nền Song Sinh Số Doanh Nghiệp.</span>
+    <span><a href="index.html">Trang chủ</a> · <a href="knowledge.html">Song Sinh Số</a> · <a href="dashboard.html">Dashboard</a></span>
+  </div>
+</footer>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// Mobile nav
+const t = document.getElementById('navToggle');
+const links = document.getElementById('navLinks');
+t.addEventListener('click', () => links.classList.toggle('open'));
+links.querySelectorAll('a').forEach(a => a.addEventListener('click', () => links.classList.remove('open')));
+
+// Folder tree (theo mục 1.4.5) + file minh họa đặt tên chuẩn [YYYYMMDD]_[Loai]_[NoiDung]_[PhienBan]
+const TREE = [
+  { n: "01_Bieu_Mau/", c: "Templates và mẫu tài liệu", k: [
+    { n: "Finance/", f: ["01_Template_BaoCaoTaiChinh.xlsx", "02_Template_DeNghiThanhToan.docx"] },
+    { n: "HR/", f: ["01_Template_HopDongLaoDong.docx", "02_Template_DanhGiaThuViec.docx"] },
+    { n: "Sales/", f: ["01_Template_BaoGia.xlsx", "02_Template_Proposal.docx"] },
+    { n: "Operations/", f: ["01_Checklist_VanHanhNgay.md"] }] },
+  { n: "02_Du_An_Hoat_Dong/", c: "Dự án đang triển khai", k: [
+    { n: "[Tên dự án A]/", f: ["20260615_KeHoach_DuAnA_v2.docx", "20260701_BaoCao_TienDo_Tuan26.pdf"] },
+    { n: "[Tên dự án B]/", f: ["20260620_HopDong_DuAnB_v1.pdf"] },
+    { n: "[Tên dự án C]/" }] },
+  { n: "03_Van_Hanh/", c: "SOP, Checklist, Quy trình hàng ngày", k: [
+    { n: "01_Nhan_Su/", f: ["01_SOP_TuyenDung.docx", "02_SOP_Onboarding.md"] },
+    { n: "02_Tai_Chinh/", f: ["01_SOP_DoiChieuCongNo.docx", "02_Checklist_KhoaSoThang.md"] },
+    { n: "03_Kinh_Doanh/", f: ["01_SOP_XuLyDonHang.docx", "02_FAQ_ChinhSachGia.md"] },
+    { n: "04_Van_Hanh/", f: ["01_SOP_XuLyKhieuNai.docx"] }] },
+  { n: "04_Kho_Tri_Thuc/", c: "Knowledge Base — FAQ, Best Practice, Case Study", k: [
+    { n: "01_Case_Study/", f: ["20250820_CaseStudy_NhaMayX_DelayVatTu.md"] },
+    { n: "02_Best_Practice/", f: ["01_BestPractice_DamPhanGia.md"] },
+    { n: "03_Bai_Hoc_Kinh_Nghiem/", f: ["20251103_BaiHoc_MatKhachHangLon.md"] },
+    { n: "04_FAQ/", f: ["01_FAQ_BaoHanh_DoiTra.md", "02_FAQ_ThanhToan_GiaoHang.md"] }] },
+  { n: "05_Bao_Cao/", c: "Báo cáo định kỳ", k: [
+    { n: "01_Tuan/", f: ["20260629_BaoCao_DoanhThu_Tuan26.xlsx"] },
+    { n: "02_Thang/", f: ["20260605_BaoCao_PL_Thang05_v2.pdf"] },
+    { n: "03_Quy/", f: ["20260410_BaoCao_TongHop_Q1.pdf"] }] },
+  { n: "06_Du_Lieu/", c: "Data thô và đã xử lý", k: [
+    { n: "Raw/", f: ["20260701_Export_BanHang_T6.xlsx"] },
+    { n: "Processed/", f: ["20260702_DoanhThu_T6_Clean.xlsx"] }] },
+  { n: "07_Luu_Tru/", c: "Archive dự án cũ", k: [
+    { n: "2023/", f: ["20231231_BaoCao_TaiChinh_Nam2023.pdf"] },
+    { n: "2024/", f: ["20241231_HoSo_DuAnDong_2024.pdf"] }] },
+];
+
+const FILE_ICONS = { pdf: "📕", doc: "📘", docx: "📘", xls: "📗", xlsx: "📗", md: "📄" };
+const fileIcon = (name) => FILE_ICONS[name.split('.').pop().toLowerCase()] || "📄";
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(t._h);
+  t._h = setTimeout(() => t.classList.remove('show'), 2600);
+}
+
+function copyPath(path, btn) {
+  const done = () => {
+    btn.textContent = '✓';
+    btn.classList.add('copied');
+    showToast(`⧉ Đã copy: ${path} — dán vào Knowledge/Workflow của Agent trong Dashboard.`);
+    setTimeout(() => { btn.textContent = '⧉'; btn.classList.remove('copied'); }, 1400);
+  };
+  const fallback = () => {
+    const ta = document.createElement('textarea');
+    ta.value = path;
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand('copy');
+    ta.remove();
+    done();
+  };
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(path).then(done).catch(fallback);
+  } else fallback();
+}
+
+function copyBtn(path) {
+  const b = document.createElement('button');
+  b.className = 't-copy';
+  b.type = 'button';
+  b.title = 'Copy đường dẫn: ' + path;
+  b.textContent = '⧉';
+  b.addEventListener('click', (e) => { e.stopPropagation(); copyPath(path, b); });
+  return b;
+}
+
+function renderNode(node, parentPath) {
+  const path = parentPath + node.n;
+  const hasKids = (node.k && node.k.length) || (node.f && node.f.length);
+  const wrap = document.createElement('div');
+  const row = document.createElement('div');
+  row.className = 't-node';
+  row.innerHTML = `<span class="caret">${hasKids ? '▶' : '·'}</span> 📁 <b>${node.n}</b>${node.c ? `<span class="t-cmt"># ${node.c}</span>` : ''}`;
+  row.appendChild(copyBtn(path));
+  wrap.appendChild(row);
+  if (hasKids) {
+    const kids = document.createElement('div');
+    kids.className = 't-kids closed';
+    (node.k || []).forEach(child => kids.appendChild(renderNode(child, path)));
+    (node.f || []).forEach(fname => {
+      const frow = document.createElement('div');
+      frow.className = 't-node t-file';
+      frow.innerHTML = `<span class="caret">·</span> ${fileIcon(fname)} ${fname}`;
+      frow.appendChild(copyBtn(path + fname));
+      kids.appendChild(frow);
+    });
+    wrap.appendChild(kids);
+    row.addEventListener('click', () => {
+      kids.classList.toggle('closed');
+      row.querySelector('.caret').classList.toggle('open');
+    });
+  }
+  return wrap;
+}
+
+const treeRoot = document.getElementById('folderTree');
+const rootRow = document.createElement('div');
+rootRow.className = 't-node';
+rootRow.innerHTML = `💾 <b>Drive/</b><span class="t-cmt"># Song Sinh Số Doanh Nghiệp</span>`;
+rootRow.appendChild(copyBtn('Drive/'));
+treeRoot.appendChild(rootRow);
+const rootKids = document.createElement('div');
+rootKids.className = 't-kids';
+TREE.forEach(n => rootKids.appendChild(renderNode(n, 'Drive/')));
+treeRoot.appendChild(rootKids);
+</script>
+</body>
+</html>

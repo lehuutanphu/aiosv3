@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>AI OS Dashboard — Quản lý đội AI Agent theo phòng ban</title>
+<link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+
+<header class="site-header">
+  <div class="container nav" style="width:100%;max-width:none;padding-inline:1.4rem">
+    <a class="logo" href="index.html">
+      <span class="logo-mark">OS</span> AI&nbsp;OS <span style="color:var(--muted);font-weight:500">· Dashboard</span>
+    </a>
+    <nav class="nav-links" id="navLinks">
+      <a href="index.html">← Trang giới thiệu</a>
+      <a href="knowledge.html">Song Sinh Số</a>
+      <a href="#" id="navOverview">Tổng quan</a>
+      <span class="badge model">Công ty TNHH Minh Phát · Gói AI OS Standard</span>
+    </nav>
+    <button class="nav-toggle" id="navToggle" aria-label="Menu">☰</button>
+  </div>
+</header>
+
+<div class="dash-layout">
+
+  <!-- SIDEBAR -->
+  <aside class="dash-sidebar" id="sidebar">
+    <h4>Điều phối</h4>
+    <button class="side-link active" data-dept="all"><span class="sic">🧭</span> Toàn bộ đội Agent</button>
+    <h4>Phòng ban</h4>
+    <div id="deptLinks" style="display:contents"></div>
+    <h4>Tri thức</h4>
+    <a class="side-link" href="knowledge.html"><span class="sic">🗂️</span> Kho tri thức 4 tầng</a>
+  </aside>
+
+  <!-- MAIN -->
+  <main class="dash-main">
+    <div class="dash-title-row">
+      <div>
+        <h1>Đội ngũ AI Agent của bạn</h1>
+        <p>Ra lệnh cho Orches Agent — tác vụ sẽ tự động phân phối đến đúng Agent chuyên môn.</p>
+      </div>
+    </div>
+
+    <!-- ORCHES COMMAND PANEL -->
+    <section class="orches-panel" id="orchesPanel">
+      <div class="orches-head">
+        <div class="avatar">🧭</div>
+        <div>
+          <b>Orches Agent — Điều phối trưởng</b>
+          <span>Nhận lệnh bằng ngôn ngữ tự nhiên · Phân tích ý định · Giao đúng Agent phụ trách</span>
+        </div>
+        <div class="orches-badges">
+          <span class="badge model">Gemini 3 Pro (High)</span>
+          <span class="badge mode">Planning Mode</span>
+        </div>
+      </div>
+      <form class="orches-form" id="orchesForm">
+        <input id="orchesInput" type="text" autocomplete="off"
+          placeholder='Ví dụ: "Soạn email cảm ơn khách hàng vừa ký hợp đồng và lên lịch chăm sóc sau bán"' />
+        <button class="btn btn-primary" type="submit">Giao việc ⏎</button>
+      </form>
+      <div class="orches-hints" id="orchesHints">
+        <button type="button" class="hint-chip">Rà soát điều khoản phạt trong hợp đồng nhà cung cấp mới</button>
+        <button type="button" class="hint-chip">Viết 5 bài đăng fanpage cho chương trình khuyến mãi tháng 7</button>
+        <button type="button" class="hint-chip">Lọc 40 CV ứng viên kế toán thành shortlist 5 người</button>
+        <button type="button" class="hint-chip">Đối chiếu công nợ quý 2 và tìm bất thường</button>
+      </div>
+      <!-- Routing flow -->
+      <div class="routing-flow" id="routingFlow">
+        <div class="routing-steps">
+          <div class="routing-step" id="rs1"><b>1 · Orches nhận lệnh</b><span id="rs1txt"></span></div>
+          <span class="routing-arrow">→</span>
+          <div class="routing-step" id="rs2"><b>2 · Phân tích ý định</b><span id="rs2txt"></span></div>
+          <span class="routing-arrow">→</span>
+          <div class="routing-step" id="rs3"><b>3 · Giao Agent chuyên môn</b><span id="rs3txt"></span></div>
+          <span class="routing-arrow">→</span>
+          <div class="routing-step" id="rs4"><b>4 · Thực thi & báo cáo</b><span id="rs4txt"></span></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- STATS -->
+    <div class="stat-cards" id="statCards"></div>
+
+    <!-- DEPARTMENTS + AGENTS injected by JS -->
+    <div id="deptContainer"></div>
+  </main>
+
+  <!-- ACTIVITY FEED -->
+  <aside class="dash-feed">
+    <h3>📡 Nhật ký hoạt động <span class="pulse-dot" style="margin-left:auto"></span></h3>
+    <div id="feedList"></div>
+  </aside>
+</div>
+
+<!-- AGENT DRAWER -->
+<div class="drawer-backdrop" id="drawerBackdrop"></div>
+<aside class="drawer" id="agentDrawer" aria-hidden="true">
+  <div class="drawer-head">
+    <div class="avatar" id="dAvatar">🤖</div>
+    <div>
+      <h2 id="dName">Agent</h2>
+      <span class="role" id="dRole"></span>
+    </div>
+    <button class="drawer-close" id="drawerClose" aria-label="Đóng">✕</button>
+  </div>
+  <div class="drawer-tabs">
+    <button class="drawer-tab active" data-tab="info">Hồ sơ & KWSR</button>
+    <button class="drawer-tab" data-tab="chat">💬 Chat với Agent</button>
+  </div>
+
+  <!-- TAB: INFO -->
+  <div class="drawer-body" id="tabInfo"></div>
+
+  <!-- TAB: CHAT -->
+  <div class="chat-wrap" id="tabChat" style="display:none">
+    <div class="chat-messages" id="chatMessages"></div>
+    <form class="chat-input-row" id="chatForm">
+      <input id="chatInput" type="text" placeholder="Nhắn cho Agent này…" autocomplete="off" />
+      <button class="btn btn-primary btn-sm" type="submit">Gửi</button>
+    </form>
+  </div>
+</aside>
+
+<!-- SKILL MODAL -->
+<div class="modal-backdrop" id="skillModal">
+  <div class="modal">
+    <div class="modal-head">
+      <div class="avatar" id="skIcon">🧩</div>
+      <div>
+        <h2 id="skName">skill-name</h2>
+        <p id="skDesc"></p>
+      </div>
+      <button class="drawer-close" id="skillClose" style="margin-left:auto" aria-label="Đóng">✕</button>
+    </div>
+    <h4 id="skH1">Cấu trúc SKILL.md (Progressive Disclosure)</h4>
+    <div class="code-block" id="skCode"></div>
+    <h4 id="skH2">Tiêu chuẩn chất lượng đầu ra</h4>
+    <ul class="std-list" id="skStd"></ul>
+    <h4 id="skH3">Cơ chế kích hoạt</h4>
+    <p style="color:var(--muted);font-size:.88rem" id="skTrigger"></p>
+  </div>
+</div>
+
+<!-- GLOBAL RULES MODAL (mở từ nút CEO trên sơ đồ tổ chức) -->
+<div class="modal-backdrop" id="globalModal">
+  <div class="modal" style="padding:0;background:transparent;border:0;box-shadow:none">
+    <section class="global-rules" id="globalRules" style="margin-bottom:0"></section>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="js/app.js"></script>
+</body>
+</html>
