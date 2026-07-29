@@ -7,6 +7,3 @@ node_modules/
 # OS / editor cruft
 .DS_Store
 Thumbs.db
-
-# File tạm nặng — không đưa lên git
-temp_skills/
