@@ -1,9 +1,19 @@
 # Bí mật — không bao giờ commit
 server/.env
 
+# Dữ liệu ứng viên & requisition — chứa PII (Nghị định 13/2023)
+hr/data/requisitions/*.json
+!hr/data/requisitions/.gitkeep
+hr/data/ho-so/**
+!hr/data/ho-so/.gitkeep
+hr/data/chat-log-general.json
+hr/templates/Tuyen-dung-2026-Pipeline.xlsx
+
 # Dependencies (nếu sau này thêm gói ngoài)
 node_modules/
 
 # OS / editor cruft
 .DS_Store
 Thumbs.db
+~$*.doc*
+~$*.xls*

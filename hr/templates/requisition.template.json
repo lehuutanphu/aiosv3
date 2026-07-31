@@ -1,0 +1,116 @@
+{
+  "requisition_id": "REQ-YYYY-NNN",
+  "trang_thai": "dang_mo",
+  "buoc_hien_tai": 1,
+  "ngay_mo": "YYYY-MM-DD",
+  "duong_dan_luu_tru": null,
+  "sheet_pipeline_url": null,
+
+  "vi_tri": {
+    "ten": "",
+    "phong_ban": "",
+    "cap_bac": "",
+    "bao_cao_cho": "",
+    "so_luong": 1,
+    "hinh_thuc": "toan_thoi_gian",
+    "dia_diem": "",
+    "ly_do_tuyen": "",
+    "onboard_mong_muon": "YYYY-MM-DD",
+    "onboard_muon_nhat": "YYYY-MM-DD"
+  },
+
+  "boi_canh": {
+    "thay_doi_doanh_nghiep": "",
+    "ba_viec_chinh_3_thang": ["", "", ""],
+    "tieu_chi_thanh_cong_6_thang": ""
+  },
+
+  "ngan_sach": {
+    "luong_min": null,
+    "luong_max": null,
+    "ghi_chu": "null = CHUA CHOT. Tuyet doi khong tu dien so vao day.",
+    "cong_bo_luong_tren_tin_dang": false
+  },
+
+  "jd": {
+    "file": null,
+    "phien_ban": 1,
+    "tieu_chi": {
+      "bat_buoc": [],
+      "nen_co": [],
+      "uu_tien": []
+    }
+  },
+
+  "kenh_dang": [
+    {
+      "kenh": "",
+      "loai": "website | facebook_group | zalo | zalo_oa | gioi_thieu_noi_bo | khac",
+      "url": "",
+      "ngay_dang": "YYYY-MM-DD",
+      "nguoi_dang": "",
+      "lan_check_cuoi": null,
+      "so_comment": 0,
+      "so_inbox": 0,
+      "trang_thai": "dang_chay"
+    }
+  ],
+
+  "ung_vien": [
+    {
+      "ma_uv": "UV-01",
+      "ten": "",
+      "email": "",
+      "sdt": "",
+      "nguon": "gmail | facebook_inbox | zalo | gioi_thieu | website",
+      "ngay_nop": "YYYY-MM-DD",
+      "file_cv": "",
+      "diem": null,
+      "xep_loai": null,
+      "diem_manh": [],
+      "diem_can_hoi": [],
+      "trang_thai": "moi",
+      "lich_pv": {
+        "thoi_gian": null,
+        "hinh_thuc": null,
+        "nguoi_pv": [],
+        "event_id": null
+      },
+      "ket_qua_pv": {
+        "diem_chuyen_mon": null,
+        "diem_van_hoa": null,
+        "diem_manh": "",
+        "diem_lo_ngai": "",
+        "luong_mong_muon": null,
+        "co_the_onboard_tu": null,
+        "ket_luan": null
+      },
+      "offer": {
+        "chuc_danh": null,
+        "bao_cao_cho": null,
+        "ngay_onboard": null,
+        "thu_viec_thang": null,
+        "luong_thu_viec": null,
+        "luong_chinh_thuc": null,
+        "phu_cap": null,
+        "thuong": null,
+        "hinh_thuc_lam_viec": null,
+        "loai_hop_dong": null,
+        "han_phan_hoi": null,
+        "nguoi_ky": null,
+        "phien_ban_file": null,
+        "nguoi_duyet": null,
+        "thoi_gian_duyet": null,
+        "da_gui": false
+      }
+    }
+  ],
+
+  "nhat_ky": [
+    {
+      "thoi_gian": "YYYY-MM-DDTHH:mm:ss+07:00",
+      "hanh_dong": "tao_requisition",
+      "nguoi_thuc_hien": "hr-1"
+    }
+  ]
+}

@@ -65,6 +65,7 @@
       <div class="orches-hints" id="orchesHints">
         <button type="button" class="hint-chip">Rà soát điều khoản phạt trong hợp đồng nhà cung cấp mới</button>
         <button type="button" class="hint-chip">Viết 5 bài đăng fanpage cho chương trình khuyến mãi tháng 7</button>
+        <button type="button" class="hint-chip">Note vị trí tuyển dụng: Kế toán nội bộ, số lượng: 2</button>
         <button type="button" class="hint-chip">Lọc 40 CV ứng viên kế toán thành shortlist 5 người</button>
         <button type="button" class="hint-chip">Đối chiếu công nợ quý 2 và tìm bất thường</button>
       </div>
@@ -117,9 +118,14 @@
 
   <!-- TAB: CHAT -->
   <div class="chat-wrap" id="tabChat" style="display:none">
+    <div class="hr-chat-context" id="hrChatContext" style="display:none">
+      <span>🧩 Thực thi qua <b>DeepSeek V4 Flash</b> (local) cho requisition:</span>
+      <select id="hrChatReqSelect"></select>
+      <button type="button" class="btn btn-ghost btn-sm" id="hrInterviewFormBtn" title="Mở form đánh giá phỏng vấn ngay, không cần chờ agent tự gọi">🗣️ Đánh giá phỏng vấn</button>
+    </div>
     <div class="chat-messages" id="chatMessages"></div>
     <form class="chat-input-row" id="chatForm">
-      <input id="chatInput" type="text" placeholder="Nhắn cho Agent này…" autocomplete="off" />
+      <textarea id="chatInput" rows="1" placeholder="Nhắn cho Agent này… (Shift+Enter để xuống hàng)"></textarea>
       <button class="btn btn-primary btn-sm" type="submit">Gửi</button>
     </form>
   </div>
@@ -149,6 +155,179 @@
 <div class="modal-backdrop" id="globalModal">
   <div class="modal" style="padding:0;background:transparent;border:0;box-shadow:none">
     <section class="global-rules" id="globalRules" style="margin-bottom:0"></section>
+  </div>
+</div>
+
+<!-- HR INTAKE MODAL — B1 Xác định nhu cầu tuyển dụng (THẬT, ghi file requisition thật) -->
+<div class="modal-backdrop" id="hrIntakeModal">
+  <div class="modal" style="max-width:720px">
+    <div class="modal-head">
+      <div class="avatar">🧑‍💼</div>
+      <div>
+        <h2 style="font-family:inherit;color:var(--text);font-size:1.1rem">Mở đợt tuyển dụng mới</h2>
+        <p>B1 — Xác định nhu cầu (<code style="color:var(--brand-2)">hr/skills/nhu-cau-tuyen-dung</code>). Tạo file requisition thật, HR Agent tiếp tục từ đây.</p>
+      </div>
+      <button class="drawer-close" id="hrIntakeClose" style="margin-left:auto" aria-label="Đóng">✕</button>
+    </div>
+
+    <form id="hrIntakeForm" class="hr-intake-form">
+      <h4>Nhóm 1 — Vị trí</h4>
+      <div class="hr-grid">
+        <label>Tên vị trí <span class="req">*</span><input type="text" name="ten" required placeholder="VD: Kế toán nội bộ" /></label>
+        <label>Phòng ban <span class="req">*</span><input type="text" name="phong_ban" required placeholder="VD: Kế toán – Tài chính" /></label>
+        <label>Số lượng cần tuyển <span class="req">*</span><input type="number" name="so_luong" min="1" value="1" required /></label>
+        <label>Cấp bậc <span class="req">*</span>
+          <select name="cap_bac" required>
+            <option value="">— chọn —</option>
+            <option>Thực tập</option><option>Nhân viên</option><option>Chuyên viên</option><option>Trưởng nhóm</option><option>Quản lý</option>
+          </select>
+        </label>
+        <label class="span2">Báo cáo cho <span class="req">*</span><input type="text" name="bao_cao_cho" required placeholder="VD: Trưởng phòng Kế toán" /></label>
+      </div>
+
+      <h4>Nhóm 2 — Thời gian</h4>
+      <div class="hr-grid">
+        <label>Ngày onboard mong muốn <span class="req">*</span><input type="date" name="onboard_mong_muon" required /></label>
+        <label>Ngày onboard muộn nhất <span class="req">*</span><input type="date" name="onboard_muon_nhat" required /></label>
+        <label class="span2">Lý do tuyển <span class="req">*</span>
+          <select name="ly_do_tuyen" required>
+            <option value="">— chọn —</option>
+            <option>Thay thế người nghỉ</option><option>Mở rộng đội</option><option>Vị trí mới hoàn toàn</option>
+          </select>
+        </label>
+      </div>
+
+      <h4>Nhóm 3 — Bối cảnh kinh doanh</h4>
+      <div class="hr-grid">
+        <label class="span2">Doanh nghiệp đang thay đổi gì khiến vị trí này khác lần tuyển trước? <span class="req">*</span>
+          <textarea name="thay_doi_doanh_nghiep" required placeholder="VD: Mở thêm chi nhánh, cần kế toán riêng cho chi nhánh mới"></textarea>
+        </label>
+        <label class="span2">3 việc chính trong 3 tháng đầu <span class="req">*</span>
+          <input type="text" name="viec_1" placeholder="Việc 1 (bắt buộc)" required />
+          <input type="text" name="viec_2" placeholder="Việc 2 (không bắt buộc)" style="margin-top:.4rem" />
+          <input type="text" name="viec_3" placeholder="Việc 3 (không bắt buộc)" style="margin-top:.4rem" />
+        </label>
+        <label class="span2">Thế nào là "làm tốt" sau 6 tháng? (tiêu chí đo được) <span class="req">*</span>
+          <textarea name="tieu_chi_thanh_cong_6_thang" required placeholder="VD: Tự chủ toàn bộ sổ sách, không sai sót thuế"></textarea>
+        </label>
+      </div>
+
+      <h4>Nhóm 4 — Khung ngân sách</h4>
+      <div class="hr-grid">
+        <label>Lương min (gross, để trống nếu chưa chốt)<input type="number" name="luong_min" min="0" placeholder="VD: 12000000" /></label>
+        <label>Lương max (gross, để trống nếu chưa chốt)<input type="number" name="luong_max" min="0" placeholder="VD: 16000000" /></label>
+        <label>Hình thức <span class="req">*</span>
+          <select name="hinh_thuc" required>
+            <option value="toan_thoi_gian">Toàn thời gian</option>
+            <option value="ban_thoi_gian">Bán thời gian</option>
+            <option value="thoi_vu">Thời vụ</option>
+            <option value="remote">Remote</option>
+            <option value="hybrid">Hybrid</option>
+          </select>
+        </label>
+        <label>Địa điểm làm việc<input type="text" name="dia_diem" placeholder="VD: Hồ Chí Minh" /></label>
+        <label class="span2 hr-checkbox"><input type="checkbox" name="cong_bo_luong" /> Công bố dải lương trên tin đăng</label>
+      </div>
+
+      <h4>Nhóm 5 — JD hiện có (tuỳ chọn)</h4>
+      <div class="hr-grid">
+        <label class="span2">Dán nội dung JD cũ (nếu có sẵn) — B2 sẽ chỉ đối chiếu/điều chỉnh thay vì viết lại từ đầu
+          <textarea name="jd_cu_noi_dung" placeholder="Dán toàn bộ nội dung JD cũ vào đây…"></textarea>
+        </label>
+        <label class="span2">Hoặc đường dẫn file JD cũ đã lưu sẵn trong hệ thống
+          <input type="text" name="jd_cu_duong_dan" placeholder="VD: hr/data/mau-cong-ty/JD-KeToan.md" />
+        </label>
+      </div>
+      <p class="bf-hint" style="margin:.4rem 0 0">💡 Bỏ trống cả hai nếu chưa có JD — HR Agent sẽ hỏi và dựng JD mới ở bước B2 như bình thường. Nếu điền, B2 sẽ chỉ hỏi khi cần điều chỉnh — không hỏi lại "có JD cũ không".</p>
+
+      <p class="bf-hint" style="margin:.7rem 0">🔴 Lương chỉ ghi đúng số bạn nhập ở đây — hệ thống <b>không</b> tự lấy số từ thang lương tham chiếu. Để trống nếu chưa chốt.</p>
+
+      <div id="hrIntakeError" class="hr-intake-error" style="display:none"></div>
+
+      <div class="bf-actions">
+        <button class="btn btn-ghost btn-sm" type="button" id="hrIntakeCancel">Hủy</button>
+        <button class="btn btn-primary btn-sm" type="submit">📋 Tạo requisition</button>
+      </div>
+    </form>
+
+    <div id="hrIntakeResult" style="display:none">
+      <div class="inherit-note" style="border-color:rgba(52,211,153,.4)">
+        <span style="font-size:1.1rem">✅</span>
+        <span>Requisition thật đã được tạo tại <code id="hrResultPath" style="color:var(--ok)"></code> — HR Agent tiếp tục pipeline từ đây.</span>
+      </div>
+      <div class="code-block" id="hrResultSummary" style="margin-top:.8rem"></div>
+      <div id="hrResultWarnings" style="margin-top:.8rem"></div>
+      <div class="bf-actions" style="margin-top:1rem">
+        <button class="btn btn-primary btn-sm" type="button" id="hrIntakeDone">Xong</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- HR — Form đánh giá phỏng vấn (B5-B6), agent có thể tự mở khi chat -->
+<div class="modal-backdrop" id="hrInterviewModal">
+  <div class="modal" style="max-width:640px">
+    <div class="modal-head">
+      <div class="avatar">🗣️</div>
+      <div>
+        <h2 style="font-family:inherit;color:var(--text);font-size:1.1rem">Đánh giá phỏng vấn</h2>
+        <p>B5-B6 — <code style="color:var(--brand-2)">hr/skills/lich-phong-van</code>. Ghi thẳng vào hồ sơ ứng viên + đồng bộ Excel, không qua chat.</p>
+      </div>
+      <button class="drawer-close" id="hrInterviewClose" style="margin-left:auto" aria-label="Đóng">✕</button>
+    </div>
+
+    <form id="hrInterviewForm" class="hr-intake-form">
+      <input type="hidden" name="req_id" />
+      <h4>Ứng viên</h4>
+      <div class="hr-grid">
+        <label class="span2">Chọn ứng viên <span class="req">*</span>
+          <select name="ma_uv" id="hrInterviewMaUvSelect" required>
+            <option value="">— chọn ứng viên —</option>
+          </select>
+        </label>
+      </div>
+      <p class="bf-hint" style="margin:.3rem 0 0">Chỉ chọn được ứng viên đã có trong hồ sơ (đã chấm CV ở B4) — không nhập tay để tránh sai mã/trùng tên.</p>
+
+      <h4>Buổi phỏng vấn (tuỳ chọn — điền nếu chưa có sẵn)</h4>
+      <div class="hr-grid">
+        <label>Thời gian PV<input type="datetime-local" name="thoi_gian" /></label>
+        <label>Hình thức
+          <select name="hinh_thuc">
+            <option value="">— không đổi —</option>
+            <option value="tai_van_phong">Tại văn phòng</option>
+            <option value="online">Online</option>
+          </select>
+        </label>
+        <label class="span2">Người phỏng vấn (phân cách bằng dấu phẩy)<input type="text" name="nguoi_pv" placeholder="VD: Trần Thị B, Nguyễn Văn C" /></label>
+      </div>
+
+      <h4>Đánh giá <span class="req">*</span></h4>
+      <div class="hr-grid">
+        <label>Điểm chuyên môn (1–5) <span class="req">*</span><input type="number" name="diem_chuyen_mon" min="1" max="5" step="1" required /></label>
+        <label>Điểm phù hợp văn hóa (1–5) <span class="req">*</span><input type="number" name="diem_van_hoa" min="1" max="5" step="1" required /></label>
+        <label class="span2">Điểm mạnh<textarea name="diem_manh" placeholder="Ghi cụ thể, có dẫn chứng"></textarea></label>
+        <label class="span2">Điểm lo ngại / cần hỏi thêm<textarea name="diem_lo_ngai" placeholder="Ghi cụ thể, không suy diễn"></textarea></label>
+        <label>Lương mong muốn (gross)<input type="number" name="luong_mong_muon" min="0" placeholder="🔴 chỉ ghi đúng số ứng viên nói" /></label>
+        <label>Có thể onboard từ<input type="date" name="co_the_onboard_tu" /></label>
+        <label class="span2">Kết luận <span class="req">*</span>
+          <select name="ket_luan" required>
+            <option value="">— chọn —</option>
+            <option value="Dong_y">Đồng ý</option>
+            <option value="Can_nhac">Cân nhắc</option>
+            <option value="Tu_choi">Từ chối</option>
+          </select>
+        </label>
+      </div>
+
+      <p class="bf-hint" style="margin:.7rem 0">🔴 Lương mong muốn chỉ ghi đúng con số ứng viên nói ở buổi phỏng vấn — không suy diễn, không tự đề xuất mức trả.</p>
+
+      <div id="hrInterviewError" class="hr-intake-error" style="display:none"></div>
+
+      <div class="bf-actions">
+        <button class="btn btn-ghost btn-sm" type="button" id="hrInterviewCancel">Hủy</button>
+        <button class="btn btn-primary btn-sm" type="submit">💾 Lưu đánh giá</button>
+      </div>
+    </form>
   </div>
 </div>
 

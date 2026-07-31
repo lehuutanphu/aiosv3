@@ -5,6 +5,7 @@
 const http = require("http");
 const fs = require("fs");
 const path = require("path");
+const hr = require("./hr");
 
 const ROOT = __dirname;
 
@@ -194,6 +195,82 @@ const server = http.createServer(async (req, res) => {
         mockMode: MOCK_MODE,
         agents: Object.keys(CONFIG.agents),
       });
+    }
+
+    // ---------- HR: Tuyển dụng thật (B1 deterministic) + SKILL.md thật ----------
+    if (parts[0] === "api" && parts[1] === "hr" && parts[2] === "requisitions") {
+      if (parts.length === 3 && req.method === "GET") {
+        return sendJson(res, 200, { requisitions: hr.listRequisitions() });
+      }
+      if (parts.length === 3 && req.method === "POST") {
+        const payload = await readJsonBody(req);
+        const result = hr.createRequisition(payload);
+        return sendJson(res, 201, result);
+      }
+      if (parts.length === 4 && req.method === "GET") {
+        const data = hr.getRequisition(decodeURIComponent(parts[3]));
+        return sendJson(res, 200, { requisition: data });
+      }
+      if (parts.length === 5 && parts[4] === "chat" && req.method === "GET") {
+        const log = hr.getChatLog(decodeURIComponent(parts[3]));
+        return sendJson(res, 200, { log });
+      }
+      if (parts.length === 5 && parts[4] === "chat" && req.method === "POST") {
+        const payload = await readJsonBody(req);
+        const result = await hr.chatOnRequisition(decodeURIComponent(parts[3]), payload.message, {
+          silent: !!payload.silent,
+          rules: Array.isArray(payload.rules) ? payload.rules : [],
+          globalRules: Array.isArray(payload.globalRules) ? payload.globalRules : [],
+        });
+        return sendJson(res, 200, result);
+      }
+      if (parts.length === 5 && parts[4] === "interview-evaluation" && req.method === "POST") {
+        const payload = await readJsonBody(req);
+        const result = await hr.submitInterviewEvaluation(decodeURIComponent(parts[3]), payload);
+        return sendJson(res, 200, result);
+      }
+    }
+
+    // ---------- HR: Chat CHUNG (không gắn 1 requisition cụ thể) ----------
+    if (parts[0] === "api" && parts[1] === "hr" && parts[2] === "chat") {
+      if (parts.length === 3 && req.method === "GET") {
+        return sendJson(res, 200, { log: hr.getGeneralChatLog() });
+      }
+      if (parts.length === 3 && req.method === "POST") {
+        const payload = await readJsonBody(req);
+        const result = await hr.chatGeneral(payload.message, {
+          silent: !!payload.silent,
+          rules: Array.isArray(payload.rules) ? payload.rules : [],
+          globalRules: Array.isArray(payload.globalRules) ? payload.globalRules : [],
+        });
+        return sendJson(res, 200, result);
+      }
+    }
+
+    // ---------- HR: tải file thật đã tạo trong hồ sơ (offer letter, JD, shortlist...) ----------
+    if (parts[0] === "api" && parts[1] === "hr" && parts[2] === "files" && req.method === "GET") {
+      const relPath = url.searchParams.get("path");
+      const absPath = hr.resolveDownloadFile(relPath);
+      const filename = path.basename(absPath);
+      const ext = path.extname(absPath).toLowerCase();
+      const mime =
+        ext === ".docx" ? "application/vnd.openxmlformats-officedocument.wordprocessingml.document" :
+        ext === ".xlsx" ? "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" :
+        ext === ".pdf" ? "application/pdf" :
+        ext === ".csv" ? "text/csv; charset=utf-8" :
+        ext === ".md" ? "text/markdown; charset=utf-8" :
+        "application/octet-stream";
+      res.writeHead(200, {
+        "Content-Type": mime,
+        "Content-Disposition": `attachment; filename*=UTF-8''${encodeURIComponent(filename)}`,
+        "Access-Control-Allow-Origin": ALLOWED_ORIGIN,
+      });
+      return fs.createReadStream(absPath).pipe(res);
+    }
+
+    if (parts[0] === "api" && parts[1] === "hr" && parts[2] === "skills" && parts[3] && req.method === "GET") {
+      const result = hr.getSkillMarkdown(decodeURIComponent(parts[3]));
+      return sendJson(res, 200, result);
     }
 
     if (parts[0] === "api" && parts[1] === "agents" && parts[3] && req.method === "POST") {

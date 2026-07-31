@@ -68,16 +68,33 @@ const AGENTS = [
   {
     id: "hr-1", dept: "hr", icon: "🧑‍💼", name: "HR Agent",
     role: "Chuyên viên tuyển dụng & hồ sơ nhân sự",
-    model: "Claude Sonnet 4.5", mode: "Planning",
-    modelWhy: "Văn phong tự nhiên khi viết JD/email ứng viên; đọc CV, tóm tắt chính xác, đánh giá kỹ năng mềm qua văn bản.",
+    hrIntake: true, // có pipeline tuyển dụng THẬT (project/aios/hr) — xem hr/README.md
+    model: "DeepSeek V4 Flash", mode: "Planning",
+    modelWhy: "Văn phong tự nhiên khi viết JD/email ứng viên; đọc CV, tóm tắt chính xác, đánh giá kỹ năng mềm qua văn bản. B2-B10 thực thi thật qua DeepSeek V4 Flash (OpenRouter).",
     maturity: 72, stage: "Thạo việc",
     status: "review",
     task: "Shortlist 40 CV kế toán → chờ bạn duyệt 5 hồ sơ đề xuất",
-    keywords: ["cv", "tuyển", "phỏng vấn", "ứng viên", "jd", "job description", "nhân sự", "shortlist"],
-    knowledge: ["Khung năng lực từng vị trí", "Văn hóa công ty & tiêu chí phù hợp", "Thang lương tham chiếu thị trường"],
-    workflows: ["/loc-cv — chấm điểm CV theo khung năng lực", "/cau-hoi-phong-van — bộ câu hỏi theo vị trí"],
-    skills: ["danh-gia-cv-theo-khung-nang-luc"],
-    rules: ["Ẩn thông tin cá nhân (PII) ứng viên trong báo cáo tổng hợp", "Không tự gửi email từ chối — phải có người duyệt"],
+    keywords: ["cv", "tuyển", "tuyển dụng", "phỏng vấn", "ứng viên", "jd", "job description", "nhân sự", "shortlist", "offer", "onboard", "thử việc", "đăng tin", "requisition"],
+    knowledge: ["Khung năng lực từng vị trí", "Văn hóa công ty & tiêu chí phù hợp", "Thang lương tham chiếu thị trường", "Mẫu offer letter chuẩn công ty (hr/data/mau-cong-ty/)", "Quy trình tuyển dụng 10 bước — hr/README.md"],
+    workflows: [
+      "/tuyen-dung — điều phối toàn pipeline, báo bước hiện tại & bước kế tiếp",
+      "/nhu-cau-tuyen-dung — B1: chốt vị trí, số lượng, ngày onboard → tạo requisition",
+      "/jd-va-tin-tuyen-dung — B2+B3: cập nhật JD, viết bài đăng đa kênh, sổ link theo dõi",
+      "/thu-nhan-sang-loc-cv — B4: gom CV từ Gmail, chấm điểm, shortlist",
+      "/lich-phong-van — B5+B6: draft email hẹn, lịch Calendar, follow kết quả trên Google Sheets",
+      "/offer-va-luu-ho-so — B7–B10: chốt điều khoản, điền mẫu offer, trình duyệt, lưu hồ sơ",
+    ],
+    skills: ["tuyen-dung", "nhu-cau-tuyen-dung", "jd-va-tin-tuyen-dung", "thu-nhan-sang-loc-cv", "lich-phong-van", "offer-va-luu-ho-so"],
+    subagents: ["cham-diem-cv — chấm CV song song khi >15 hồ sơ/đợt"],
+    rules: [
+      "Chỉ trả lời trong phạm vi tuyển dụng & hồ sơ nhân sự — câu hỏi thuộc phòng ban khác (marketing, kế toán, pháp lý, kỹ thuật, CSKH...) phải từ chối rõ ràng và định hướng sang đúng Agent phụ trách, không tự ý trả lời một phần hay \"hỗ trợ thêm\" ngoài phạm vi",
+      "Ẩn thông tin cá nhân (PII) ứng viên trong báo cáo tổng hợp",
+      "Không tự gửi email từ chối — phải có người duyệt",
+      "🔴 Không tự điền con số lương — mọi mức lương phải do người xác nhận bằng chữ (Cổng B7)",
+      "🔴 Offer letter chỉ điền vào mẫu có sẵn của công ty — không tự soạn mẫu mới, không sửa câu chữ của mẫu",
+      "🔴 Không auto-send email ứng viên — chỉ tạo draft Gmail, người bấm Gửi (Cổng B9)",
+      "Không chấm điểm CV theo giới tính, tuổi, tình trạng hôn nhân, quê quán, ngoại hình",
+    ],
   },
   {
     id: "fin-1", dept: "fin", icon: "📊", name: "Finance Agent",
@@ -446,6 +463,250 @@ function renderStats() {
     <div class="stat-card"><span class="lbl">Rule bảo vệ</span><div class="val">${GLOBAL_RULES.length + wsRules}</div><span class="sub">${GLOBAL_RULES.length} Global + ${wsRules} Workspace</span></div>`;
 }
 
+// ---------- HR INTAKE (THẬT) — B1 Xác định nhu cầu tuyển dụng ----------
+// Ghi file requisition thật qua Backend Proxy (project/aios/server/hr.js), khớp đúng
+// hr/skills/nhu-cau-tuyen-dung/SKILL.md. Không dùng USE_REAL_HERMES — B1 chạy được ngay
+// cả khi chưa nối Hermes thật, miễn Backend Proxy đang chạy.
+const BUOC_TEN_MAP = {
+  1: "Xác định nhu cầu", 2: "Cập nhật JD", 3: "Đăng tin đa kênh", 4: "Thu nhận & sàng lọc CV",
+  5: "Hẹn & lên lịch phỏng vấn", 6: "Follow kết quả phỏng vấn", 7: "Chốt điều khoản offer",
+  8: "Trình duyệt offer letter", 9: "Gửi offer letter", 10: "Lưu hồ sơ & đóng job",
+};
+
+async function hrApi(path, opts) {
+  const res = await fetch(`${HERMES_PROXY_BASE}${path}`, {
+    headers: { "Content-Type": "application/json" },
+    ...opts,
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || `Lỗi ${res.status}`);
+  return data;
+}
+
+// URL tải file thật đã tạo trong hồ sơ (offer letter...) — chỉ phục vụ file trong hr/data/ho-so/
+function hrFileDownloadUrl(relPath) {
+  return `${HERMES_PROXY_BASE}/api/hr/files?path=${encodeURIComponent(relPath)}`;
+}
+
+function openHrIntake(agent) {
+  const modal = $("#hrIntakeModal");
+  const form = $("#hrIntakeForm");
+  form.reset();
+  form.style.display = "";
+  $("#hrIntakeResult").style.display = "none";
+  $("#hrIntakeError").style.display = "none";
+  modal.classList.add("open");
+  modal.dataset.agentId = agent ? agent.id : "hr-1";
+}
+function closeHrIntake() {
+  $("#hrIntakeModal").classList.remove("open");
+}
+function prefillHrIntake(fields) {
+  openHrIntake(AGENTS.find(x => x.id === "hr-1"));
+  const form = $("#hrIntakeForm");
+  if (fields.ten) form.elements["ten"].value = fields.ten;
+  if (fields.so_luong) form.elements["so_luong"].value = fields.so_luong;
+}
+
+// ---------- HR — Form đánh giá phỏng vấn (B5-B6) — agent có thể tự mở qua tool open_interview_form ----------
+// Danh sách ứng viên trong dropdown lấy từ ung_vien[] thật của requisition (đã có từ B4 chấm CV) —
+// không cho nhập tay để tránh sai mã/trùng tên/tạo nhầm ứng viên mới ngoài luồng.
+async function openHrInterviewForm(reqId, maUv, ten) {
+  const modal = $("#hrInterviewModal");
+  const form = $("#hrInterviewForm");
+  form.reset();
+  $("#hrInterviewError").style.display = "none";
+  form.elements["req_id"].value = reqId;
+  const select = $("#hrInterviewMaUvSelect");
+  select.innerHTML = `<option value="">Đang tải danh sách ứng viên…</option>`;
+  modal.classList.add("open");
+  try {
+    const { requisition } = await hrApi(`/api/hr/requisitions/${encodeURIComponent(reqId)}`);
+    const candidates = requisition.ung_vien || [];
+    if (!candidates.length) {
+      select.innerHTML = `<option value="">— Chưa có ứng viên nào, chấm CV ở B4 trước —</option>`;
+      return;
+    }
+    select.innerHTML = `<option value="">— chọn ứng viên —</option>` +
+      candidates.map(c => `<option value="${c.ma_uv}">${c.ma_uv} — ${c.ten || "(chưa có tên)"}</option>`).join("");
+    const match = ten ? candidates.find(c => c.ten === ten) : null;
+    const preselect = (maUv && candidates.some(c => c.ma_uv === maUv)) ? maUv : (match ? match.ma_uv : "");
+    if (preselect) select.value = preselect;
+  } catch (e) {
+    select.innerHTML = `<option value="">⚠️ Không tải được danh sách ứng viên</option>`;
+  }
+}
+function closeHrInterviewForm() {
+  $("#hrInterviewModal").classList.remove("open");
+}
+$("#hrInterviewClose").addEventListener("click", closeHrInterviewForm);
+$("#hrInterviewCancel").addEventListener("click", closeHrInterviewForm);
+$("#hrInterviewFormBtn")?.addEventListener("click", () => {
+  const sel = $("#hrChatReqSelect");
+  const reqId = sel ? sel.value : "";
+  if (!reqId || reqId === HR_GENERAL_VALUE) {
+    toast("⚠️ Chọn 1 requisition cụ thể trong dropdown trước (không phải \"Hỏi chung\")");
+    return;
+  }
+  openHrInterviewForm(reqId, "", "");
+});
+$("#hrInterviewModal").addEventListener("click", (e) => { if (e.target.id === "hrInterviewModal") closeHrInterviewForm(); });
+
+$("#hrInterviewForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const form = e.target;
+  const fd = new FormData(form);
+  const errBox = $("#hrInterviewError");
+  errBox.style.display = "none";
+  const reqId = fd.get("req_id");
+  const nguoiPv = String(fd.get("nguoi_pv") || "").split(",").map(s => s.trim()).filter(Boolean);
+  const payload = {
+    ma_uv: fd.get("ma_uv") || "",
+    thoi_gian: fd.get("thoi_gian") || "",
+    hinh_thuc: fd.get("hinh_thuc") || "",
+    nguoi_pv: nguoiPv,
+    diem_chuyen_mon: fd.get("diem_chuyen_mon"),
+    diem_van_hoa: fd.get("diem_van_hoa"),
+    diem_manh: fd.get("diem_manh") || "",
+    diem_lo_ngai: fd.get("diem_lo_ngai") || "",
+    luong_mong_muon: fd.get("luong_mong_muon") || "",
+    co_the_onboard_tu: fd.get("co_the_onboard_tu") || "",
+    ket_luan: fd.get("ket_luan"),
+  };
+  const submitBtn = form.querySelector('button[type="submit"]');
+  submitBtn.disabled = true;
+  submitBtn.textContent = "Đang lưu…";
+  try {
+    const result = await hrApi(`/api/hr/requisitions/${encodeURIComponent(reqId)}/interview-evaluation`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+    closeHrInterviewForm();
+    toast(result.advancedToB7
+      ? `🎉 ${result.ma_uv} — Đồng ý tuyển! Đã chuyển sang B7 (chốt offer).`
+      : `✅ Đã lưu đánh giá phỏng vấn cho ${result.ma_uv}${result.sheetSync?.ok ? " — đã đồng bộ Excel" : ""}`);
+    const a = AGENTS.find(x => x.id === "hr-1");
+    if (a) {
+      loadHrPipeline(a);
+      populateHrChatReqSelect();
+      refreshOrgChart();
+      const key = hrKey(a.id, reqId);
+      if (chatHistory[key]) {
+        const syncLine = result.sheetSync?.ok
+          ? `\n   📊 Excel: đã ${result.sheetSync.action === "updated" ? "cập nhật" : "thêm"} dòng`
+          : (result.sheetSync?.error ? `\n   ⚠️ Excel: ${result.sheetSync.error}` : "");
+        chatHistory[key].push({ from: "tool", text: `✅ Đã lưu đánh giá phỏng vấn ${result.ma_uv} qua form${syncLine}` });
+        if (result.advancedToB7) {
+          chatHistory[key].push({
+            from: "agent",
+            text: `🎉 <b>${result.ma_uv}</b> được đánh giá <b>Đồng ý</b> — em đã chuyển requisition sang <b>B7 (chốt điều khoản offer)</b>.\n` +
+              `Anh/chị nhắn cho em khi sẵn sàng chốt điều khoản (chức danh, ngày onboard, lương, phụ cấp...), em sẽ trình bảng 12 dòng để anh/chị xác nhận từng dòng — xong em tạo offer letter thật theo mẫu công ty.`,
+          });
+        }
+        if (currentAgent && currentAgent.id === a.id) renderChat(a, key);
+      }
+    }
+  } catch (err) {
+    errBox.textContent = "⚠️ " + err.message;
+    errBox.style.display = "";
+  } finally {
+    submitBtn.disabled = false;
+    submitBtn.textContent = "💾 Lưu đánh giá";
+  }
+});
+
+async function loadHrPipeline(agent) {
+  const box = $("#hrPipelineList");
+  if (!box) return;
+  try {
+    const { requisitions } = await hrApi("/api/hr/requisitions");
+    if (!requisitions.length) {
+      box.innerHTML = `<div class="kwsr-empty">Chưa có đợt tuyển nào — bấm "＋ Mở đợt tuyển mới" để tạo requisition thật đầu tiên.</div>`;
+      return;
+    }
+    box.innerHTML = requisitions.map(r => `
+      <div class="hr-req-card">
+        <div class="hr-req-top"><b>📋 ${r.requisition_id} — ${r.vi_tri?.ten || "?"}</b><span class="badge">${r.vi_tri?.so_luong || "?"} người</span></div>
+        <div class="hr-req-meta">Mở ngày ${r.ngay_mo} · ${r.so_ung_vien} ứng viên · Bước hiện tại: B${r.buoc_hien_tai} — ${r.buoc_ten}</div>
+        <div class="hr-req-next">Bước kế tiếp: ${r.buoc_ke_tiep ? "/" + r.buoc_ke_tiep : "—"}</div>
+        ${r.buoc_hien_tai === 4 ? `<div class="hr-req-next">📂 Copy CV (.pdf) vào <code>hr/data/ho-so/${r.requisition_id}/cv/</code>, rồi nhắn tên file vào chat để chấm điểm</div>` : ""}
+      </div>`).join("");
+  } catch (e) {
+    box.innerHTML = `<div class="kwsr-empty">⚠️ Không tải được pipeline — Backend Proxy (project/aios/server) có đang chạy trên ${HERMES_PROXY_BASE} không?</div>`;
+  }
+}
+
+$("#hrIntakeClose").addEventListener("click", closeHrIntake);
+$("#hrIntakeCancel").addEventListener("click", closeHrIntake);
+$("#hrIntakeDone").addEventListener("click", () => {
+  closeHrIntake();
+  const a = AGENTS.find(x => x.id === "hr-1");
+  if (a) loadHrPipeline(a);
+  refreshOrgChart();
+});
+$("#hrIntakeModal").addEventListener("click", (e) => { if (e.target.id === "hrIntakeModal") closeHrIntake(); });
+
+$("#hrIntakeForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const form = e.target;
+  const fd = new FormData(form);
+  const errBox = $("#hrIntakeError");
+  errBox.style.display = "none";
+
+  const baViec = [fd.get("viec_1"), fd.get("viec_2"), fd.get("viec_3")].filter(v => v && v.trim());
+  const payload = {
+    vi_tri: {
+      ten: fd.get("ten"), phong_ban: fd.get("phong_ban"), cap_bac: fd.get("cap_bac"),
+      bao_cao_cho: fd.get("bao_cao_cho"), so_luong: Number(fd.get("so_luong")),
+      hinh_thuc: fd.get("hinh_thuc"), dia_diem: fd.get("dia_diem") || "",
+      ly_do_tuyen: fd.get("ly_do_tuyen"),
+      onboard_mong_muon: fd.get("onboard_mong_muon"), onboard_muon_nhat: fd.get("onboard_muon_nhat"),
+    },
+    boi_canh: {
+      thay_doi_doanh_nghiep: fd.get("thay_doi_doanh_nghiep"),
+      ba_viec_chinh_3_thang: baViec,
+      tieu_chi_thanh_cong_6_thang: fd.get("tieu_chi_thanh_cong_6_thang"),
+    },
+    ngan_sach: {
+      luong_min: fd.get("luong_min") || "", luong_max: fd.get("luong_max") || "",
+      cong_bo_luong_tren_tin_dang: fd.get("cong_bo_luong") === "on",
+    },
+    jd_cu: {
+      noi_dung: fd.get("jd_cu_noi_dung") || "",
+      duong_dan: fd.get("jd_cu_duong_dan") || "",
+    },
+  };
+
+  const submitBtn = form.querySelector('button[type="submit"]');
+  submitBtn.disabled = true;
+  submitBtn.textContent = "Đang tạo…";
+  try {
+    const result = await hrApi("/api/hr/requisitions", { method: "POST", body: JSON.stringify(payload) });
+    form.style.display = "none";
+    const resBox = $("#hrIntakeResult");
+    resBox.style.display = "";
+    $("#hrResultPath").textContent = `hr/data/requisitions/${result.requisition.requisition_id}.json`;
+    $("#hrResultSummary").textContent = result.summary;
+    $("#hrResultWarnings").innerHTML = (result.canhBao || []).map(w => `<div class="warn-line">${w}</div>`).join("");
+
+    const a = AGENTS.find(x => x.id === "hr-1");
+    a.task = `${result.requisition.requisition_id} — ${result.requisition.vi_tri.ten}: bước B${result.requisition.buoc_hien_tai} ${BUOC_TEN_MAP[result.requisition.buoc_hien_tai]}`;
+    a.status = "working";
+    refreshAgentCard(a);
+    if (!chatHistory[a.id]) renderChatSeed(a);
+    chatHistory[a.id].push({ from: "agent", text: `📋 Đã tạo ${result.requisition.requisition_id} thật (ghi file trên đĩa).\n\n${result.summary}` });
+    if (currentAgent && currentAgent.id === "hr-1") renderChat(a);
+    addFeed(`<b>HR Agent</b> tạo requisition thật <b>${result.requisition.requisition_id}</b> — ${result.requisition.vi_tri.ten} (${result.requisition.vi_tri.so_luong} người).`, "f-done");
+    toast(`✅ Đã tạo ${result.requisition.requisition_id} — file thật trong hr/data/requisitions/`);
+  } catch (err) {
+    errBox.textContent = "⚠️ " + err.message;
+    errBox.style.display = "";
+  } finally {
+    submitBtn.disabled = false;
+    submitBtn.textContent = "📋 Tạo requisition";
+  }
+});
+
 // ---------- GLOBAL RULES MODAL (mở từ nút CEO trên sơ đồ tổ chức) ----------
 function openGlobalModal() {
   $("#globalModal").classList.add("open");
@@ -553,10 +814,12 @@ function agentCardHTML(a) {
     </div>
     <div class="skill-chips">
       ${a.skills.map(s => `<button class="skill-chip" data-skill="${s}" title="Xem chi tiết skill">🧩 ${s}</button>`).join("")}
+      ${(a.subagents || []).map(s => `<button class="skill-chip" data-skill="${s.split(" — ")[0]}" title="Subagent — chạy song song trong context riêng">🤖 ${s.split(" — ")[0]}</button>`).join("")}
     </div>
     <div class="agent-actions">
       <button class="btn btn-primary btn-sm" data-chat="${a.id}">💬 Chat</button>
       <button class="btn btn-ghost btn-sm" data-detail="${a.id}">Hồ sơ & KWSR</button>
+      ${a.hrIntake ? `<button class="btn btn-ghost btn-sm" data-hr-open-intake title="Tạo requisition thật (B1)">📋 Mở đợt tuyển</button>` : ""}
     </div>
   </article>`;
 }
@@ -640,10 +903,47 @@ function renderDepartments() {
     if (ch) return openDrawer(ch.dataset.chat, "chat");
     const dt = e.target.closest("[data-detail]");
     if (dt) return openDrawer(dt.dataset.detail, "info");
+    const hi = e.target.closest("[data-hr-open-intake]");
+    if (hi) return openHrIntake(AGENTS.find(x => x.id === "hr-1"));
   });
 }
 
 // ---------- PACK MODAL (xem chi tiết Skill / Workflow) ----------
+// Skill/subagent THẬT của HR (project/aios/hr) — nội dung fetch trực tiếp từ ổ đĩa qua Proxy
+const HR_REAL_SKILL_IDS = new Set([
+  "tuyen-dung", "nhu-cau-tuyen-dung", "jd-va-tin-tuyen-dung",
+  "thu-nhan-sang-loc-cv", "lich-phong-van", "offer-va-luu-ho-so", "cham-diem-cv",
+]);
+
+function parseSkillFrontmatter(md) {
+  const m = md.match(/^---\n([\s\S]*?)\n---/);
+  if (!m) return { description: "" };
+  const desc = m[1].match(/description:\s*([\s\S]*?)(?=\n\w+:|$)/);
+  return { description: desc ? desc[1].replace(/\n\s+/g, " ").trim() : "" };
+}
+
+async function openRealHrSkill(id) {
+  $("#skIcon").textContent = "📄";
+  $("#skName").textContent = id;
+  $("#skDesc").textContent = "Đang tải nội dung thật từ hr/skills/…";
+  $("#skH1").textContent = "SKILL.md thật (project/aios/hr) — không phải bản mô phỏng";
+  $("#skCode").textContent = "Đang tải…";
+  $("#skH2").textContent = "";
+  $("#skStd").innerHTML = "";
+  $("#skH3").textContent = "Nguồn";
+  $("#skTrigger").textContent = "";
+  $("#skillModal").classList.add("open");
+  try {
+    const data = await hrApi(`/api/hr/skills/${encodeURIComponent(id)}`);
+    const { description } = parseSkillFrontmatter(data.md);
+    $("#skDesc").textContent = description || "(không có mô tả trong frontmatter)";
+    $("#skCode").textContent = data.md;
+    $("#skTrigger").textContent = `${data.path} — đọc trực tiếp từ ổ đĩa qua Backend Proxy, đúng nội dung Hermes hr-1 sẽ dùng khi kích hoạt skill này thật.`;
+  } catch (e) {
+    $("#skCode").textContent = `⚠️ Không tải được nội dung thật.\n${e.message}\n\nBackend Proxy (project/aios/server) có đang chạy trên ${HERMES_PROXY_BASE} không?`;
+  }
+}
+
 function showPack(name, entry, labels) {
   $("#skIcon").textContent = labels.icon;
   $("#skName").textContent = name;
@@ -658,6 +958,7 @@ function showPack(name, entry, labels) {
 }
 
 function openSkill(id) {
+  if (HR_REAL_SKILL_IDS.has(id)) return openRealHrSkill(id);
   const s = SKILLS[id];
   if (!s) return;
   showPack(id, s, {
@@ -901,6 +1202,22 @@ Chốt bằng email xác nhận trong 24h"></textarea>
         <dt>Task hiện tại</dt><dd>${a.task}</dd>
       </dl>
     </div>
+    ${a.hrIntake ? `
+    <div class="d-section">
+      <div class="d-section-head">
+        <h4>📋 Pipeline tuyển dụng — dữ liệu THẬT</h4>
+        <button class="add-btn" data-hr-open-intake>＋ Mở đợt tuyển mới</button>
+      </div>
+      <div class="hr-req-list" id="hrPipelineList"><div class="kwsr-empty">Đang tải…</div></div>
+      <div class="hr-gap-banner">
+        <b>⚠️ Khoảng trống connector (theo hr/README.md mục 3):</b>
+        Gmail ✅ · Google Calendar ✅ · Đăng bài FB/Zalo ❌ chưa có MCP (đăng tay) ·
+        Tạo hình ảnh ❌ chưa có công cụ (xuất brief cho Canva) ·
+        Google Drive/OneDrive ❌ chưa có connector (đồng bộ qua thư mục desktop) ·
+        Ghi trực tiếp Google Sheets ❌ (xuất .csv rồi dán tay). B1 (form này) chạy hoàn toàn thật —
+        B2–B10 cần Hermes hr-1 thật hoặc các connector trên.
+      </div>
+    </div>` : ""}
     ${secHTML("knowledge")}${secHTML("workflows")}${secHTML("skills")}
     <div class="d-section">
       <div class="d-section-head">
@@ -928,6 +1245,12 @@ Chốt bằng email xác nhận trong 24h"></textarea>
   // Nút quản lý Global Rule → mở modal Global Rule (như bấm nút CEO trên sơ đồ)
   const goGlobal = root.querySelector("[data-go-global]");
   if (goGlobal) goGlobal.addEventListener("click", openGlobalModal);
+
+  // Pipeline tuyển dụng thật (chỉ hr-1)
+  if (a.hrIntake) {
+    root.querySelectorAll("[data-hr-open-intake]").forEach(b => b.addEventListener("click", () => openHrIntake(a)));
+    loadHrPipeline(a);
+  }
 
   // ---- Panel 3 phương thức: dùng chung cho Knowledge / Workflow / Skill ----
   const panels = {};
@@ -1210,9 +1533,28 @@ function switchTab(tab) {
   document.querySelectorAll(".drawer-tab").forEach(t => t.classList.toggle("active", t.dataset.tab === tab));
   $("#tabInfo").style.display = tab === "info" ? "" : "none";
   $("#tabChat").style.display = tab === "chat" ? "flex" : "none";
-  if (tab === "chat") setTimeout(() => $("#chatInput").focus(), 250);
+  if (tab === "chat") {
+    setTimeout(() => $("#chatInput").focus(), 250);
+    if (currentAgent && currentAgent.id === "hr-1") {
+      $("#hrChatContext").style.display = "flex";
+      populateHrChatReqSelect().then(() => {
+        const sel = $("#hrChatReqSelect");
+        if (!sel || !sel.value) return;
+        if (sel.value === HR_GENERAL_VALUE) hydrateGeneralChat(currentAgent);
+        else kickoffHrChat(currentAgent, sel.value, selectedHrBuoc());
+      });
+    } else {
+      $("#hrChatContext").style.display = "none";
+    }
+  }
 }
 document.querySelectorAll(".drawer-tab").forEach(t => t.addEventListener("click", () => switchTab(t.dataset.tab)));
+
+$("#hrChatReqSelect")?.addEventListener("change", (e) => {
+  if (!currentAgent || currentAgent.id !== "hr-1" || !e.target.value) return;
+  if (e.target.value === HR_GENERAL_VALUE) hydrateGeneralChat(currentAgent);
+  else kickoffHrChat(currentAgent, e.target.value, selectedHrBuoc());
+});
 
 function closeDrawer() {
   $("#agentDrawer").classList.remove("open");
@@ -1222,20 +1564,197 @@ $("#drawerClose").addEventListener("click", closeDrawer);
 $("#drawerBackdrop").addEventListener("click", closeDrawer);
 
 // ---------- CHAT ----------
-function renderChat(a) {
-  if (!chatHistory[a.id]) {
-    chatHistory[a.id] = [{
+// hr-1 có 1 thread riêng cho từng requisition (key "hr-1:<reqId>") thay vì gộp chung — mỗi
+// requisition có 1 chat-log.json thật trên server nên không thể dùng chung 1 key cho tất cả.
+function hrKey(agentId, reqId) {
+  return agentId === "hr-1" && reqId ? `${agentId}:${reqId}` : agentId;
+}
+
+function renderChat(a, key = a.id) {
+  if (!chatHistory[key]) {
+    chatHistory[key] = [{
       from: "agent",
       text: `Chào anh/chị! Em là ${a.name} (${a.model}).\nEm đang phụ trách: "${a.task}".\nAnh/chị cần em hỗ trợ gì ạ?`,
     }];
   }
   const box = $("#chatMessages");
-  box.innerHTML = chatHistory[a.id].map(m =>
-    m.from === "user"
-      ? `<div class="msg user">${m.text}</div>`
-      : `<div class="msg agent"><div class="m-from">${a.icon} ${a.name}</div>${m.text}</div>`
+  box.innerHTML = chatHistory[key].map(m =>
+    m.from === "user" ? `<div class="msg user">${m.text}</div>`
+    : m.from === "tool" ? `<div class="msg tool-log">🛠️ ${m.text}</div>`
+    : `<div class="msg agent"><div class="m-from">${a.icon} ${a.name}</div>${m.text}</div>`
   ).join("");
   box.scrollTop = box.scrollHeight;
+}
+
+// ---------- HR CHAT (DeepSeek thật cho B2-B10, bỏ qua Hermes) ----------
+// "__general__" = chat chung, không gắn với 1 requisition cụ thể — vẫn là DeepSeek thật, chỉ
+// không có tool/state của riêng requisition nào (xem hr.chatGeneral ở backend).
+const HR_GENERAL_VALUE = "__general__";
+const HR_GENERAL_LABEL = "💬 Hỏi chung — không gắn REQ nào";
+
+async function populateHrChatReqSelect() {
+  const sel = $("#hrChatReqSelect");
+  if (!sel) return;
+  const prevValue = sel.value;
+  sel.innerHTML = `<option value="">Đang tải…</option>`;
+  try {
+    const { requisitions } = await hrApi("/api/hr/requisitions");
+    const generalOption = `<option value="${HR_GENERAL_VALUE}">${HR_GENERAL_LABEL}</option>`;
+    if (!requisitions.length) {
+      sel.innerHTML = generalOption;
+      sel.value = HR_GENERAL_VALUE;
+      return;
+    }
+    sel.innerHTML = generalOption + requisitions
+      .map(r => `<option value="${r.requisition_id}" data-buoc="${r.buoc_hien_tai}">${r.requisition_id} — ${r.vi_tri?.ten || "?"} (B${r.buoc_hien_tai} · ${r.buoc_ten})</option>`)
+      .join("");
+    if (prevValue && (prevValue === HR_GENERAL_VALUE || requisitions.some(r => r.requisition_id === prevValue))) {
+      sel.value = prevValue;
+    } else {
+      sel.value = requisitions[0].requisition_id; // mặc định vẫn chọn requisition gần nhất, giống hành vi cũ
+    }
+  } catch (e) {
+    sel.innerHTML = `<option value="">⚠️ Không tải được — Backend Proxy có đang chạy không?</option>`;
+  }
+}
+
+function selectedHrBuoc() {
+  const sel = $("#hrChatReqSelect");
+  const opt = sel && sel.selectedOptions && sel.selectedOptions[0];
+  return opt ? opt.dataset.buoc : "";
+}
+
+// Tự hỏi câu mở đầu bằng Sonnet thật khi user mở/chuyển sang 1 requisition ở bước hiện tại
+// lần đầu trong phiên — tránh việc user phải tự đoán nên gõ gì để bắt đầu bước.
+//
+// Hội thoại với từng requisition được lưu thật trên server (hr/data/ho-so/<reqId>/chat-log.json —
+// xem fetchHrSonnetReply/hrApi bên dưới), sống sót qua restart server hoặc F5 trang. Trước khi hỏi
+// lại từ đầu, hàm này luôn thử khôi phục lịch sử đã lưu trước — nếu có, hiển thị lại nguyên hội
+// thoại cũ thay vì bắt user làm lại từ đầu bước.
+const hrKickoffDone = new Set();
+async function kickoffHrChat(a, reqId, buoc) {
+  if (!reqId) return;
+  const key = hrKey(a.id, reqId);
+  const isOpen = () => currentAgent && currentAgent.id === a.id;
+
+  if (!chatHistory[key]) {
+    let persisted = [];
+    try {
+      const { log } = await hrApi(`/api/hr/requisitions/${encodeURIComponent(reqId)}/chat`);
+      persisted = Array.isArray(log) ? log : [];
+    } catch (e) {
+      // Không tải được (server chưa chạy…) — im lặng, để rơi xuống nhánh hỏi kickoff bên dưới.
+    }
+    if (persisted.length) {
+      chatHistory[key] = persisted.map(h => ({ from: h.role === "agent" ? "agent" : "user", text: h.text }));
+      hrKickoffDone.add(`${reqId}:B${buoc}`);
+      if (isOpen()) renderChat(a, key);
+      return; // đã khôi phục hội thoại cũ thật — không hỏi lại từ đầu
+    }
+  }
+
+  const doneKey = `${reqId}:B${buoc}`;
+  if (hrKickoffDone.has(doneKey)) {
+    if (isOpen()) renderChat(a, key);
+    return;
+  }
+  hrKickoffDone.add(doneKey);
+  if (!chatHistory[key]) renderChatSeed(a, key);
+  let typing;
+  if (isOpen()) {
+    renderChat(a, key);
+    const box = $("#chatMessages");
+    typing = el(`<div class="msg agent typing">${a.name} đang xem hồ sơ…</div>`);
+    box.appendChild(typing);
+    box.scrollTop = box.scrollHeight;
+  }
+  const kickoffPrompt = "[Hệ thống — không phải tin nhắn của user, đừng nhắc lại câu này trong câu trả lời] " +
+    "Bạn vừa mở requisition này ở bước hiện tại. Đọc kỹ SKILL.md của bước hiện tại và trạng thái requisition " +
+    "thật, rồi chủ động hỏi user câu hỏi đầu tiên cần thiết theo đúng thứ tự SKILL.md để có thể bắt đầu bước " +
+    "này (ví dụ: có JD cũ không, hoặc thông tin nào đang thiếu trong requisition). Đừng gọi tool nào ở lượt " +
+    "này, chỉ hỏi.";
+  const replyText = await fetchHrSonnetReply(a, reqId, kickoffPrompt, { silent: true });
+  if (typing) typing.remove();
+  chatHistory[key].push({ from: "agent", text: replyText });
+  if (isOpen()) renderChat(a, key);
+}
+
+// Chat chung của hr-1 (HR_GENERAL_VALUE) — cũng gọi DeepSeek thật (hr.chatGeneral ở backend),
+// nhưng không gắn tool/state của riêng requisition nào. Khôi phục lịch sử đã lưu (nếu có) khi mở,
+// giống hệt cơ chế kickoffHrChat làm cho từng requisition.
+const hrGeneralHydrated = new Set();
+async function hydrateGeneralChat(a) {
+  const key = hrKey(a.id, HR_GENERAL_VALUE);
+  if (hrGeneralHydrated.has(a.id) || chatHistory[key]) {
+    if (currentAgent && currentAgent.id === a.id) renderChat(a, key);
+    return;
+  }
+  hrGeneralHydrated.add(a.id);
+  try {
+    const { log } = await hrApi("/api/hr/chat");
+    if (Array.isArray(log) && log.length) {
+      chatHistory[key] = log.map(h => ({ from: h.role === "agent" ? "agent" : "user", text: h.text }));
+    }
+  } catch (e) {
+    // im lặng — chưa tải được, sẽ dùng lời chào mặc định khi renderChat seed
+  }
+  if (currentAgent && currentAgent.id === a.id) renderChat(a, key);
+}
+
+async function fetchHrGeneralReply(a, text, opts = {}) {
+  const key = hrKey(a.id, HR_GENERAL_VALUE);
+  try {
+    const data = await hrApi("/api/hr/chat", {
+      method: "POST",
+      body: JSON.stringify({ message: text, silent: !!opts.silent, rules: a.rules || [], globalRules: GLOBAL_RULES || [] }),
+    });
+    return data.reply;
+  } catch (e) {
+    return `⚠️ Không gọi được mô hình (DeepSeek V4 Flash): ${e.message}\n\nKiểm tra OPENROUTER_API_KEY trong server/.env và Backend Proxy (project/aios/server) có đang chạy trên ${HERMES_PROXY_BASE} không.`;
+  }
+}
+
+async function fetchHrSonnetReply(a, reqId, text, opts = {}) {
+  const key = hrKey(a.id, reqId);
+  try {
+    const data = await hrApi(`/api/hr/requisitions/${encodeURIComponent(reqId)}/chat`, {
+      method: "POST",
+      body: JSON.stringify({ message: text, silent: !!opts.silent, rules: a.rules || [], globalRules: GLOBAL_RULES || [] }),
+    });
+    if (data.toolLog && data.toolLog.length) {
+      const lines = data.toolLog.map(t => {
+        if (t.error) return `❌ ${t.tool}: ${t.error}`;
+        if (t.tool === "open_interview_form") return `📝 Đang mở form đánh giá phỏng vấn…`;
+        if (t.tool === "generate_offer_letter") {
+          const missing = t.result?.missingTemplateFields?.length ? `\n   ⚠️ Mẫu còn thiếu placeholder cho: ${t.result.missingTemplateFields.join(", ")} — kiểm tra lại trước khi gửi` : "";
+          const dl = t.result?.path
+            ? `\n   <a href="${hrFileDownloadUrl(t.result.path)}" download class="btn btn-primary btn-sm" style="display:inline-block;margin-top:.3rem">⬇️ Tải Offer Letter (v${t.result.version}) để xem trước & gửi mail</a>`
+            : "";
+          return `✅ Đã tạo Offer Letter — ${t.result?.path}${missing}${dl}`;
+        }
+        const base = `✅ ${t.tool}(${t.input?.hanh_dong_nhat_ky || t.input?.relative_path || t.input?.ma_uv || ""})`;
+        const sync = t.result?.sheetSync;
+        if (!sync) return base;
+        return base + (sync.ok ? `\n   📊 Excel (Tuyen-dung-2026-Pipeline.xlsx): đã ${sync.action === "updated" ? "cập nhật" : "thêm"} dòng ${t.input?.ma_uv || ""}` : `\n   ⚠️ Excel: chưa đồng bộ được — ${sync.error}`);
+      }).join("\n");
+      chatHistory[key].push({ from: "tool", text: lines });
+
+      const openFormCall = data.toolLog.find(t => t.tool === "open_interview_form" && !t.error);
+      if (openFormCall && currentAgent && currentAgent.id === a.id) {
+        openHrInterviewForm(reqId, openFormCall.input?.ma_uv || "", openFormCall.input?.ten || "");
+      }
+    }
+    if (data.requisition) {
+      a.task = `${data.requisition.requisition_id} — ${data.requisition.vi_tri.ten}: bước B${data.requisition.buoc_hien_tai} ${BUOC_TEN_MAP[data.requisition.buoc_hien_tai] || ""}`;
+      refreshAgentCard(a);
+      loadHrPipeline(a);
+      refreshOrgChart();
+      populateHrChatReqSelect();
+    }
+    return data.reply;
+  } catch (e) {
+    return `⚠️ Không gọi được mô hình (DeepSeek V4 Flash): ${e.message}\n\nKiểm tra OPENROUTER_API_KEY trong server/.env và Backend Proxy (project/aios/server) có đang chạy trên ${HERMES_PROXY_BASE} không.`;
+  }
 }
 
 function agentReply(a, userText) {
@@ -1299,28 +1818,69 @@ $("#chatForm").addEventListener("submit", (e) => {
   const text = input.value.trim();
   if (!text || !currentAgent) return;
   const a = currentAgent;
-  chatHistory[a.id].push({ from: "user", text });
+
+  const hrReqSelect = $("#hrChatReqSelect");
+  const hrReqId = a.id === "hr-1" && hrReqSelect ? hrReqSelect.value : "";
+  const key = hrKey(a.id, hrReqId);
+
+  if (!chatHistory[key]) renderChatSeed(a, key);
+  chatHistory[key].push({ from: "user", text });
   input.value = "";
-  renderChat(a);
+  input.style.height = "auto";
+  renderChat(a, key);
 
   const box = $("#chatMessages");
   const typing = el(`<div class="msg agent typing">${a.name} đang soạn…</div>`);
   box.appendChild(typing);
   box.scrollTop = box.scrollHeight;
 
-  const replyPromise = USE_REAL_HERMES
-    ? fetchHermesReply(a, text).then(r => r !== null ? r : agentReply(a, text))
-    : Promise.resolve(agentReply(a, text)).then(r => new Promise(res => setTimeout(() => res(r), 900 + Math.random() * 700)));
+  let replyPromise;
+  if (hrReqId === HR_GENERAL_VALUE) {
+    // Chat chung của hr-1 — DeepSeek thật, không gắn tool/state của requisition nào
+    replyPromise = fetchHrGeneralReply(a, text);
+  } else if (hrReqId) {
+    // B2-B10 thật qua DeepSeek V4 Flash (OpenRouter) tại local — bỏ qua Hermes hoàn toàn cho hr-1
+    replyPromise = fetchHrSonnetReply(a, hrReqId, text);
+  } else if (USE_REAL_HERMES) {
+    replyPromise = fetchHermesReply(a, text).then(r => r !== null ? r : agentReply(a, text));
+  } else {
+    replyPromise = Promise.resolve(agentReply(a, text)).then(r => new Promise(res => setTimeout(() => res(r), 900 + Math.random() * 700)));
+  }
 
   replyPromise.then((replyText) => {
     typing.remove();
-    chatHistory[a.id].push({ from: "agent", text: replyText });
-    renderChat(a);
+    chatHistory[key].push({ from: "agent", text: replyText });
+    renderChat(a, key);
     addFeed(`<b>${a.name}</b> phản hồi tin nhắn của bạn trong khung chat.`, "");
   });
 });
 
+// Enter gửi tin nhắn, Shift+Enter xuống hàng (mặc định textarea) — và tự giãn chiều cao theo nội dung.
+$("#chatInput").addEventListener("keydown", (e) => {
+  if (e.key === "Enter" && !e.shiftKey) {
+    e.preventDefault();
+    $("#chatForm").requestSubmit();
+  }
+});
+$("#chatInput").addEventListener("input", (e) => {
+  e.target.style.height = "auto";
+  e.target.style.height = `${e.target.scrollHeight}px`;
+});
+
 // ---------- ORCHESTRATOR ROUTING ----------
+// Nhận diện lệnh mở đợt tuyển dụng — vd "Note vị trí tuyển dụng: Kế toán nội bộ, số lượng: 2"
+// Kích hoạt skill /tuyen-dung → /nhu-cau-tuyen-dung (B1) thật cho hr-1, đúng README.md.
+function parseRecruitmentIntent(cmd) {
+  const t = cmd.toLowerCase();
+  if (!(t.includes("vị trí") && t.includes("số lượng"))) return null;
+  const viTriMatch = cmd.match(/vị trí(?:\s*tuyển\s*dụng)?\s*[:là]*\s*([^,\n]+?)(?=,|\s+số lượng|$)/i);
+  const soLuongMatch = cmd.match(/số lượng\s*[:là]*\s*(\d+)/i);
+  return {
+    ten: viTriMatch ? viTriMatch[1].trim().replace(/^là\s+/i, "") : "",
+    so_luong: soLuongMatch ? soLuongMatch[1] : "",
+  };
+}
+
 function routeCommand(cmd) {
   const t = cmd.toLowerCase();
   let best = null, bestScore = 0;
@@ -1389,12 +1949,24 @@ function runOrches(cmd) {
       // push a briefing message into agent chat
       if (!chatHistory[agent.id]) renderChatSeed(agent);
       chatHistory[agent.id] = chatHistory[agent.id] || [];
-      chatHistory[agent.id].push({
-        from: "agent",
-        text: `📥 Em vừa nhận tác vụ từ Orches Agent:\n"${cmd}"\n${agent.workflows.length ? `Em sẽ chạy theo workflow ${agent.workflows[0].split(" — ")[0]}` : "Em sẽ xử lý theo kinh nghiệm tích lũy"}${agent.skills.length ? ` và áp chuẩn skill ${agent.skills[0]}` : ""}. Có gì cần lưu ý thêm anh/chị nhắn em nhé!`,
-      });
-      toast(`✅ Orches đã giao việc cho ${agent.name} — mở chat để trao đổi trực tiếp.`);
-      addFeed(`<b>${agent.name}</b> bắt đầu thực thi task mới. Trạng thái: Đang thực thi.`, "f-done");
+
+      const recruit = agent.id === "hr-1" ? parseRecruitmentIntent(cmd) : null;
+      if (recruit) {
+        chatHistory[agent.id].push({
+          from: "agent",
+          text: `📥 Em vừa nhận tác vụ từ Orches Agent:\n"${cmd}"\n🧩 Kích hoạt skill /tuyen-dung → gọi /nhu-cau-tuyen-dung (B1) — mở sẵn form xác định nhu cầu để anh/chị điền nốt các mục còn thiếu ạ.`,
+        });
+        addFeed(`<b>${agent.name}</b> kích hoạt skill <b>tuyen-dung</b> (B1 — nhu-cau-tuyen-dung) từ lệnh Orches.`, "f-done");
+        toast(`✅ Orches giao HR Agent — đã mở form xác định nhu cầu tuyển dụng, điền nốt và bấm "Tạo requisition".`);
+        prefillHrIntake(recruit);
+      } else {
+        chatHistory[agent.id].push({
+          from: "agent",
+          text: `📥 Em vừa nhận tác vụ từ Orches Agent:\n"${cmd}"\n${agent.workflows.length ? `Em sẽ chạy theo workflow ${agent.workflows[0].split(" — ")[0]}` : "Em sẽ xử lý theo kinh nghiệm tích lũy"}${agent.skills.length ? ` và áp chuẩn skill ${agent.skills[0]}` : ""}. Có gì cần lưu ý thêm anh/chị nhắn em nhé!`,
+        });
+        toast(`✅ Orches đã giao việc cho ${agent.name} — mở chat để trao đổi trực tiếp.`);
+        addFeed(`<b>${agent.name}</b> bắt đầu thực thi task mới. Trạng thái: Đang thực thi.`, "f-done");
+      }
     } else {
       $("#rs4txt").textContent = "Chờ bạn bổ sung thông tin";
       toast(`🤔 Orches cần thêm ngữ cảnh: hãy nêu rõ nghiệp vụ (khách hàng, hợp đồng, CV, công nợ, nội dung…)`);
@@ -1402,8 +1974,8 @@ function runOrches(cmd) {
   }, 2400);
 }
 
-function renderChatSeed(a) {
-  chatHistory[a.id] = [{
+function renderChatSeed(a, key = a.id) {
+  chatHistory[key] = [{
     from: "agent",
     text: `Chào anh/chị! Em là ${a.name} (${a.model}).\nEm đang phụ trách: "${a.task}".\nAnh/chị cần em hỗ trợ gì ạ?`,
   }];
@@ -1447,7 +2019,7 @@ function ambientTick() {
 $("#navToggle").addEventListener("click", () => $("#navLinks").classList.toggle("open"));
 $("#navOverview").addEventListener("click", (e) => { e.preventDefault(); window.scrollTo({ top: 0, behavior: "smooth" }); });
 document.addEventListener("keydown", (e) => {
-  if (e.key === "Escape") { closeDrawer(); $("#skillModal").classList.remove("open"); closeGlobalModal(); }
+  if (e.key === "Escape") { closeDrawer(); $("#skillModal").classList.remove("open"); closeGlobalModal(); closeHrIntake(); closeHrInterviewForm(); }
 });
 $("#globalModal").addEventListener("click", (e) => { if (e.target.id === "globalModal") closeGlobalModal(); });
 
