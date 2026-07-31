@@ -688,10 +688,22 @@ section.block { padding: 4.5rem 0; }
 
 /* HR chat context selector (B2-B10 — Sonnet thật) */
 .hr-chat-context {
-  display: flex; align-items: center; gap: .6rem; flex-wrap: wrap;
+  display: flex; align-items: center; gap: .6rem;
   padding: .6rem 1.3rem; border-bottom: 1px solid var(--line);
   background: rgba(167,139,250,.06); font-size: .78rem; color: var(--muted);
 }
+.hr-chat-context-inner {
+  display: flex; align-items: center; gap: .6rem; flex-wrap: wrap; flex: 1; min-width: 0;
+}
+.hr-chat-context.collapsed { padding: .3rem 1.3rem; }
+.hr-chat-context.collapsed .hr-chat-context-inner { display: none; }
+.hr-chat-context-toggle {
+  flex: 0 0 auto; margin-left: auto; background: transparent; border: none;
+  color: var(--muted); cursor: pointer; font-size: .7rem; padding: .25rem .4rem;
+  line-height: 1; border-radius: 6px; transition: transform .15s ease, color .15s ease;
+}
+.hr-chat-context-toggle:hover { color: var(--text); background: rgba(255,255,255,.06); }
+.hr-chat-context.collapsed .hr-chat-context-toggle { transform: rotate(180deg); }
 .hr-chat-context select {
   background: rgba(7,11,26,.7); border: 1px solid var(--line); border-radius: 8px;
   padding: .3rem .6rem; color: var(--text); font-size: .78rem; outline: none;

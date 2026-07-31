@@ -473,6 +473,21 @@ const BUOC_TEN_MAP = {
   8: "Trình duyệt offer letter", 9: "Gửi offer letter", 10: "Lưu hồ sơ & đóng job",
 };
 
+// Tóm tắt tác vụ THẬT của hr-1 từ pipeline requisitions thật (thay cho task demo cố định) —
+// dùng cho cả badge trên thẻ agent lẫn câu chào mở đầu trong chat.
+function hrTaskSummary(requisitions) {
+  if (!requisitions || !requisitions.length) {
+    return "Chưa có đợt tuyển dụng nào — sẵn sàng mở đợt mới khi cần.";
+  }
+  if (requisitions.length === 1) {
+    const r = requisitions[0];
+    const uv = r.so_ung_vien ? `, ${r.so_ung_vien} ứng viên` : "";
+    return `${r.requisition_id} — ${r.vi_tri?.ten || "?"}: đang ở B${r.buoc_hien_tai} (${r.buoc_ten || BUOC_TEN_MAP[r.buoc_hien_tai] || "?"})${uv}.`;
+  }
+  return `Đang theo dõi ${requisitions.length} đợt tuyển dụng: ` +
+    requisitions.map(r => `${r.requisition_id} (B${r.buoc_hien_tai})`).join(", ") + ".";
+}
+
 async function hrApi(path, opts) {
   const res = await fetch(`${HERMES_PROXY_BASE}${path}`, {
     headers: { "Content-Type": "application/json" },
@@ -552,6 +567,13 @@ $("#hrInterviewFormBtn")?.addEventListener("click", () => {
 });
 $("#hrInterviewModal").addEventListener("click", (e) => { if (e.target.id === "hrInterviewModal") closeHrInterviewForm(); });
 
+$("#hrChatContextToggle")?.addEventListener("click", () => {
+  const bar = $("#hrChatContext");
+  const collapsed = bar.classList.toggle("collapsed");
+  $("#hrChatContextToggle").title = collapsed ? "Mở rộng thanh này" : "Thu gọn thanh này";
+  localStorage.setItem("hrChatContextCollapsed", collapsed ? "1" : "0");
+});
+
 $("#hrInterviewForm").addEventListener("submit", async (e) => {
   e.preventDefault();
   const form = e.target;
@@ -620,6 +642,8 @@ async function loadHrPipeline(agent) {
   if (!box) return;
   try {
     const { requisitions } = await hrApi("/api/hr/requisitions");
+    agent.task = hrTaskSummary(requisitions);
+    refreshAgentCard(agent);
     if (!requisitions.length) {
       box.innerHTML = `<div class="kwsr-empty">Chưa có đợt tuyển nào — bấm "＋ Mở đợt tuyển mới" để tạo requisition thật đầu tiên.</div>`;
       return;
@@ -1537,6 +1561,7 @@ function switchTab(tab) {
     setTimeout(() => $("#chatInput").focus(), 250);
     if (currentAgent && currentAgent.id === "hr-1") {
       $("#hrChatContext").style.display = "flex";
+      $("#hrChatContext").classList.toggle("collapsed", localStorage.getItem("hrChatContextCollapsed") === "1");
       populateHrChatReqSelect().then(() => {
         const sel = $("#hrChatReqSelect");
         if (!sel || !sel.value) return;
@@ -1599,6 +1624,8 @@ async function populateHrChatReqSelect() {
   sel.innerHTML = `<option value="">Đang tải…</option>`;
   try {
     const { requisitions } = await hrApi("/api/hr/requisitions");
+    const a = AGENTS.find(x => x.id === "hr-1");
+    if (a) { a.task = hrTaskSummary(requisitions); refreshAgentCard(a); }
     const generalOption = `<option value="${HR_GENERAL_VALUE}">${HR_GENERAL_LABEL}</option>`;
     if (!requisitions.length) {
       sel.innerHTML = generalOption;

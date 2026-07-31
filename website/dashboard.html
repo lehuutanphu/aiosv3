@@ -119,9 +119,12 @@
   <!-- TAB: CHAT -->
   <div class="chat-wrap" id="tabChat" style="display:none">
     <div class="hr-chat-context" id="hrChatContext" style="display:none">
-      <span>🧩 Thực thi qua <b>DeepSeek V4 Flash</b> (local) cho requisition:</span>
-      <select id="hrChatReqSelect"></select>
-      <button type="button" class="btn btn-ghost btn-sm" id="hrInterviewFormBtn" title="Mở form đánh giá phỏng vấn ngay, không cần chờ agent tự gọi">🗣️ Đánh giá phỏng vấn</button>
+      <div class="hr-chat-context-inner" id="hrChatContextInner">
+        <span>🧩 Thực thi qua <b>DeepSeek V4 Flash</b> (local) cho requisition:</span>
+        <select id="hrChatReqSelect"></select>
+        <button type="button" class="btn btn-ghost btn-sm" id="hrInterviewFormBtn" title="Mở form đánh giá phỏng vấn ngay, không cần chờ agent tự gọi">🗣️ Đánh giá phỏng vấn</button>
+      </div>
+      <button type="button" class="hr-chat-context-toggle" id="hrChatContextToggle" title="Thu gọn/mở rộng thanh này">▲</button>
     </div>
     <div class="chat-messages" id="chatMessages"></div>
     <form class="chat-input-row" id="chatForm">
