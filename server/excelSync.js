@@ -21,7 +21,7 @@ function withQueue(fn) {
   return run;
 }
 
-// values: mảng 24 phần tử theo ĐÚNG thứ tự cột A..X trong hr/templates/pipeline-sheet-schema.md.
+// values: mảng 31 phần tử theo ĐÚNG thứ tự cột A..AE trong hr/templates/pipeline-sheet-schema.md.
 // values[0] = Ma_UV, values[1] = REQ_ID — khóa ghép 2 cột này để tránh đè nhầm UV-01 của REQ khác
 // (Ma_UV chỉ duy nhất TRONG PHẠM VI 1 requisition, không duy nhất toàn bộ sheet).
 async function upsertRow(values) {

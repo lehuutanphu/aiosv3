@@ -340,6 +340,10 @@ const TOOLS = [
       description:
         "Thêm mới hoặc cập nhật 1 ứng viên trong ung_vien[] theo ma_uv (merge nông vào phần tử hiện có). " +
         "Dùng cho B4 (điểm CV), B5-B6 (lịch PV, kết quả), B7-B9 (offer). " +
+        "B4 — khi chấm điểm CV, LUÔN điền đủ diem, xep_loai, diem_chi_tiet {bat_buoc(/50), nen_co(/25), " +
+        "kinh_nghiem(/15), on_dinh(/10)} theo đúng 4 hạng mục rubric B1 của SKILL.md (không chỉ điền tổng " +
+        "diem rồi bỏ trống breakdown), cùng diem_manh[] và diem_can_hoi[] — các field này đều được đồng bộ " +
+        "thành cột riêng trong Excel Pipeline, thiếu field nào thì cột đó trống. " +
         "🔴 CHỈ điền offer.luong_thu_viec/luong_chinh_thuc/phu_cap/thuong SAU KHI người dùng đã gõ xác nhận " +
         "đủ 12/12 dòng điều khoản trong hội thoại — nếu chưa, để các field đó null.",
       parameters: {
@@ -480,6 +484,7 @@ function buildPipelineRow(reqId, requisition, uv) {
   const lichPv = uv.lich_pv || {};
   const ketQuaPv = uv.ket_qua_pv || {};
   const offer = uv.offer || {};
+  const diemChiTiet = uv.diem_chi_tiet || {};
   const [ngayPv, gioPv] = String(lichPv.thoi_gian || "").split("T");
   return [
     uv.ma_uv || "",
@@ -506,6 +511,13 @@ function buildPipelineRow(reqId, requisition, uv) {
     uv.trang_thai === "nhan_viec" ? offer.ngay_onboard || "" : "",
     "", // Ghi_chu — để trống, không tự suy diễn
     nowISO(),
+    uv.file_cv || "",
+    diemChiTiet.bat_buoc ?? "",
+    diemChiTiet.nen_co ?? "",
+    diemChiTiet.kinh_nghiem ?? "",
+    diemChiTiet.on_dinh ?? "",
+    (uv.diem_manh || []).join("; "),
+    (uv.diem_can_hoi || []).join("; "),
   ];
 }
 
@@ -673,10 +685,18 @@ function jdCuDinhKemBlock(initial) {
 
 // ---------- B4 — nộp CV bằng cách copy file PDF vào thư mục thật (không có Gmail MCP thật) ----------
 // User tự copy CV vào hr/data/ho-so/<reqId>/cv/ rồi nhắn TÊN FILE vào chat. Server phát hiện tên
-// file được nhắc tới, tự đính kèm đúng file PDF đó vào tin nhắn (base64) và nhờ OpenRouter tự
-// đọc PDF hộ (plugin file-parser, engine cloudflare-ai — miễn phí) — không cần cài thư viện parse
-// PDF nào ở server, đúng chủ trương "không phụ thuộc gói ngoài" của module này.
-const CV_MAX_BYTES = 8 * 1024 * 1024; // 8MB/file — đủ cho CV thường, chặn file quá khổ tốn OCR
+// file được nhắc tới, tự đính kèm đúng file PDF đó (base64) vào tin nhắn.
+//
+// Model riêng cho lượt đọc CV: Claude Haiku 4.5 (có vision, đọc PDF gốc trực tiếp — kể cả CV dạng
+// scan/đồ họa không có lớp text) thay vì DEFAULT_MODEL (DeepSeek V4 Flash, text-only). Trước đây dùng
+// plugin file-parser (OCR engine cloudflare-ai) của OpenRouter để trích text hộ DeepSeek, nhưng OCR
+// đó có thể chỉ đọc được metadata PDF (không đọc được nội dung trang) với CV dạng ảnh/đồ họa — xem
+// nhật ký sự cố "chỉ đọc được metadata". Chuyển sang model vision bỏ hẳn bước OCR trung gian này:
+// KHÔNG truyền `plugins` cho lượt gọi CV_READ_MODEL — để OpenRouter chuyển file PDF thẳng cho Claude
+// đọc bằng khả năng đọc tài liệu gốc, không qua bộ OCR nào cả. Các bước khác (B1-B3, B5-B10) không
+// đọc file nên vẫn dùng DEFAULT_MODEL (DeepSeek V4 Flash) như cũ — chỉ lượt có đính kèm CV mới đổi model.
+const CV_READ_MODEL = process.env.OPENROUTER_CV_MODEL || "anthropic/claude-haiku-4.5";
+const CV_MAX_BYTES = 8 * 1024 * 1024; // 8MB/file — đủ cho CV thường
 
 function cvDirPath(reqId) {
   return path.join(HOSO_DIR, reqId, "cv");
@@ -700,7 +720,9 @@ function cvFolderBlock(reqId, initial) {
       ? `File PDF hiện có: ${files.join(", ")}\n\n` +
         `User đã copy file vào thư mục trên. Khi user nhắc TÊN FILE trong chat (hoặc nói "chấm tất cả"/"chấm hết"), ` +
         `hệ thống tự đính kèm đúng file PDF đó vào tin nhắn cho bạn đọc trực tiếp — bạn KHÔNG cần tool đọc file, ` +
-        `chỉ cần chấm điểm theo đúng rubric 3 tầng ở Phần B của SKILL.md rồi lưu bằng upsert_candidate.`
+        `chỉ cần chấm điểm theo đúng rubric 3 tầng ở Phần B của SKILL.md rồi gọi upsert_candidate lưu NGAY trong ` +
+        `cùng lượt trả lời (xem block "QUAN TRỌNG — chấm điểm CV (B4)" ở trên) — không hiển thị bảng điểm cho ` +
+        `user xong mới lưu ở lượt sau.`
       : `Thư mục đang trống. Hướng dẫn user: copy file CV (định dạng .pdf, đặt tên rõ ràng vd TenUngVien.pdf) ` +
         `vào đúng đường dẫn trên, rồi nhắn tên file đó vào chat — hệ thống sẽ tự đính kèm cho bạn đọc và chấm điểm. ` +
         `Đây là cách nộp CV thay Gmail vì hệ thống này chưa nối Gmail MCP thật.`)
@@ -772,6 +794,16 @@ async function chatOnRequisition(reqId, message, opts = {}) {
     `có thể chuyển sang bước kế tiếp, PHẢI gọi update_requisition_fields với buoc_hien_tai mới NGAY trong lượt ` +
     `đó. Chỉ nói bằng lời "đã hoàn tất B..." mà không gọi tool sẽ KHÔNG được lưu — lần chat sau (hoặc sau khi ` +
     `restart) bước sẽ vẫn hiện đúng như cũ, người dùng sẽ tưởng bị mất tiến độ dù bạn đã nói là xong.\n\n` +
+    `QUAN TRỌNG — chấm điểm CV (B4): ngay khi bạn đưa ra điểm số/xếp loại cụ thể cho một ứng viên trong ` +
+    `câu trả lời (bảng điểm, điểm mạnh, điểm cần hỏi...), PHẢI gọi tool upsert_candidate lưu đúng số đó ` +
+    `NGAY TRONG CÙNG LƯỢT — không hiển thị điểm cho user rồi chờ user yêu cầu "lưu lại" mới lưu, không hỏi ` +
+    `thêm thông tin rồi bỏ dở việc lưu. Chỉ hiện điểm trong chat mà không gọi tool = dữ liệu KHÔNG vào file ` +
+    `pipeline, bước kế tiếp (B5+) sẽ không thấy ứng viên này. Lệnh gọi PHẢI kèm đủ diem_chi_tiet (4 hạng mục ` +
+    `bat_buoc/nen_co/kinh_nghiem/on_dinh của rubric B1) chứ không chỉ tổng diem — thiếu breakdown thì cột ` +
+    `tương ứng trong Excel Pipeline sẽ trống, người dùng không truy được vì sao điểm ra như vậy. Nếu thiếu ` +
+    `căn cứ chấm điểm (chưa có tiêu chí JD) thì được phép từ chối chấm và hỏi lại — nhưng một khi bạn đã nêu ` +
+    `một con số điểm cụ thể, con số đó (kèm breakdown) bắt buộc phải được lưu qua tool trong cùng lượt, kèm ` +
+    `ghi chú cảnh báo trong diem_can_hoi nếu điểm chưa chắc chắn do thiếu tiêu chí.\n\n` +
     `=== hr/skills/tuyen-dung/SKILL.md (điều phối) ===\n${dispatcherMd}\n\n` +
     `=== hr/skills/${buoc.skill}/SKILL.md (bước hiện tại B${initial.buoc_hien_tai}) ===\n${stepMd}\n\n` +
     `=== Trạng thái requisition hiện tại (JSON thật) ===\n${JSON.stringify(initial, null, 2)}` +
@@ -790,7 +822,9 @@ async function chatOnRequisition(reqId, message, opts = {}) {
     ...persistedLog.map((h) => ({ role: h.role === "agent" ? "assistant" : "user", content: String(h.text || "") })),
     { role: "user", content: userContent },
   ];
-  const plugins = attachments.length ? [{ id: "file-parser", pdf: { engine: "cloudflare-ai" } }] : undefined;
+  // Có CV đính kèm → đổi sang model có vision (CV_READ_MODEL), không dùng plugin OCR nữa (Claude tự
+  // đọc PDF gốc). Không có CV đính kèm → giữ nguyên DEFAULT_MODEL (DeepSeek V4 Flash) cho mọi bước khác.
+  const model = attachments.length ? CV_READ_MODEL : undefined;
 
   const persist = (reply) => {
     const entries = [];
@@ -804,7 +838,7 @@ async function chatOnRequisition(reqId, message, opts = {}) {
 
   const toolLog = [];
   for (let turn = 0; turn < 5; turn++) {
-    const msg = await callChatModel({ system, messages, tools: TOOLS, plugins });
+    const msg = await callChatModel({ system, messages, tools: TOOLS, model });
     const toolCalls = msg.tool_calls || [];
 
     if (!toolCalls.length) {

@@ -43,6 +43,16 @@ Agent xuất `.csv` đúng thứ tự dưới đây để bạn dán đè. Sai t
 | V | `Ngay_onboard_thuc_te` | Date | |
 | W | `Ghi_chu` | Text | |
 | X | `Cap_nhat_luc` | Datetime | Agent ghi mốc thời gian đồng bộ gần nhất |
+| Y | `File_CV` | Text | Tên file PDF gốc trong `hr/data/ho-so/<REQ-ID>/cv/` |
+| Z | `Diem_bat_buoc` | Number | 0–50 — breakdown rubric B1, hạng mục tiêu chí bắt buộc |
+| AA | `Diem_nen_co` | Number | 0–25 — breakdown rubric B1, hạng mục tiêu chí nên có |
+| AB | `Diem_kinh_nghiem` | Number | 0–15 — breakdown rubric B1, kinh nghiệm liên quan |
+| AC | `Diem_on_dinh` | Number | 0–10 — breakdown rubric B1, tín hiệu ổn định |
+| AD | `Diem_manh` | Text | Gộp các điểm mạnh, phân cách `; ` |
+| AE | `Diem_can_hoi` | Text | Gộp các điểm cần hỏi ở vòng PV, phân cách `; ` |
+
+Cột Z–AC cộng lại đúng bằng cột I (`Diem_CV`) nếu agent chấm đủ 4 hạng mục — dùng để soát nhanh
+khi thấy điểm tổng có vẻ bất thường mà không cần mở lại CV gốc.
 
 ---
 

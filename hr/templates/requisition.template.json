@@ -67,6 +67,12 @@
       "file_cv": "",
       "diem": null,
       "xep_loai": null,
+      "diem_chi_tiet": {
+        "bat_buoc": null,
+        "nen_co": null,
+        "kinh_nghiem": null,
+        "on_dinh": null
+      },
       "diem_manh": [],
       "diem_can_hoi": [],
       "trang_thai": "moi",

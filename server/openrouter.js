@@ -5,9 +5,10 @@
 const DEFAULT_MODEL = process.env.OPENROUTER_MODEL || "deepseek/deepseek-v4-flash";
 const DEFAULT_MAX_TOKENS = 4096;
 
-// { system, messages: [{role,content}], tools: OpenAI function-tool format, plugins: OpenRouter plugins (vd file-parser cho PDF) }
+// { system, messages: [{role,content}], tools: OpenAI function-tool format, plugins: OpenRouter plugins (vd file-parser cho PDF),
+//   model: override model cho riêng lượt gọi này (vd đọc CV bằng model có vision thay vì DEFAULT_MODEL) }
 // -> trả nguyên văn choices[0].message (OpenAI Chat Completions shape)
-async function callChatModel({ system, messages, tools, plugins }) {
+async function callChatModel({ system, messages, tools, plugins, model }) {
   const apiKey = process.env.OPENROUTER_API_KEY;
   if (!apiKey) {
     throw Object.assign(new Error("Thiếu OPENROUTER_API_KEY trong .env — cần key thật để mô hình thực thi B2-B10 tại local."), { status: 500 });
@@ -24,7 +25,7 @@ async function callChatModel({ system, messages, tools, plugins }) {
         "X-Title": "AI OS - HR Agent (tuyen-dung)",
       },
       body: JSON.stringify({
-        model: DEFAULT_MODEL,
+        model: model || DEFAULT_MODEL,
         max_tokens: DEFAULT_MAX_TOKENS,
         messages: [{ role: "system", content: system }, ...messages],
         tools,
