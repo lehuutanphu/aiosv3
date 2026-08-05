@@ -27,7 +27,20 @@ loadEnvFile();
 
 const CONFIG = JSON.parse(fs.readFileSync(path.join(ROOT, "agents.config.json"), "utf8"));
 const PROXY_PORT = Number(process.env.PROXY_PORT || 8787);
-const ALLOWED_ORIGIN = process.env.ALLOWED_ORIGIN || "http://localhost:64667";
+// Hỗ trợ nhiều origin cùng lúc (phân cách bằng dấu phẩy) — vd chạy song song dashboard local
+// (http://localhost:64667) và bản đã deploy (https://workers.ai-os.vn), vì proxy này luôn chạy trên
+// MÁY của người mở dashboard (kể cả khi mở bản deploy) nên phải nhận diện đúng origin đang gọi tới
+// thì mới trả lại đúng Access-Control-Allow-Origin — trả sai origin sẽ bị trình duyệt chặn ở tầng CORS
+// dù request vẫn "thành công" ở tầng mạng (dễ nhầm là proxy không chạy).
+const ALLOWED_ORIGINS = String(process.env.ALLOWED_ORIGIN || "http://localhost:64667")
+  .split(",")
+  .map((s) => s.trim())
+  .filter(Boolean);
+function pickAllowedOrigin(req) {
+  const reqOrigin = req.headers.origin;
+  if (reqOrigin && ALLOWED_ORIGINS.includes(reqOrigin)) return reqOrigin;
+  return ALLOWED_ORIGINS[0];
+}
 const MOCK_MODE = String(process.env.MOCK_MODE || "true").toLowerCase() === "true";
 
 function hermesKeyEnvName(agentId) {
@@ -38,7 +51,7 @@ function sendJson(res, status, obj) {
   const body = JSON.stringify(obj);
   res.writeHead(status, {
     "Content-Type": "application/json; charset=utf-8",
-    "Access-Control-Allow-Origin": ALLOWED_ORIGIN,
+    "Access-Control-Allow-Origin": res.__corsOrigin || ALLOWED_ORIGINS[0],
     "Access-Control-Allow-Headers": "Content-Type",
     "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
   });
@@ -176,9 +189,11 @@ async function handleKnowledge(agentId, agentCfg, payload) {
 
 // ---------- HTTP server (không dùng framework ngoài) ----------
 const server = http.createServer(async (req, res) => {
+  res.__corsOrigin = pickAllowedOrigin(req);
+
   if (req.method === "OPTIONS") {
     res.writeHead(204, {
-      "Access-Control-Allow-Origin": ALLOWED_ORIGIN,
+      "Access-Control-Allow-Origin": res.__corsOrigin,
       "Access-Control-Allow-Headers": "Content-Type",
       "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
     });
@@ -263,7 +278,7 @@ const server = http.createServer(async (req, res) => {
       res.writeHead(200, {
         "Content-Type": mime,
         "Content-Disposition": `attachment; filename*=UTF-8''${encodeURIComponent(filename)}`,
-        "Access-Control-Allow-Origin": ALLOWED_ORIGIN,
+        "Access-Control-Allow-Origin": res.__corsOrigin,
       });
       return fs.createReadStream(absPath).pipe(res);
     }
@@ -301,6 +316,6 @@ const server = http.createServer(async (req, res) => {
 
 server.listen(PROXY_PORT, () => {
   console.log(`AI OS ↔ Hermes proxy đang chạy tại http://localhost:${PROXY_PORT}`);
-  console.log(`MOCK_MODE=${MOCK_MODE} — ALLOWED_ORIGIN=${ALLOWED_ORIGIN}`);
+  console.log(`MOCK_MODE=${MOCK_MODE} — ALLOWED_ORIGINS=${ALLOWED_ORIGINS.join(", ")}`);
   console.log(`Agents cấu hình: ${Object.keys(CONFIG.agents).join(", ")}`);
 });
