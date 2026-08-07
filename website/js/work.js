@@ -215,6 +215,89 @@
     };
   }
 
+  // ---------- Thành phần giao diện dùng lại ----------
+  const STATUS_LIST = ["Mới", "Đang thực hiện", "Chờ duyệt", "Tạm dừng", "Hoàn tất"];
+  const PRIO_LIST = ["Cao", "Trung bình", "Thấp"];
+  const TYPE_LIST = ["Yêu cầu phát triển phần mềm", "Hỗ trợ khách hàng", "Testing phần mềm", "Tư vấn & khảo sát"];
+
+  const stClass = (st) => ({ "Mới": "new", "Đang thực hiện": "doing", "Chờ duyệt": "review", "Tạm dừng": "pause", "Hoàn tất": "done", "Hoàn thành": "done" }[st] || "new");
+  const pill = (st) => `<span class="wk-pill ${stClass(st)}">${esc(st)}</span>`;
+  const prioTag = (p) => `<span class="wk-prio ${p === "Cao" ? "hi" : p === "Thấp" ? "lo" : "md"}">⚑ ${esc(p)}</span>`;
+  const bar = (p) => `<div class="wk-bar ${p >= 100 ? "full" : ""}"><i style="width:${Math.max(0, Math.min(100, p))}%"></i><b>${p}%</b></div>`;
+  const initials = (name) => name.trim().split(/\s+/).slice(-2).map((w) => w[0]).join("").toUpperCase();
+
+  function avatars(ids) {
+    const shown = ids.slice(0, 5);
+    const rest = ids.length - shown.length;
+    return `<span class="wk-avts">${shown.map((id) => `<span class="wk-avt" title="${esc(staffName(id))}">${esc(initials(staffName(id)))}</span>`).join("")}${rest > 0 ? `<span class="wk-avt">+${rest}</span>` : ""}</span>`;
+  }
+
+  const dlCell = (date, status) =>
+    !date ? '<span class="wk-muted">—</span>'
+      : isLate(date, status) ? `<span class="wk-late" title="Đã quá hạn">${fmtD(date)}</span>`
+      : `<span>${fmtD(date)}</span>`;
+
+  function whoBadge(k) {
+    if (isAgentTask(k)) {
+      const a = agentById(k.executor.id);
+      return `<span class="wk-who agent" title="AI Agent · nhân sự chịu trách nhiệm: ${esc(staffName(k.owner))}">🤖 ${esc(a ? a.name : k.executor.id)}</span>`;
+    }
+    return `<span class="wk-who human">${esc(staffName(k.executor.id))}</span>`;
+  }
+  const ownerLine = (k) => (isAgentTask(k) ? `<span class="wk-sub">chịu trách nhiệm: ${esc(staffName(k.owner))}</span>` : "");
+
+  const opts = (list, selected) => list.map((v) => `<option value="${esc(v)}"${v === selected ? " selected" : ""}>${esc(v)}</option>`).join("");
+  const staffOpts = (selected) => S.staff.map((s) => `<option value="${s.id}"${s.id === selected ? " selected" : ""}>${esc(s.name)}</option>`).join("");
+  const projectOpts = (selected) => S.projects.map((p) => `<option value="${p.id}"${p.id === selected ? " selected" : ""}>${esc(p.name)}</option>`).join("");
+  const customerOpts = (selected) => S.customers.map((c) => `<option value="${c.id}"${c.id === selected ? " selected" : ""}>${esc(c.name)}</option>`).join("");
+
+  function ticketOpts(selected) {
+    return S.projects.map((p) => {
+      const ts = projectTickets(p.id);
+      if (!ts.length) return "";
+      return `<optgroup label="${esc(p.name)}">${ts.map((t) => `<option value="${t.id}"${t.id === selected ? " selected" : ""}>#${t.code} — ${esc(t.title)}</option>`).join("")}</optgroup>`;
+    }).join("");
+  }
+
+  // Người thực hiện: nhân sự hoặc AI Agent — giá trị dạng "human:s3" / "agent:sales-1"
+  const executorValue = (k) => `${k.executor.type}:${k.executor.id}`;
+  function executorOpts(selected) {
+    const humans = S.staff.map((s) => `<option value="human:${s.id}"${`human:${s.id}` === selected ? " selected" : ""}>${esc(s.name)}</option>`).join("");
+    const agents = agentList().map((a) => `<option value="agent:${a.id}"${`agent:${a.id}` === selected ? " selected" : ""}>${esc(a.icon || "🤖")} ${esc(a.name)} — ${esc(a.model)}</option>`).join("");
+    return `<optgroup label="👤 Nhân sự">${humans}</optgroup><optgroup label="🤖 AI Agent">${agents || '<option disabled>Chưa nạp được danh sách Agent</option>'}</optgroup>`;
+  }
+  function parseExecutor(value) {
+    const [type, id] = String(value).split(":");
+    return { type: type === "agent" ? "agent" : "human", id };
+  }
+  // Agent làm việc thì người chịu trách nhiệm mặc định là nhân sự phụ trách Agent đó
+  function defaultOwner(executor) {
+    if (executor.type === "agent") return S.agentOwners[executor.id] || S.staff[0].id;
+    return executor.id;
+  }
+
+  const panel = (title, actions, body) => `
+    <div class="wk-panel">
+      <div class="wk-panel-head"><h3>${title}</h3><span class="spacer"></span>${actions || ""}</div>
+      ${body}
+    </div>`;
+
+  const table = (headHtml, rowsHtml, emptyText, cols) => `
+    <div class="wk-table-wrap"><table class="wk-table">
+      <thead><tr>${headHtml}</tr></thead>
+      <tbody>${rowsHtml || `<tr><td class="empty" colspan="${cols}">${esc(emptyText)}</td></tr>`}</tbody>
+    </table></div>`;
+
+  const crumb = (parts) =>
+    `<div class="wk-crumb">${parts.map((p, i) =>
+      (p.view ? `<button data-act="go" data-view="${p.view}"${p.id ? ` data-id="${p.id}"` : ""}>${esc(p.label)}</button>` : `<b>${esc(p.label)}</b>`) +
+      (i < parts.length - 1 ? '<span class="sep">/</span>' : "")).join("")}</div>`;
+
+  // ---------- Bộ lọc (giữ giữa các lần render) ----------
+  const TF = { kw: "", project: "", customer: "", status: "" };
+  const KF = { kw: "", executor: "", project: "", status: "", showDone: false, sortKey: "", sortDir: 1, mode: "table" };
+  const QA = {}; // ticketId -> đang mở hàng thêm nhanh
+
   // ---------- Điều hướng ----------
   const VIEW_META = {
     control: { icon: "🛰️", title: "Phòng điều hành", desc: "Toàn cảnh dự án, công việc, trễ hạn và tình trạng báo cáo của cả người lẫn AI Agent." },
@@ -227,11 +310,22 @@
     flow: { icon: "🔄", title: "Luồng nghiệp vụ", desc: "Mô hình dữ liệu và luồng vận hành, bao gồm cả nhánh giao việc cho AI Agent." },
   };
 
-  let VIEW = "control";
+  const PARENT_VIEW = { projectDetail: "projects", ticketDetail: "tickets" };
 
-  function show(view) {
-    VIEW = VIEW_META[view] ? view : "control";
+  let VIEW = "control";
+  let CTX = null;
+
+  function show(view, ctx) {
+    VIEW = (VIEW_META[view] || PARENT_VIEW[view]) ? view : "control";
+    CTX = ctx == null ? null : ctx;
     render();
+  }
+
+  function setSidebarActive() {
+    const key = PARENT_VIEW[VIEW] || VIEW;
+    document.querySelectorAll(".dash-sidebar .side-link").forEach((x) => x.classList.remove("active"));
+    const link = document.querySelector(`[data-work="${key}"]`);
+    if (link) link.classList.add("active");
   }
 
   // ---------- Render ----------
@@ -259,41 +353,340 @@
 
   const VIEW_TODO = {
     control: ["P2", "Biểu đồ tải theo người và theo Agent, danh sách việc trễ hạn / thiếu báo cáo bấm được, và nhật ký hoạt động hợp nhất người + AI."],
-    projects: ["P1", "Danh sách dự án, trang chi tiết với phiếu yêu cầu lồng bên trong, tài liệu đính kèm và công tắc public cho khách hàng."],
-    tickets: ["P1", "Danh sách phiếu có bộ lọc theo dự án / khách hàng / trạng thái, trang chi tiết kèm các công việc bên trong và nút thêm nhanh."],
-    tasks: ["P1", "Bảng công việc và bảng Kanban theo trạng thái, lọc theo người thực hiện, theo Agent và theo dự án."],
     staff: ["P2", "Khối lượng việc từng nhân sự, các Agent người đó chịu trách nhiệm kèm độ trưởng thành KWSR lấy từ hồ sơ Agent."],
     reports: ["P2", "Nhật ký báo cáo theo ngày/tuần, lọc theo người và Agent, cảnh báo công việc đang chạy mà không có báo cáo."],
     portal: ["P4", "Trang tiến độ dành cho khách hàng theo tone tối của AI OS, chỉ hiện dự án đã bật public."],
     flow: ["P4", "Sơ đồ mô hình dữ liệu 3 cấp, ma trận trạng thái và luồng giao việc cho AI Agent."],
   };
 
+  /* ================= 1. DỰ ÁN ================= */
+  function vProjects() {
+    const rows = S.projects.map((p) => {
+      const pr = projectProgress(p.id);
+      return `<tr class="clickable" data-act="go" data-view="projectDetail" data-id="${p.id}">
+        <td><span class="wk-link">${esc(p.name)}</span><span class="wk-sub">${esc(p.desc.slice(0, 64))}…</span></td>
+        <td>${esc(customerName(p.customer))}</td>
+        <td><span class="wk-who human">${esc(staffName(p.pm))}</span></td>
+        <td>${avatars(p.members)}</td>
+        <td>${dlCell(p.deadline, p.status)}</td>
+        <td style="text-align:center">${projectTickets(p.id).length}</td>
+        <td>${bar(pr)}</td>
+        <td>${pill(p.status)}</td>
+        <td>${p.public ? '<span class="wk-pill done">🌐 Có</span>' : '<span class="wk-muted">—</span>'}</td>
+      </tr>`;
+    }).join("");
+
+    return kpiStrip() + panel(
+      "📁 Danh sách dự án",
+      '<button class="btn btn-primary btn-sm" data-act="new-project">＋ Tạo dự án</button>',
+      table(
+        "<th>Dự án</th><th>Khách hàng</th><th>PM</th><th>Nhân sự</th><th>Thời hạn</th><th>Phiếu</th><th>Tiến độ</th><th>Trạng thái</th><th>Public</th>",
+        rows, "Chưa có dự án nào.", 9)
+    );
+  }
+
+  function vProjectDetail() {
+    const p = projectById(CTX);
+    if (!p) return vProjects();
+    const pr = projectProgress(p.id);
+    const ts = projectTickets(p.id);
+
+    const head = `
+    <div class="wk-panel">
+      <div class="wk-panel-head">
+        <h3>${esc(p.name)}</h3>
+        ${pill(p.status)}
+        ${p.public ? '<span class="wk-pill review">🌐 Public cho KH</span>' : ""}
+        <span class="spacer"></span>
+        <button class="wk-minibtn" data-act="toggle-public" data-id="${p.id}">${p.public ? "Tắt public" : "Bật public cho KH"}</button>
+      </div>
+      <div class="wk-info">
+        <div class="cell"><div class="lbl">Khách hàng</div><div class="val">${esc(customerName(p.customer))}</div></div>
+        <div class="cell"><div class="lbl">PM phụ trách</div><div class="val">👤 ${esc(staffName(p.pm))}</div></div>
+        <div class="cell"><div class="lbl">Thời gian</div><div class="val">${fmtD(p.start)} → ${dlCell(p.deadline, p.status)}</div></div>
+        <div class="cell"><div class="lbl">Mức độ hoàn thành</div><div class="val">${bar(pr)}</div></div>
+        <div class="cell full"><div class="lbl">Nội dung dự án</div><div class="val normal">${esc(p.desc)}</div></div>
+        <div class="cell full"><div class="lbl">Nhân sự trong dự án</div><div class="val">${p.members.map((m) => `<span class="wk-chip">${esc(staffName(m))}</span>`).join("")}</div></div>
+        <div class="cell full"><div class="lbl">Tài liệu đính kèm</div><div class="val">${p.docs.length ? p.docs.map((d) => `<span class="wk-chip doc">📎 ${esc(d)}</span>`).join("") : '<span class="wk-muted">Chưa có tài liệu</span>'}</div></div>
+      </div>
+    </div>`;
+
+    return crumb([{ label: "Dự án", view: "projects" }, { label: p.name }]) + head + panel(
+      `🎫 Phiếu yêu cầu trong dự án <span class="wk-pill new">${ts.length}</span>`,
+      `<button class="btn btn-primary btn-sm" data-act="new-ticket" data-project="${p.id}">＋ Tạo phiếu yêu cầu</button>`,
+      ts.length ? ts.map(ticketBlock).join("") : '<div class="wk-panel-body wk-muted">Chưa có phiếu yêu cầu nào trong dự án này.</div>'
+    );
+  }
+
+  // Một phiếu yêu cầu kèm bảng công việc bên trong + hàng thêm nhanh
+  function ticketBlock(t) {
+    const ks = ticketTasks(t.id);
+    const rows = ks.map((k) => `<tr>
+      <td>${esc(k.title)}${ownerLine(k)}</td>
+      <td>${whoBadge(k)}</td>
+      <td>${pill(k.status)}</td>
+      <td>${bar(k.progress)}</td>
+      <td>${dlCell(k.deadline, k.status)}</td>
+      <td><button class="wk-minibtn" data-act="report" data-id="${k.id}">Báo cáo</button></td>
+    </tr>`).join("");
+
+    const qaRow = QA[t.id] ? `<tr class="wk-qa">
+      <td><input class="wk-input" data-qa-title="${t.id}" placeholder="Nhập tên công việc rồi nhấn Enter…"></td>
+      <td><select class="wk-input" data-qa-exec="${t.id}">${executorOpts(`human:${t.assignees[0] || S.staff[0].id}`)}</select></td>
+      <td>${pill("Mới")}</td>
+      <td>${bar(0)}</td>
+      <td><input type="date" class="wk-date" data-qa-dl="${t.id}" value="${t.deadline || ""}"></td>
+      <td><div class="wk-cellflex">
+        <button class="wk-iconbtn ok" title="Lưu" data-act="qa-save" data-ticket="${t.id}">✓</button>
+        <button class="wk-iconbtn no" title="Hủy" data-act="qa-cancel" data-ticket="${t.id}">✕</button>
+      </div></td>
+    </tr>` : "";
+
+    return `<div class="wk-tic">
+      <div class="wk-tic-head" data-act="go" data-view="ticketDetail" data-id="${t.id}">
+        <span class="code">#${t.code}</span>
+        <span class="name">${esc(t.title)}</span>
+        ${pill(t.status)}
+        ${avatars(t.assignees)}
+        <span style="min-width:110px">${bar(ticketProgress(t.id))}</span>
+        <span style="font-size:.78rem">⏱ ${dlCell(t.deadline, t.status)}</span>
+      </div>
+      ${table(
+        `<th>Công việc <button class="wk-iconbtn" title="Thêm công việc nhanh" data-act="qa-toggle" data-ticket="${t.id}">＋</button></th><th>Người thực hiện</th><th>Trạng thái</th><th>Tiến độ</th><th>Thời hạn</th><th></th>`,
+        qaRow + rows,
+        'Chưa có công việc — bấm ＋ ở cột "Công việc" để thêm nhanh.', 6)}
+    </div>`;
+  }
+
+  /* ================= 2. PHIẾU YÊU CẦU ================= */
+  function vTickets() {
+    const kw = TF.kw.toLowerCase();
+    const list = S.tickets.filter((t) => {
+      const p = projectById(t.project);
+      return (!TF.project || t.project === TF.project)
+        && (!TF.customer || (p && p.customer === TF.customer))
+        && (!TF.status || t.status === TF.status)
+        && (!kw || t.title.toLowerCase().includes(kw) || String(t.code).includes(kw));
+    });
+
+    const rows = list.map((t) => {
+      const p = projectById(t.project);
+      const ks = ticketTasks(t.id);
+      return `<tr class="clickable" data-act="go" data-view="ticketDetail" data-id="${t.id}">
+        <td><span class="wk-link">#${t.code}</span> ${esc(t.title)}<span class="wk-sub">${esc(t.type)} · ${prioTag(t.prio)}</span></td>
+        <td>${p ? `<span class="wk-link" data-act="go" data-view="projectDetail" data-id="${p.id}">${esc(p.name)}</span>` : "—"}</td>
+        <td>${esc(p ? customerName(p.customer) : "—")}</td>
+        <td>${avatars(t.assignees)}</td>
+        <td style="text-align:center">${ks.filter((k) => isDone(k.status)).length}/${ks.length}</td>
+        <td>${bar(ticketProgress(t.id))}</td>
+        <td>${dlCell(t.deadline, t.status)}</td>
+        <td>${pill(t.status)}</td>
+      </tr>`;
+    }).join("");
+
+    const filters = `
+    <div class="wk-filters">
+      <div class="wk-search">🔍<input placeholder="Tìm theo tên hoặc mã phiếu…" value="${esc(TF.kw)}" data-filter="t.kw"></div>
+      <select class="wk-select" data-filter="t.project"><option value="">— Tất cả dự án —</option>${projectOpts(TF.project)}</select>
+      <select class="wk-select" data-filter="t.customer"><option value="">— Tất cả khách hàng —</option>${customerOpts(TF.customer)}</select>
+      <select class="wk-select" data-filter="t.status"><option value="">— Trạng thái —</option>${opts(STATUS_LIST, TF.status)}</select>
+    </div>`;
+
+    return panel(
+      `🎫 Danh sách phiếu yêu cầu <span class="wk-pill new">${list.length}/${S.tickets.length}</span>`,
+      '<button class="btn btn-primary btn-sm" data-act="new-ticket">＋ Tạo phiếu yêu cầu</button>',
+      filters + table(
+        "<th>Phiếu yêu cầu</th><th>Dự án</th><th>Khách hàng</th><th>Người xử lý</th><th>Việc</th><th>Tiến độ</th><th>Thời hạn</th><th>Trạng thái</th>",
+        rows, "Không có phiếu nào khớp bộ lọc.", 8)
+    );
+  }
+
+  function vTicketDetail() {
+    const t = ticketById(CTX);
+    if (!t) return vTickets();
+    const p = projectById(t.project);
+    const ks = ticketTasks(t.id);
+
+    const rows = ks.map((k) => {
+      const last = k.reports.length ? k.reports[k.reports.length - 1] : null;
+      return `<tr>
+        <td>${esc(k.title)}${ownerLine(k)}</td>
+        <td>${whoBadge(k)}</td>
+        <td>${fmtD(k.start)}</td>
+        <td>${dlCell(k.deadline, k.status)}</td>
+        <td>${pill(k.status)}${needsReport(k) ? ' <span class="wk-pill late" title="Đang làm nhưng không có báo cáo mới">im lặng</span>' : ""}</td>
+        <td>${bar(k.progress)}</td>
+        <td class="wk-muted" style="max-width:220px">${last ? esc(last.note.slice(0, 70)) : "—"}</td>
+        <td><div class="wk-cellflex">
+          ${k.status === "Chờ duyệt" ? `<button class="wk-minibtn go" data-act="approve" data-id="${k.id}">Duyệt</button><button class="wk-minibtn" data-act="reject" data-id="${k.id}">Trả lại</button>` : ""}
+          <button class="wk-minibtn" data-act="report" data-id="${k.id}">Báo cáo</button>
+        </div></td>
+      </tr>`;
+    }).join("");
+
+    const head = `
+    <div class="wk-panel">
+      <div class="wk-panel-head">
+        <h3>#${t.code} — ${esc(t.title)}</h3>${pill(t.status)}${prioTag(t.prio)}
+      </div>
+      <div class="wk-info">
+        <div class="cell"><div class="lbl">Thuộc dự án</div><div class="val">${p ? `<span class="wk-link" data-act="go" data-view="projectDetail" data-id="${p.id}">${esc(p.name)}</span>` : "—"}</div></div>
+        <div class="cell"><div class="lbl">Khách hàng</div><div class="val">${esc(p ? customerName(p.customer) : "—")}</div></div>
+        <div class="cell"><div class="lbl">Loại phiếu</div><div class="val">${esc(t.type)}</div></div>
+        <div class="cell"><div class="lbl">Thời hạn</div><div class="val">${dlCell(t.deadline, t.status)}</div></div>
+        <div class="cell"><div class="lbl">Tiến độ (TB các công việc)</div><div class="val">${bar(ticketProgress(t.id))}</div></div>
+        <div class="cell full"><div class="lbl">Nội dung yêu cầu</div><div class="val normal">${esc(t.desc)}</div></div>
+        <div class="cell full"><div class="lbl">Người xử lý</div><div class="val">${t.assignees.map((a) => `<span class="wk-chip">${esc(staffName(a))}</span>`).join("")}</div></div>
+      </div>
+    </div>`;
+
+    return crumb([
+      { label: "Dự án", view: "projects" },
+      ...(p ? [{ label: p.name, view: "projectDetail", id: p.id }] : []),
+      { label: `Phiếu #${t.code}` },
+    ]) + head + panel(
+      `✅ Công việc trong phiếu <span class="wk-pill new">${ks.length}</span>`,
+      `<button class="btn btn-primary btn-sm" data-act="new-task" data-ticket="${t.id}">＋ Giao công việc</button>`,
+      table(
+        "<th>Công việc</th><th>Người thực hiện</th><th>Bắt đầu</th><th>Thời hạn</th><th>Trạng thái</th><th>Tiến độ</th><th>Báo cáo gần nhất</th><th></th>",
+        rows, "Chưa có công việc nào trong phiếu này.", 8)
+    );
+  }
+
+  /* ================= 3. CÔNG VIỆC ================= */
+  const SORT_ACCESSOR = {
+    title: (k) => k.title,
+    executor: (k) => executorLabel(k),
+    project: (k) => { const t = ticketById(k.ticket); const p = t && projectById(t.project); return p ? p.name : ""; },
+    deadline: (k) => k.deadline || "9999",
+    status: (k) => STATUS_LIST.indexOf(k.status),
+    progress: (k) => k.progress,
+  };
+
+  function filteredTasks() {
+    const kw = KF.kw.toLowerCase();
+    let list = S.tasks.filter((k) => {
+      const t = ticketById(k.ticket);
+      return (!KF.executor || executorValue(k) === KF.executor)
+        && (!KF.status || k.status === KF.status)
+        && (!KF.project || (t && t.project === KF.project))
+        && (KF.showDone || !isDone(k.status))
+        && (!kw || k.title.toLowerCase().includes(kw));
+    });
+    if (KF.sortKey && SORT_ACCESSOR[KF.sortKey]) {
+      const acc = SORT_ACCESSOR[KF.sortKey];
+      list = list.slice().sort((a, b) => {
+        const av = acc(a), bv = acc(b);
+        const cmp = typeof av === "string" ? av.localeCompare(bv, "vi") : av - bv;
+        return cmp * KF.sortDir;
+      });
+    }
+    return list;
+  }
+
+  const sortTh = (label, key) =>
+    `<th class="sortable" data-act="sort" data-key="${key}">${label}${KF.sortKey === key ? `<span style="color:var(--brand-2)">${KF.sortDir === 1 ? " ▲" : " ▼"}</span>` : ""}</th>`;
+
+  function vTasks() {
+    const list = filteredTasks();
+
+    const filters = `
+    <div class="wk-filters">
+      <div class="wk-search">🔍<input placeholder="Tìm theo tên công việc…" value="${esc(KF.kw)}" data-filter="k.kw"></div>
+      <select class="wk-select" data-filter="k.executor"><option value="">— Người thực hiện / Agent —</option>${executorOpts(KF.executor)}</select>
+      <select class="wk-select" data-filter="k.project"><option value="">— Tất cả dự án —</option>${projectOpts(KF.project)}</select>
+      <select class="wk-select" data-filter="k.status"><option value="">— Trạng thái —</option>${opts(STATUS_LIST, KF.status)}</select>
+      <label class="wk-check"><input type="checkbox" data-filter="k.showDone"${KF.showDone ? " checked" : ""}> Hiện việc đã hoàn tất</label>
+      <span class="spacer" style="flex:1"></span>
+      <span class="wk-seg">
+        <button class="${KF.mode === "table" ? "on" : ""}" data-act="mode" data-mode="table">▤ Bảng</button>
+        <button class="${KF.mode === "kanban" ? "on" : ""}" data-act="mode" data-mode="kanban">▦ Kanban</button>
+      </span>
+    </div>`;
+
+    const body = KF.mode === "kanban" ? kanban(list) : table(
+      `${sortTh("Công việc", "title")}<th>Phiếu yêu cầu</th>${sortTh("Dự án", "project")}${sortTh("Người thực hiện", "executor")}${sortTh("Thời hạn", "deadline")}${sortTh("Trạng thái", "status")}${sortTh("Tiến độ", "progress")}<th></th>`,
+      list.map((k) => {
+        const t = ticketById(k.ticket);
+        const p = t && projectById(t.project);
+        return `<tr>
+          <td>${esc(k.title)}${ownerLine(k)}</td>
+          <td>${t ? `<span class="wk-link" data-act="go" data-view="ticketDetail" data-id="${t.id}">#${t.code}</span>` : "—"}</td>
+          <td>${p ? `<span class="wk-link" data-act="go" data-view="projectDetail" data-id="${p.id}">${esc(p.name)}</span>` : "—"}</td>
+          <td>${whoBadge(k)}</td>
+          <td>${dlCell(k.deadline, k.status)}</td>
+          <td>${pill(k.status)}${needsReport(k) ? ' <span class="wk-pill late" title="Đang làm nhưng không có báo cáo mới">im lặng</span>' : ""}</td>
+          <td>${bar(k.progress)}</td>
+          <td><div class="wk-cellflex">
+            ${k.status === "Chờ duyệt" ? `<button class="wk-minibtn go" data-act="approve" data-id="${k.id}">Duyệt</button>` : ""}
+            <button class="wk-minibtn" data-act="report" data-id="${k.id}">Báo cáo</button>
+          </div></td>
+        </tr>`;
+      }).join(""), "Không có công việc nào khớp bộ lọc.", 8);
+
+    return kpiStrip() + panel(
+      `✅ Danh sách công việc <span class="wk-pill new">${list.length}/${S.tasks.length}</span>`,
+      '<button class="btn btn-primary btn-sm" data-act="new-task">＋ Giao công việc</button>',
+      filters + body
+    );
+  }
+
+  function kanban(list) {
+    return `<div class="wk-kanban">${STATUS_LIST.map((st) => {
+      const ks = list.filter((k) => k.status === st);
+      return `<div class="wk-col" data-col="${esc(st)}">
+        <h5>${pill(st)}<span class="n">${ks.length}</span></h5>
+        ${ks.map((k) => {
+          const t = ticketById(k.ticket);
+          return `<div class="wk-card ${isAgentTask(k) ? "agent" : "human"}" draggable="true" data-task="${k.id}" data-act="report" data-id="${k.id}">
+            <div class="t">${esc(k.title)}</div>
+            <div class="m">${whoBadge(k)}${t ? `<span>#${t.code}</span>` : ""}</div>
+            <div class="m">${dlCell(k.deadline, k.status)}<span style="flex:1">${bar(k.progress)}</span></div>
+          </div>`;
+        }).join("") || '<div class="empty">Trống</div>'}
+      </div>`;
+    }).join("")}</div>`;
+  }
+
+  /* ================= RENDER ================= */
+  const VIEW_RENDER = {
+    projects: vProjects,
+    projectDetail: vProjectDetail,
+    tickets: vTickets,
+    ticketDetail: vTicketDetail,
+    tasks: vTasks,
+  };
+
   function render() {
     const host = $("#workView");
     if (!host) return;
-    const meta = VIEW_META[VIEW];
-    const [phase, what] = VIEW_TODO[VIEW];
+    const isDetail = !!PARENT_VIEW[VIEW];
+    const meta = VIEW_META[PARENT_VIEW[VIEW] || VIEW];
+    const renderer = VIEW_RENDER[VIEW];
 
-    host.innerHTML = `
+    const header = isDetail ? "" : `
       <div class="wk-head">
         <div class="wk-head-main">
           <h1>${meta.icon} ${esc(meta.title)}</h1>
           <p>${esc(meta.desc)}</p>
         </div>
         <div class="wk-head-actions">
-          <button class="btn btn-ghost btn-sm" data-wk-reset title="Xóa dữ liệu đã lưu trên trình duyệt và nạp lại dữ liệu mẫu">↺ Nạp lại dữ liệu mẫu</button>
+          <button class="btn btn-ghost btn-sm" data-act="reset" title="Xóa dữ liệu đã lưu trên trình duyệt và nạp lại dữ liệu mẫu">↺ Nạp lại dữ liệu mẫu</button>
         </div>
-      </div>
-      ${kpiStrip()}
-      ${todoPanel(phase, what)}`;
+      </div>`;
 
-    const resetBtn = host.querySelector("[data-wk-reset]");
-    if (resetBtn) {
-      resetBtn.addEventListener("click", () => {
-        reset();
-        if (typeof toast === "function") toast("Đã nạp lại dữ liệu mẫu điều hành công việc");
-      });
+    let body;
+    if (renderer) {
+      body = renderer();
+    } else {
+      const [phase, what] = VIEW_TODO[VIEW];
+      body = kpiStrip() + todoPanel(phase, what);
     }
+
+    host.innerHTML = header + body;
+    setSidebarActive();
+    refreshCounters();
+    bindKanbanDnd(host);
   }
 
   // Bộ đếm trên sidebar
@@ -309,10 +702,353 @@
     set("reports", m.silent);
   }
 
+  /* ================= MODAL ================= */
+  function ensureModalHost() {
+    let m = document.getElementById("wkModal");
+    if (!m) {
+      m = document.createElement("div");
+      m.id = "wkModal";
+      m.className = "modal-backdrop";
+      m.innerHTML = '<div class="modal"></div>';
+      document.body.appendChild(m);
+      m.addEventListener("click", (e) => { if (e.target === m) closeModal(); });
+    }
+    return m;
+  }
+  function openModal(html) {
+    const m = ensureModalHost();
+    m.querySelector(".modal").innerHTML = html;
+    m.classList.add("open");
+    const first = m.querySelector("input, select, textarea");
+    if (first) setTimeout(() => first.focus(), 0);
+  }
+  function closeModal() {
+    const m = document.getElementById("wkModal");
+    if (m) m.classList.remove("open");
+  }
+  const modalHead = (icon, title, desc) => `
+    <div class="modal-head">
+      <div class="avatar">${icon}</div>
+      <div>
+        <h2 style="font-family:inherit;color:var(--text);font-size:1.1rem">${esc(title)}</h2>
+        <p>${desc}</p>
+      </div>
+      <button class="drawer-close" data-act="modal-close" style="margin-left:auto" aria-label="Đóng">✕</button>
+    </div>`;
+  const modalFoot = (saveAct, saveLabel) => `
+    <div class="bf-actions" style="margin-top:1.2rem">
+      <button class="btn btn-ghost btn-sm" type="button" data-act="modal-close">Hủy</button>
+      <button class="btn btn-primary btn-sm" type="button" data-act="${saveAct}">${saveLabel}</button>
+    </div>`;
+
+  const fld = (id) => document.getElementById(id);
+  const val = (id) => { const e = fld(id); return e ? e.value.trim() : ""; };
+  const say = (msg) => { if (typeof toast === "function") toast(msg); };
+  const newId = (prefix) => prefix + Date.now().toString(36) + Math.floor(Math.random() * 100);
+
+  // ---- Tạo dự án ----
+  function mNewProject() {
+    openModal(modalHead("📁", "Tạo dự án mới", "Dự án là cấp cao nhất — gắn khách hàng, PM và nhóm nhân sự. Tiến độ tự cuộn lên từ các phiếu bên dưới.") + `
+      <div class="hr-intake-form"><div class="hr-grid">
+        <label class="span2">Tên dự án <span class="req">*</span><input type="text" id="wk_p_name" placeholder="VD: Triển khai TCRM — CN Bến Tre"></label>
+        <label>Khách hàng <span class="req">*</span><select id="wk_p_cus">${customerOpts()}</select></label>
+        <label>PM phụ trách <span class="req">*</span><select id="wk_p_pm">${staffOpts()}</select></label>
+        <label>Ngày bắt đầu<input type="date" id="wk_p_start" value="${today()}"></label>
+        <label>Thời hạn<input type="date" id="wk_p_dl"></label>
+        <label class="span2">Nhân sự tham gia (giữ Ctrl để chọn nhiều)<select id="wk_p_mem" multiple size="5">${staffOpts()}</select></label>
+        <label class="span2">Nội dung dự án<textarea id="wk_p_desc" placeholder="Phạm vi, mục tiêu…"></textarea></label>
+        <label class="span2">Tài liệu đính kèm<input type="text" id="wk_p_docs" placeholder="Tên file, cách nhau bằng dấu phẩy"></label>
+      </div>` + modalFoot("save-project", "Lưu dự án") + "</div>");
+  }
+  function saveProject() {
+    const name = val("wk_p_name");
+    if (!name) return say("Vui lòng nhập tên dự án");
+    const pm = val("wk_p_pm");
+    const mem = [...fld("wk_p_mem").selectedOptions].map((o) => o.value);
+    const id = newId("p");
+    S.projects.push({
+      id, name, customer: val("wk_p_cus"), pm,
+      members: [...new Set([pm, ...mem])],
+      start: val("wk_p_start"), deadline: val("wk_p_dl"),
+      status: "Mới", desc: val("wk_p_desc"),
+      docs: val("wk_p_docs") ? val("wk_p_docs").split(",").map((s) => s.trim()).filter(Boolean) : [],
+      public: false,
+    });
+    save(); closeModal(); say("Đã tạo dự án ✓"); show("projectDetail", id);
+  }
+
+  // ---- Tạo phiếu yêu cầu ----
+  function mNewTicket(projectId) {
+    openModal(modalHead("🎫", "Tạo phiếu yêu cầu", "Phiếu luôn thuộc đúng một dự án. Khách hàng được kế thừa từ dự án cha.") + `
+      <div class="hr-intake-form"><div class="hr-grid">
+        <label class="span2">Thuộc dự án <span class="req">*</span><select id="wk_t_proj">${projectOpts(projectId)}</select></label>
+        <label class="span2">Tiêu đề <span class="req">*</span><input type="text" id="wk_t_title" placeholder="VD: Phân quyền theo tổ chức chi nhánh"></label>
+        <label class="span2">Nội dung yêu cầu<textarea id="wk_t_desc"></textarea></label>
+        <label>Loại phiếu<select id="wk_t_type">${opts(TYPE_LIST)}</select></label>
+        <label>Độ ưu tiên<select id="wk_t_prio">${opts(PRIO_LIST, "Trung bình")}</select></label>
+        <label>Thời hạn<input type="date" id="wk_t_dl"></label>
+        <label>Trạng thái<select id="wk_t_st">${opts(STATUS_LIST, "Mới")}</select></label>
+        <label class="span2">Người xử lý (giữ Ctrl để chọn nhiều)<select id="wk_t_asg" multiple size="5">${staffOpts()}</select></label>
+      </div>` + modalFoot("save-ticket", "Lưu phiếu") + "</div>");
+  }
+  function saveTicket() {
+    const title = val("wk_t_title");
+    if (!title) return say("Vui lòng nhập tiêu đề phiếu");
+    const id = newId("t");
+    const maxCode = S.tickets.reduce((m, t) => Math.max(m, t.code || 0), 49000);
+    S.tickets.push({
+      id, code: maxCode + 1, title, project: val("wk_t_proj"),
+      type: val("wk_t_type"), status: val("wk_t_st"), prio: val("wk_t_prio"),
+      deadline: val("wk_t_dl"),
+      assignees: [...fld("wk_t_asg").selectedOptions].map((o) => o.value),
+      desc: val("wk_t_desc"),
+    });
+    save(); closeModal(); say("Đã tạo phiếu yêu cầu ✓"); show("ticketDetail", id);
+  }
+
+  // ---- Giao công việc ----
+  function mNewTask(ticketId) {
+    const firstExec = `human:${S.staff[0].id}`;
+    openModal(modalHead("✅", "Giao công việc", "Người thực hiện có thể là <b>nhân sự</b> hoặc <b>AI Agent</b>. Chọn Agent thì người chịu trách nhiệm tự điền theo nhân sự phụ trách Agent đó.") + `
+      <div class="hr-intake-form"><div class="hr-grid">
+        <label class="span2">Thuộc phiếu yêu cầu <span class="req">*</span><select id="wk_k_tick">${ticketOpts(ticketId)}</select></label>
+        <label class="span2">Tên công việc <span class="req">*</span><input type="text" id="wk_k_title" placeholder="VD: Soạn email cập nhật tiến độ cho khách hàng"></label>
+        <label>Người thực hiện <span class="req">*</span><select id="wk_k_exec">${executorOpts(firstExec)}</select></label>
+        <label>Người chịu trách nhiệm <span class="req">*</span><select id="wk_k_owner">${staffOpts(S.staff[0].id)}</select></label>
+        <label>Độ ưu tiên<select id="wk_k_prio">${opts(PRIO_LIST, "Trung bình")}</select></label>
+        <label>Trạng thái<select id="wk_k_st">${opts(STATUS_LIST, "Mới")}</select></label>
+        <label>Bắt đầu<input type="date" id="wk_k_start" value="${today()}"></label>
+        <label>Thời hạn<input type="date" id="wk_k_dl"></label>
+      </div>
+      <p class="bf-hint" style="margin:.7rem 0 0">Dù ai làm, <b>báo cáo tiến độ vẫn là bắt buộc</b> — việc đang chạy mà quá ${REPORT_GRACE_DAYS} ngày không có báo cáo sẽ bị đánh dấu "im lặng".</p>`
+      + modalFoot("save-task", "Giao việc") + "</div>");
+
+    const exec = fld("wk_k_exec");
+    if (exec) exec.addEventListener("change", () => {
+      const o = fld("wk_k_owner");
+      if (o) o.value = defaultOwner(parseExecutor(exec.value));
+    });
+  }
+  function saveTask() {
+    const title = val("wk_k_title");
+    if (!title) return say("Vui lòng nhập tên công việc");
+    const tid = val("wk_k_tick");
+    if (!tid) return say("Vui lòng chọn phiếu yêu cầu");
+    const executor = parseExecutor(val("wk_k_exec"));
+    S.tasks.push({
+      id: newId("k"), ticket: tid, title, executor,
+      owner: val("wk_k_owner") || defaultOwner(executor),
+      status: val("wk_k_st"), prio: val("wk_k_prio"),
+      start: val("wk_k_start"), deadline: val("wk_k_dl") || ticketById(tid).deadline,
+      progress: 0, reports: [],
+    });
+    save(); closeModal(); say("Đã giao công việc ✓"); render();
+  }
+
+  // ---- Báo cáo tiến độ ----
+  let CURRENT_REPORT = null; // công việc đang mở modal báo cáo
+  function mReport(taskId) {
+    const k = taskById(taskId);
+    if (!k) return;
+    CURRENT_REPORT = taskId;
+    const t = ticketById(k.ticket);
+    const reporter = isAgentTask(k) ? k.owner : k.executor.id;
+    const history = k.reports.slice().reverse().map((r) => `
+      <div class="wk-report ${r.byType === "agent" ? "agent" : ""}">
+        ${esc(r.note)}
+        <div class="meta">${fmtD(r.at)} · ${r.progress}%${r.minutes ? ` · ⏱ ${r.minutes} phút` : ""} · ${r.byType === "agent" ? `🤖 ${esc((agentById(r.agentId) || {}).name || r.agentId)} (chịu trách nhiệm: ${esc(staffName(r.by))})` : esc(staffName(r.by))}</div>
+      </div>`).join("");
+
+    openModal(modalHead("📈", "Báo cáo tiến độ", `${esc(k.title)}${t ? ` · phiếu #${t.code}` : ""}`) + `
+      <div class="hr-intake-form">
+        <div class="wk-note">Người ghi báo cáo: <b>${esc(staffName(reporter))}</b>${isAgentTask(k) ? ` — việc do <b>🤖 ${esc((agentById(k.executor.id) || {}).name || k.executor.id)}</b> thực hiện, bạn là người chịu trách nhiệm xác nhận.` : ""}</div>
+        <div class="hr-grid">
+          <label>Ngày bắt đầu<input type="date" id="wk_r_start" value="${k.start || ""}"></label>
+          <label>Thời hạn<input type="date" id="wk_r_dl" value="${k.deadline || ""}"></label>
+          <label class="span2">Tiến độ hiện tại: <b id="wk_r_pv" style="color:var(--brand-2)">${k.progress}%</b>
+            <input type="range" class="wk-range" id="wk_r_prog" min="0" max="100" step="5" value="${k.progress}">
+          </label>
+          <label>Trạng thái<select id="wk_r_st">${opts(STATUS_LIST, k.status)}</select></label>
+          <label>Thời gian thực hiện (phút)<input type="number" id="wk_r_min" min="0" step="5" placeholder="VD: 120"></label>
+          <label class="span2">Nội dung báo cáo<textarea id="wk_r_note" placeholder="Đã làm gì, còn vướng gì, cần ai hỗ trợ…"></textarea></label>
+        </div>
+        ${history ? `<h4>Lịch sử báo cáo (${k.reports.length})</h4>${history}` : '<p class="bf-hint" style="margin-top:.8rem">Công việc này chưa có báo cáo nào.</p>'}
+      ` + modalFoot("save-report", "Lưu báo cáo") + `</div>`);
+
+    const range = fld("wk_r_prog");
+    if (range) range.addEventListener("input", () => { fld("wk_r_pv").textContent = range.value + "%"; });
+  }
+  function saveReport(taskId) {
+    const k = taskById(taskId);
+    if (!k) return;
+    k.start = val("wk_r_start") || k.start;
+    k.deadline = val("wk_r_dl") || k.deadline;
+    k.progress = Number(val("wk_r_prog"));
+    k.status = val("wk_r_st");
+    // Giữ trạng thái nhất quán với tiến độ vừa báo cáo
+    if (k.progress === 100 && k.status !== "Chờ duyệt") k.status = DONE;
+    else if (k.progress > 0 && k.status === "Mới") k.status = "Đang thực hiện";
+    if (isDone(k.status)) k.progress = 100;
+    const minutes = Number(val("wk_r_min")) || 0;
+    k.reports.push({
+      at: today(), progress: k.progress,
+      note: val("wk_r_note") || "(cập nhật tiến độ)",
+      by: isAgentTask(k) ? k.owner : k.executor.id,
+      byType: "human",
+      minutes: minutes || undefined,
+    });
+    save(); closeModal(); say("Đã lưu báo cáo — tiến độ phiếu & dự án tự cập nhật ✓"); render();
+  }
+
+  // ---- Duyệt / trả lại kết quả ----
+  function approveTask(taskId) {
+    const k = taskById(taskId);
+    if (!k) return;
+    k.status = DONE; k.progress = 100;
+    k.reports.push({ at: today(), progress: 100, note: `Đã duyệt kết quả${isAgentTask(k) ? ` do ${(agentById(k.executor.id) || {}).name || k.executor.id} thực hiện` : ""} và đóng công việc.`, by: k.owner, byType: "human" });
+    save(); say("Đã duyệt và đóng công việc ✓"); render();
+  }
+  function rejectTask(taskId) {
+    const k = taskById(taskId);
+    if (!k) return;
+    k.status = "Đang thực hiện";
+    k.reports.push({ at: today(), progress: k.progress, note: "Trả lại để chỉnh sửa — xem ghi chú của người chịu trách nhiệm.", by: k.owner, byType: "human" });
+    save(); say("Đã trả lại công việc"); render(); mReport(taskId);
+  }
+
+  // ---- Thêm nhanh công việc trong block phiếu ----
+  function qaSave(ticketId) {
+    const titleEl = document.querySelector(`[data-qa-title="${ticketId}"]`);
+    const title = titleEl ? titleEl.value.trim() : "";
+    if (!title) { say("Vui lòng nhập tên công việc"); if (titleEl) titleEl.focus(); return; }
+    const executor = parseExecutor(document.querySelector(`[data-qa-exec="${ticketId}"]`).value);
+    const dlEl = document.querySelector(`[data-qa-dl="${ticketId}"]`);
+    S.tasks.push({
+      id: newId("k"), ticket: ticketId, title, executor, owner: defaultOwner(executor),
+      status: "Mới", prio: "Trung bình", start: today(),
+      deadline: (dlEl && dlEl.value) || ticketById(ticketId).deadline,
+      progress: 0, reports: [],
+    });
+    save(); say("Đã thêm công việc ✓");
+    QA[ticketId] = true; // giữ mở để thêm tiếp
+    render();
+    const next = document.querySelector(`[data-qa-title="${ticketId}"]`);
+    if (next) next.focus();
+  }
+
+  /* ================= SỰ KIỆN ================= */
+  function renderKeepFocus(filterKey) {
+    render();
+    const el = document.querySelector(`[data-filter="${filterKey}"]`);
+    if (el) { el.focus(); const v = el.value; el.value = ""; el.value = v; }
+  }
+
+  function onClick(e) {
+    const el = e.target.closest("[data-act]");
+    if (!el) return;
+    const d = el.dataset;
+    switch (d.act) {
+      case "go": show(d.view, d.id); break;
+      case "sort":
+        if (KF.sortKey === d.key) KF.sortDir *= -1; else { KF.sortKey = d.key; KF.sortDir = 1; }
+        render(); break;
+      case "mode": KF.mode = d.mode; render(); break;
+      case "new-project": mNewProject(); break;
+      case "new-ticket": mNewTicket(d.project); break;
+      case "new-task": mNewTask(d.ticket); break;
+      case "report": mReport(d.id); break;
+      case "approve": approveTask(d.id); break;
+      case "reject": rejectTask(d.id); break;
+      case "save-project": saveProject(); break;
+      case "save-ticket": saveTicket(); break;
+      case "save-task": saveTask(); break;
+      case "save-report": saveReport(CURRENT_REPORT); break;
+      case "modal-close": closeModal(); break;
+      case "qa-toggle": QA[d.ticket] = !QA[d.ticket]; render();
+        { const i = document.querySelector(`[data-qa-title="${d.ticket}"]`); if (i) i.focus(); } break;
+      case "qa-save": qaSave(d.ticket); break;
+      case "qa-cancel": QA[d.ticket] = false; render(); break;
+      case "toggle-public": {
+        const p = projectById(d.id);
+        if (p) { p.public = !p.public; save(); say(p.public ? "Đã bật public — khách hàng xem được tiến độ" : "Đã tắt public"); render(); }
+        break;
+      }
+      case "reset": reset(); say("Đã nạp lại dữ liệu mẫu điều hành công việc"); break;
+    }
+  }
+
+  function onFilterChange(e) {
+    const el = e.target.closest("[data-filter]");
+    if (!el) return;
+    // select/checkbox chỉ xử lý ở "change" để không render hai lần
+    if (e.type === "input" && !(el.tagName === "INPUT" && el.type !== "checkbox")) return;
+    const [group, key] = el.dataset.filter.split(".");
+    const store = group === "t" ? TF : KF;
+    store[key] = el.type === "checkbox" ? el.checked : el.value;
+    if (key === "kw") renderKeepFocus(el.dataset.filter); else render();
+  }
+
+  function onKey(e) {
+    const qa = e.target.closest("[data-qa-title]");
+    if (!qa) return;
+    if (e.key === "Enter") { e.preventDefault(); qaSave(qa.dataset.qaTitle); }
+    else if (e.key === "Escape") { QA[qa.dataset.qaTitle] = false; render(); }
+  }
+
+  // Kéo thả thẻ Kanban để đổi trạng thái
+  function bindKanbanDnd(host) {
+    const cards = host.querySelectorAll(".wk-card[draggable]");
+    if (!cards.length) return;
+    let dragId = null;
+    cards.forEach((c) => {
+      c.addEventListener("dragstart", (e) => {
+        dragId = c.dataset.task;
+        c.classList.add("dragging");
+        e.dataTransfer.effectAllowed = "move";
+        e.dataTransfer.setData("text/plain", dragId);
+      });
+      c.addEventListener("dragend", () => { c.classList.remove("dragging"); dragId = null; });
+    });
+    host.querySelectorAll(".wk-col").forEach((col) => {
+      col.addEventListener("dragover", (e) => { e.preventDefault(); col.classList.add("over"); });
+      col.addEventListener("dragleave", () => col.classList.remove("over"));
+      col.addEventListener("drop", (e) => {
+        e.preventDefault();
+        col.classList.remove("over");
+        const id = dragId || e.dataTransfer.getData("text/plain");
+        const k = taskById(id);
+        const status = col.dataset.col;
+        if (!k || !status || k.status === status) return;
+        k.status = status;
+        if (isDone(status)) k.progress = 100;
+        else if (status === "Đang thực hiện" && k.progress === 0) k.progress = 5;
+        k.reports.push({
+          at: today(), progress: k.progress,
+          note: `Chuyển trạng thái sang "${status}" trên bảng Kanban.`,
+          by: isAgentTask(k) ? k.owner : k.executor.id, byType: "human",
+        });
+        save(); render();
+      });
+    });
+  }
+
+  function bindHost() {
+    const host = $("#workView");
+    if (!host || host.__wkBound) return;
+    host.__wkBound = true;
+    host.addEventListener("click", onClick);
+    host.addEventListener("input", onFilterChange);
+    host.addEventListener("change", onFilterChange);
+    host.addEventListener("keydown", onKey);
+    ensureModalHost().addEventListener("click", onClick);
+    document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeModal(); });
+  }
+
   // ---------- Khởi động ----------
   S = load();
   save();
   refreshCounters();
+  bindHost();
 
   window.AIOS_WORK = {
     show,

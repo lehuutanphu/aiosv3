@@ -136,6 +136,106 @@
 .wk-select:focus { border-color: var(--brand-2); color: var(--text); }
 .wk-check { display: flex; align-items: center; gap: .4rem; font-size: .8rem; color: var(--muted); cursor: pointer; user-select: none; }
 
+/* ---------- Lưới thông tin trang chi tiết ---------- */
+.wk-info {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+  gap: 1px; background: var(--line); border-top: 1px solid var(--line);
+}
+.wk-info .cell { background: var(--panel); padding: .7rem 1.1rem; min-width: 0; }
+.wk-info .cell.full { grid-column: 1 / -1; }
+.wk-info .lbl { font-size: .7rem; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+.wk-info .val { font-size: .87rem; font-weight: 600; margin-top: .25rem; }
+.wk-info .val.normal { font-weight: 400; color: var(--muted); line-height: 1.6; }
+
+.wk-chip {
+  display: inline-flex; align-items: center; gap: .35rem; margin: .15rem .25rem .15rem 0;
+  font-size: .76rem; font-weight: 600; color: var(--muted);
+  background: rgba(7,11,26,.5); border: 1px solid var(--line); border-radius: 999px; padding: .2rem .65rem;
+}
+.wk-chip.doc { border-radius: 8px; }
+.wk-chip.doc:hover { border-color: var(--brand-2); color: var(--brand-2); }
+
+/* ---------- Block phiếu yêu cầu lồng trong dự án ---------- */
+.wk-tic { border: 1px solid var(--line); border-radius: 12px; margin: 0 1.1rem .7rem; overflow: hidden; background: rgba(7,11,26,.35); }
+.wk-tic:last-child { margin-bottom: 1.1rem; }
+.wk-tic-head {
+  display: flex; align-items: center; gap: .7rem; flex-wrap: wrap; cursor: pointer;
+  padding: .7rem .9rem; background: linear-gradient(92deg, rgba(91,124,250,.09), transparent);
+}
+.wk-tic-head:hover { background: rgba(91,124,250,.14); }
+.wk-tic-head .code { color: var(--brand-2); font-weight: 800; font-size: .78rem; white-space: nowrap; }
+.wk-tic-head .name { flex: 1; min-width: 150px; font-size: .87rem; font-weight: 600; }
+.wk-tic .wk-table th { background: transparent; }
+
+/* ---------- Nút nhỏ ---------- */
+.wk-iconbtn {
+  display: inline-grid; place-items: center; width: 20px; height: 20px; border-radius: 50%;
+  border: 1.5px solid var(--brand-2); color: var(--brand-2); font-size: .7rem; font-weight: 800;
+  line-height: 1; vertical-align: middle; margin-left: .35rem; flex-shrink: 0;
+}
+.wk-iconbtn:hover { background: var(--brand-2); color: #071022; }
+.wk-iconbtn.ok { border-color: var(--ok); color: var(--ok); }
+.wk-iconbtn.ok:hover { background: var(--ok); color: #071022; }
+.wk-iconbtn.no { border-color: var(--muted); color: var(--muted); }
+.wk-iconbtn.no:hover { background: var(--muted); color: #071022; }
+.wk-minibtn {
+  font-size: .72rem; font-weight: 700; border: 1px solid var(--line); border-radius: 8px;
+  padding: .22rem .6rem; color: var(--muted); white-space: nowrap;
+}
+.wk-minibtn:hover { border-color: var(--brand-2); color: var(--brand-2); }
+.wk-minibtn.go { border-color: rgba(52,211,153,.4); color: var(--ok); }
+.wk-minibtn.go:hover { background: rgba(52,211,153,.12); }
+
+/* ---------- Hàng thêm nhanh ---------- */
+.wk-qa td { background: rgba(91,124,250,.09) !important; }
+.wk-input, .wk-date {
+  width: 100%; background: rgba(7,11,26,.7); border: 1px solid var(--line); border-radius: 8px;
+  padding: .35rem .55rem; color: var(--text); font-size: .8rem; outline: none;
+}
+.wk-input:focus, .wk-date:focus { border-color: var(--brand-2); }
+.wk-cellflex { display: flex; gap: .35rem; align-items: center; }
+
+/* ---------- Segmented control (Bảng / Kanban) ---------- */
+.wk-seg { display: inline-flex; background: rgba(7,11,26,.6); border: 1px solid var(--line); border-radius: 10px; padding: .15rem; }
+.wk-seg button { font-size: .78rem; font-weight: 700; color: var(--muted); padding: .3rem .75rem; border-radius: 8px; }
+.wk-seg button.on { background: rgba(91,124,250,.22); color: var(--text); }
+
+/* ---------- Kanban ---------- */
+.wk-kanban { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: .7rem; padding: 1.1rem; }
+.wk-col { background: rgba(7,11,26,.4); border: 1px solid var(--line); border-radius: 12px; padding: .6rem; min-height: 140px; transition: border-color .15s, background .15s; }
+.wk-col.over { border-color: var(--brand-2); background: rgba(34,211,238,.06); }
+.wk-col h5 { font-size: .74rem; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin-bottom: .55rem; display: flex; gap: .4rem; align-items: center; }
+.wk-col h5 .n { margin-left: auto; font-size: .7rem; background: rgba(148,163,216,.14); border-radius: 999px; padding: .05rem .45rem; }
+.wk-card {
+  background: var(--panel); border: 1px solid var(--line); border-left-width: 3px; border-radius: 10px;
+  padding: .55rem .65rem; margin-bottom: .5rem; cursor: grab; font-size: .8rem;
+}
+.wk-card:hover { border-color: var(--brand); }
+.wk-card.agent { border-left-color: var(--wk-agent); }
+.wk-card.human { border-left-color: var(--wk-human); }
+.wk-card .t { font-weight: 600; line-height: 1.4; }
+.wk-card .m { display: flex; align-items: center; gap: .4rem; flex-wrap: wrap; margin-top: .4rem; font-size: .72rem; color: var(--muted); }
+.wk-card.dragging { opacity: .45; }
+.wk-col .empty { font-size: .74rem; color: var(--muted); font-style: italic; padding: .4rem .2rem; }
+
+/* ---------- Báo cáo ---------- */
+.wk-report {
+  border-left: 2px solid var(--brand); background: rgba(7,11,26,.5);
+  padding: .5rem .75rem; border-radius: 0 8px 8px 0; margin-bottom: .5rem; font-size: .82rem; line-height: 1.55;
+}
+.wk-report.agent { border-left-color: var(--wk-agent); }
+.wk-report .meta { color: var(--muted); font-size: .72rem; margin-top: .25rem; }
+
+.wk-note {
+  background: rgba(91,124,250,.07); border: 1px solid rgba(91,124,250,.28); border-radius: 12px;
+  padding: .7rem .95rem; font-size: .82rem; color: var(--muted); line-height: 1.6; margin-bottom: 1rem;
+}
+.wk-note b { color: var(--text); }
+.wk-note.warn { background: rgba(251,191,36,.06); border-color: rgba(251,191,36,.28); }
+.wk-note.warn b { color: var(--warn); }
+
+.wk-range { width: 100%; accent-color: var(--brand-2); }
+
 /* ---------- Placeholder cho các phase chưa làm ---------- */
 .wk-todo {
   border: 1px dashed rgba(148,163,216,.35); border-radius: 16px;
@@ -154,9 +254,17 @@
 @media (max-width: 1180px) {
   .dash-layout.work-mode { grid-template-columns: 220px 1fr; }
   .wk-kpis { grid-template-columns: repeat(3, 1fr); }
+  .wk-kanban { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
 @media (max-width: 768px) {
   .dash-layout.work-mode { grid-template-columns: 1fr; }
   .wk-kpis { grid-template-columns: repeat(2, 1fr); }
   .wk-head h1 { font-size: 1.15rem; }
+  .wk-kanban { grid-template-columns: 1fr; }
+  .wk-tic { margin-left: .6rem; margin-right: .6rem; }
+  .wk-search { max-width: none; }
+}
+@media (max-width: 560px) {
+  /* Chỉ áp cho modal của phần điều hành công việc, không đụng modal HR */
+  #wkModal .hr-grid { grid-template-columns: 1fr; }
 }
