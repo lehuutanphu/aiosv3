@@ -246,6 +246,16 @@
   }
   const ownerLine = (k) => (isAgentTask(k) ? `<span class="wk-sub">chịu trách nhiệm: ${esc(staffName(k.owner))}</span>` : "");
 
+  // Nút ra lệnh cho AI Agent ngay trên dòng công việc
+  function runBtn(k) {
+    if (isDone(k.status)) return "";
+    if (isAgentTask(k)) {
+      const ran = k.run && k.run.status === "done";
+      return `<button class="wk-minibtn go" data-act="run-agent" data-id="${k.id}" title="Cho Agent thực thi công việc này">▶ ${ran ? "Chạy lại" : "Chạy Agent"}</button>`;
+    }
+    return `<button class="wk-minibtn" data-act="assign-agent" data-id="${k.id}" title="Giao công việc này cho AI Agent">🤖 Giao Agent</button>`;
+  }
+
   const opts = (list, selected) => list.map((v) => `<option value="${esc(v)}"${v === selected ? " selected" : ""}>${esc(v)}</option>`).join("");
   const staffOpts = (selected) => S.staff.map((s) => `<option value="${s.id}"${s.id === selected ? " selected" : ""}>${esc(s.name)}</option>`).join("");
   const projectOpts = (selected) => S.projects.map((p) => `<option value="${p.id}"${p.id === selected ? " selected" : ""}>${esc(p.name)}</option>`).join("");
@@ -352,9 +362,6 @@
   }
 
   const VIEW_TODO = {
-    control: ["P2", "Biểu đồ tải theo người và theo Agent, danh sách việc trễ hạn / thiếu báo cáo bấm được, và nhật ký hoạt động hợp nhất người + AI."],
-    staff: ["P2", "Khối lượng việc từng nhân sự, các Agent người đó chịu trách nhiệm kèm độ trưởng thành KWSR lấy từ hồ sơ Agent."],
-    reports: ["P2", "Nhật ký báo cáo theo ngày/tuần, lọc theo người và Agent, cảnh báo công việc đang chạy mà không có báo cáo."],
     portal: ["P4", "Trang tiến độ dành cho khách hàng theo tone tối của AI OS, chỉ hiện dự án đã bật public."],
     flow: ["P4", "Sơ đồ mô hình dữ liệu 3 cấp, ma trận trạng thái và luồng giao việc cho AI Agent."],
   };
@@ -519,6 +526,7 @@
         <td class="wk-muted" style="max-width:220px">${last ? esc(last.note.slice(0, 70)) : "—"}</td>
         <td><div class="wk-cellflex">
           ${k.status === "Chờ duyệt" ? `<button class="wk-minibtn go" data-act="approve" data-id="${k.id}">Duyệt</button><button class="wk-minibtn" data-act="reject" data-id="${k.id}">Trả lại</button>` : ""}
+          ${runBtn(k)}
           <button class="wk-minibtn" data-act="report" data-id="${k.id}">Báo cáo</button>
         </div></td>
       </tr>`;
@@ -619,6 +627,7 @@
           <td>${bar(k.progress)}</td>
           <td><div class="wk-cellflex">
             ${k.status === "Chờ duyệt" ? `<button class="wk-minibtn go" data-act="approve" data-id="${k.id}">Duyệt</button>` : ""}
+            ${runBtn(k)}
             <button class="wk-minibtn" data-act="report" data-id="${k.id}">Báo cáo</button>
           </div></td>
         </tr>`;
@@ -648,13 +657,247 @@
     }).join("")}</div>`;
   }
 
+  /* ================= 4. PHÒNG ĐIỀU HÀNH ================= */
+  // Một dòng công việc gọn, bấm vào là mở báo cáo
+  function taskLi(k, cls) {
+    const t = ticketById(k.ticket);
+    const p = t && projectById(t.project);
+    return `<button class="wk-li ${cls || ""}" data-act="report" data-id="${k.id}">
+      <span class="li-main">
+        <span class="li-t">${esc(k.title)}</span>
+        <span class="li-m">${whoBadge(k)}${p ? `<span>${esc(p.name)}</span>` : ""}${t ? `<span>#${t.code}</span>` : ""}<span>⏱ ${fmtD(k.deadline)}</span></span>
+      </span>
+      ${bar(k.progress)}
+    </button>`;
+  }
+
+  const listPanel = (title, items, emptyMsg, cls) =>
+    panel(title, "", items.length
+      ? `<div class="wk-list">${items.map((k) => taskLi(k, cls)).join("")}</div>`
+      : `<div class="wk-empty-ok">✓ ${esc(emptyMsg)}</div>`);
+
+  // Tải công việc: việc người đó tự làm + việc do Agent của họ đảm nhiệm
+  function workload() {
+    const open = S.tasks.filter((k) => !isDone(k.status));
+    return S.staff.map((s) => {
+      const own = open.filter((k) => !isAgentTask(k) && k.executor.id === s.id).length;
+      const viaAgent = open.filter((k) => isAgentTask(k) && k.owner === s.id).length;
+      return { s, own, viaAgent, total: own + viaAgent };
+    }).filter((r) => r.total > 0).sort((a, b) => b.total - a.total);
+  }
+
+  function allReports() {
+    const out = [];
+    S.tasks.forEach((k) => (k.reports || []).forEach((r, i) => out.push({ k, r, i })));
+    return out.sort((a, b) => (a.r.at === b.r.at ? b.i - a.i : (a.r.at < b.r.at ? 1 : -1)));
+  }
+
+  function reportLine(entry) {
+    const { k, r } = entry;
+    const t = ticketById(k.ticket);
+    const who = r.byType === "agent"
+      ? `🤖 ${esc((agentById(r.agentId) || {}).name || r.agentId)} <span class="wk-owner">(chịu trách nhiệm: ${esc(staffName(r.by))})</span>`
+      : esc(staffName(r.by));
+    return `<div class="wk-report ${r.byType === "agent" ? "agent" : ""}">
+      <b style="font-size:.8rem">${esc(k.title)}</b>${t ? ` <span class="wk-muted" style="font-size:.74rem">#${t.code}</span>` : ""}
+      <div>${esc(r.note.length > 320 ? r.note.slice(0, 320) + "…" : r.note)}</div>
+      <div class="meta">${fmtD(r.at)} · ${r.progress}%${r.minutes ? ` · ⏱ ${r.minutes} phút` : ""} · ${who}</div>
+    </div>`;
+  }
+
+  function vControl() {
+    const late = S.tasks.filter((k) => isLate(k.deadline, k.status));
+    const silent = S.tasks.filter(needsReport);
+    const review = S.tasks.filter((k) => k.status === "Chờ duyệt");
+    const load = workload();
+    const maxLoad = Math.max(1, ...load.map((r) => r.total));
+    const recent = allReports().slice(0, 8);
+
+    const loadRows = load.map((r) => `
+      <div class="wk-load">
+        <span class="nm" title="${esc(r.s.name)}">${esc(r.s.name)}</span>
+        <span class="track">
+          <i class="human" style="width:${(r.own / maxLoad) * 100}%"></i>
+          <i class="agent" style="width:${(r.viaAgent / maxLoad) * 100}%"></i>
+        </span>
+        <span class="num">${r.total} việc${r.viaAgent ? ` · ${r.viaAgent} qua Agent` : ""}</span>
+      </div>`).join("");
+
+    const projRows = S.projects.map((p) => `
+      <div class="wk-load">
+        <span class="nm" title="${esc(p.name)}">${esc(p.name)}</span>
+        <span>${bar(projectProgress(p.id))}</span>
+        <span class="num">${projectTickets(p.id).length} phiếu · ${fmtD(p.deadline)}</span>
+      </div>`).join("");
+
+    return kpiStrip() + `
+      <div class="wk-grid3">
+        ${listPanel(`🔴 Trễ hạn <span class="wk-pill late">${late.length}</span>`, late, "Không có việc nào trễ hạn.", "late")}
+        ${listPanel(`🟡 Thiếu báo cáo <span class="wk-pill doing">${silent.length}</span>`, silent, "Mọi việc đang chạy đều có báo cáo mới.", "silent")}
+        ${listPanel(`🟣 Chờ duyệt <span class="wk-pill review">${review.length}</span>`, review, "Không có kết quả nào chờ duyệt.", "review")}
+      </div>
+      <div class="wk-grid2">
+        ${panel("📊 Tải công việc theo nhân sự", "", `<div class="wk-panel-body">
+          <div class="wk-legend"><span><i style="background:var(--brand)"></i>Tự làm</span><span><i style="background:var(--accent)"></i>Giao AI Agent</span></div>
+          ${loadRows || '<div class="wk-muted">Chưa có việc nào đang mở.</div>'}
+        </div>`)}
+        ${panel("📈 Tiến độ dự án", "", `<div class="wk-panel-body">${projRows || '<div class="wk-muted">Chưa có dự án.</div>'}</div>`)}
+      </div>
+      ${panel("🗒️ Báo cáo gần nhất (người + AI Agent)",
+        '<button class="wk-minibtn" data-act="go" data-view="reports">Xem tất cả ›</button>',
+        `<div class="wk-panel-body">${recent.length ? recent.map(reportLine).join("") : '<div class="wk-muted">Chưa có báo cáo nào.</div>'}</div>`)}`;
+  }
+
+  /* ================= 5. NHÂN SỰ & AGENT ================= */
+  let SF = ""; // nhân sự đang chọn
+
+  const agentsOf = (staffId) => agentList().filter((a) => S.agentOwners[a.id] === staffId);
+  const agentTasks = (agentId, openOnly) =>
+    S.tasks.filter((k) => isAgentTask(k) && k.executor.id === agentId && (!openOnly || !isDone(k.status)));
+
+  function agentCard(a) {
+    const open = agentTasks(a.id, true).length;
+    return `<div class="wk-agentcard">
+      <div class="top">
+        <span class="ic">${esc(a.icon || "🤖")}</span>
+        <span style="flex:1;min-width:0"><b>${esc(a.name)}</b><span class="mdl">${esc(a.model)}</span></span>
+        <span class="wk-pill ${open ? "doing" : "pause"}">${open} việc</span>
+      </div>
+      <div class="maturity" style="margin-top:.5rem"><span class="bar"><i style="width:${a.maturity}%"></i></span><span>${a.stage} · ${a.maturity}%</span></div>
+      <div class="acts">
+        <button class="wk-minibtn" data-act="agent-chat" data-agent="${a.id}">💬 Chat</button>
+        <button class="wk-minibtn" data-act="agent-profile" data-agent="${a.id}">Hồ sơ & KWSR</button>
+      </div>
+    </div>`;
+  }
+
+  function vStaff() {
+    const load = workload();
+    const rows = S.staff.map((s) => {
+      const open = S.tasks.filter((k) => !isDone(k.status) && (isAgentTask(k) ? k.owner === s.id : k.executor.id === s.id));
+      const l = load.find((x) => x.s.id === s.id) || { own: 0, viaAgent: 0 };
+      return `<tr class="clickable" data-act="pick-staff" data-id="${s.id}">
+        <td><span class="wk-avt" style="margin:0 .5rem 0 0">${esc(initials(s.name))}</span><b>${esc(s.name)}</b><span class="wk-sub">${esc(s.title)}</span></td>
+        <td style="text-align:center">${l.own}</td>
+        <td style="text-align:center">${l.viaAgent ? `<span class="wk-pill review">${l.viaAgent}</span>` : '<span class="wk-muted">—</span>'}</td>
+        <td style="text-align:center">${(() => { const n = open.filter((k) => isLate(k.deadline, k.status)).length; return n ? `<span class="wk-late">${n}</span>` : '<span class="wk-muted">—</span>'; })()}</td>
+        <td style="text-align:center">${(() => { const n = open.filter(needsReport).length; return n ? `<span class="wk-pill doing">${n}</span>` : '<span class="wk-muted">—</span>'; })()}</td>
+        <td>${agentsOf(s.id).map((a) => `<span class="wk-chip">${esc(a.icon || "🤖")} ${esc(a.name)}</span>`).join("") || '<span class="wk-muted">—</span>'}</td>
+        <td><span class="wk-link">Xem chi tiết ›</span></td>
+      </tr>`;
+    }).join("");
+
+    const table1 = panel("👥 Khối lượng công việc theo nhân sự", "",
+      table("<th>Nhân sự</th><th>Tự làm</th><th>Qua Agent</th><th>Trễ</th><th>Im lặng</th><th>Agent chịu trách nhiệm</th><th></th>",
+        rows, "Chưa có nhân sự.", 7));
+
+    let detail = "";
+    if (SF) {
+      const s = staffById(SF);
+      const mine = S.tasks.filter((k) => !isDone(k.status) && (isAgentTask(k) ? k.owner === SF : k.executor.id === SF));
+      const ags = agentsOf(SF);
+      detail = panel(
+        `📋 ${esc(s ? s.name : "")} — việc chưa hoàn tất <span class="wk-pill new">${mine.length}</span>`,
+        '<button class="wk-minibtn" data-act="pick-staff" data-id="">Đóng</button>',
+        (mine.length ? `<div class="wk-list" style="max-height:none">${mine.map((k) => taskLi(k, isLate(k.deadline, k.status) ? "late" : needsReport(k) ? "silent" : "")).join("")}</div>`
+          : '<div class="wk-empty-ok">✓ Không còn việc nào đang mở.</div>')
+        + `<div class="wk-panel-head" style="border-top:1px solid var(--line)"><h3>🤖 AI Agent do ${esc(s ? s.name : "")} chịu trách nhiệm</h3></div>`
+        + (ags.length ? `<div class="wk-agents">${ags.map(agentCard).join("")}</div>`
+          : '<div class="wk-panel-body wk-muted">Nhân sự này chưa được giao Agent nào. Khi giao, mọi việc Agent làm sẽ tính vào trách nhiệm của họ.</div>')
+      );
+    }
+
+    const agentRows = agentList().map((a) => {
+      const owner = S.agentOwners[a.id];
+      const open = agentTasks(a.id, true);
+      return `<tr>
+        <td><b>${esc(a.icon || "🤖")} ${esc(a.name)}</b><span class="wk-sub">${esc(a.role)}</span></td>
+        <td><span class="badge model">${esc(a.model)}</span></td>
+        <td><span class="badge ${a.stage === "Chuyên gia" ? "stage-chuyengia" : a.stage === "Thạo việc" ? "stage-thaoviec" : "stage-hocviec"}">${esc(a.stage)} · ${a.maturity}%</span></td>
+        <td>${owner ? `<span class="wk-who human">${esc(staffName(owner))}</span>` : '<span class="wk-late">chưa gán</span>'}</td>
+        <td style="text-align:center">${open.length}</td>
+        <td><div class="wk-cellflex">
+          <button class="wk-minibtn" data-act="agent-chat" data-agent="${a.id}">💬 Chat</button>
+          <button class="wk-minibtn" data-act="agent-profile" data-agent="${a.id}">Hồ sơ</button>
+        </div></td>
+      </tr>`;
+    }).join("");
+
+    const table2 = panel("🤖 Đội AI Agent — ai chịu trách nhiệm cho ai", "",
+      `<div class="wk-note">Mỗi Agent phải có đúng một nhân sự chịu trách nhiệm. Kết quả Agent làm ra <b>chỉ được đóng khi người đó duyệt</b> — Agent không tự đóng việc của mình.</div>`.replace('class="wk-note"', 'class="wk-note" style="margin:1.1rem 1.1rem 0"')
+      + table("<th>Agent</th><th>Model</th><th>Trưởng thành (KWSR)</th><th>Nhân sự chịu trách nhiệm</th><th>Việc đang làm</th><th></th>",
+        agentRows, "Chưa nạp được danh sách Agent từ Dashboard.", 6));
+
+    return table1 + detail + table2;
+  }
+
+  /* ================= 6. BÁO CÁO ================= */
+  const RF = { who: "", project: "", range: "30", type: "" };
+
+  function vReports() {
+    const from = RF.range === "all" ? "0000-00-00" : dOff(-Number(RF.range));
+    const entries = allReports().filter(({ k, r }) => {
+      const t = ticketById(k.ticket);
+      return r.at >= from
+        && (!RF.type || r.byType === RF.type)
+        && (!RF.who || (r.byType === "agent" ? `agent:${r.agentId}` === RF.who : `human:${r.by}` === RF.who))
+        && (!RF.project || (t && t.project === RF.project));
+    });
+
+    const minutes = entries.reduce((s, e) => s + (e.r.minutes || 0), 0);
+    const byAgent = entries.filter((e) => e.r.byType === "agent").length;
+    const silent = S.tasks.filter(needsReport);
+
+    const summary = `
+    <div class="wk-kpis">
+      <div class="wk-kpi"><div class="lbl">Báo cáo</div><div class="val">${entries.length}</div><div class="sub">${RF.range === "all" ? "toàn bộ" : `${RF.range} ngày gần nhất`}</div></div>
+      <div class="wk-kpi"><div class="lbl">Thời gian ghi nhận</div><div class="val">${(minutes / 60).toFixed(1)}h</div><div class="sub">${minutes} phút</div></div>
+      <div class="wk-kpi agent"><div class="lbl">Do AI Agent</div><div class="val">${byAgent}</div><div class="sub">${entries.length ? Math.round((byAgent / entries.length) * 100) : 0}% số báo cáo</div></div>
+      <div class="wk-kpi ${silent.length ? "warn" : "ok"}"><div class="lbl">Việc im lặng</div><div class="val">${silent.length}</div><div class="sub">quá ${REPORT_GRACE_DAYS} ngày không báo cáo</div></div>
+      <div class="wk-kpi"><div class="lbl">Người báo cáo</div><div class="val">${new Set(entries.map((e) => e.r.by)).size}</div><div class="sub">có phát sinh báo cáo</div></div>
+    </div>`;
+
+    const filters = `
+    <div class="wk-filters">
+      <select class="wk-select" data-filter="r.who"><option value="">— Tất cả người & Agent —</option>${executorOpts(RF.who)}</select>
+      <select class="wk-select" data-filter="r.project"><option value="">— Tất cả dự án —</option>${projectOpts(RF.project)}</select>
+      <select class="wk-select" data-filter="r.type"><option value="">— Người & AI —</option><option value="human"${RF.type === "human" ? " selected" : ""}>Chỉ người</option><option value="agent"${RF.type === "agent" ? " selected" : ""}>Chỉ AI Agent</option></select>
+      <select class="wk-select" data-filter="r.range">
+        <option value="7"${RF.range === "7" ? " selected" : ""}>7 ngày gần nhất</option>
+        <option value="30"${RF.range === "30" ? " selected" : ""}>30 ngày gần nhất</option>
+        <option value="all"${RF.range === "all" ? " selected" : ""}>Toàn bộ</option>
+      </select>
+    </div>`;
+
+    // Gom theo ngày
+    const days = [];
+    entries.forEach((e) => {
+      const d = days.find((x) => x.at === e.r.at);
+      if (d) d.items.push(e); else days.push({ at: e.r.at, items: [e] });
+    });
+    const timeline = days.map((d) => `<div class="wk-day"><div class="d">${fmtD(d.at)}${d.at === today() ? " · hôm nay" : ""} — ${d.items.length} báo cáo</div>${d.items.map(reportLine).join("")}</div>`).join("");
+
+    const silentPanel = silent.length ? panel(
+      `⚠️ Đang chạy nhưng không có báo cáo <span class="wk-pill doing">${silent.length}</span>`, "",
+      `<div class="wk-note warn"><b>Quy ước:</b> việc ở trạng thái "Đang thực hiện" mà quá ${REPORT_GRACE_DAYS} ngày không có báo cáo mới sẽ nằm ở đây — áp dụng cho cả người lẫn AI Agent.</div>`.replace('class="wk-note warn"', 'class="wk-note warn" style="margin:1.1rem 1.1rem 0"')
+      + `<div class="wk-list" style="max-height:none">${silent.map((k) => taskLi(k, "silent")).join("")}</div>`) : "";
+
+    return summary + silentPanel + panel(
+      `🗒️ Nhật ký báo cáo <span class="wk-pill new">${entries.length}</span>`, "",
+      filters + (timeline ? `<div style="padding-bottom:1rem">${timeline}</div>` : '<div class="wk-panel-body wk-muted">Không có báo cáo nào khớp bộ lọc.</div>')
+    );
+  }
+
   /* ================= RENDER ================= */
   const VIEW_RENDER = {
+    control: vControl,
     projects: vProjects,
     projectDetail: vProjectDetail,
     tickets: vTickets,
     ticketDetail: vTicketDetail,
     tasks: vTasks,
+    staff: vStaff,
+    reports: vReports,
   };
 
   function render() {
@@ -906,7 +1149,7 @@
     if (!k) return;
     k.status = DONE; k.progress = 100;
     k.reports.push({ at: today(), progress: 100, note: `Đã duyệt kết quả${isAgentTask(k) ? ` do ${(agentById(k.executor.id) || {}).name || k.executor.id} thực hiện` : ""} và đóng công việc.`, by: k.owner, byType: "human" });
-    save(); say("Đã duyệt và đóng công việc ✓"); render();
+    save(); closeModal(); say("Đã duyệt và đóng công việc ✓"); render();
   }
   function rejectTask(taskId) {
     const k = taskById(taskId);
@@ -934,6 +1177,260 @@
     render();
     const next = document.querySelector(`[data-qa-title="${ticketId}"]`);
     if (next) next.focus();
+  }
+
+  /* ================= GIAO VIỆC CHO AI AGENT (chạy thật qua Proxy) =================
+     Luồng: chọn Agent → dựng ngữ cảnh (dự án + phiếu + việc + rule) → gọi
+     POST /api/agents/:id/chat của Backend Proxy → kết quả trở thành BÁO CÁO,
+     công việc chuyển "Chờ duyệt" để người chịu trách nhiệm xác nhận.
+     Agent không bao giờ tự đóng việc của mình.
+  ============================================================================= */
+
+  /* Gợi ý Agent — dùng chung bộ từ khóa nghiệp vụ của Orches (AGENTS[].keywords),
+     nhưng chấm điểm chặt hơn: từ khóa trúng trong TÊN CÔNG VIỆC mới được coi là
+     nhận diện chắc chắn; trúng trong mô tả phiếu chỉ tính điểm phụ. Tránh trường hợp
+     một việc kỹ thuật bị đẩy sang Sales chỉ vì mô tả phiếu có chữ "khách hàng". */
+  function scoreAgents(k) {
+    const t = ticketById(k.ticket);
+    const title = (k.title || "").toLowerCase();
+    const ctx = (t ? `${t.title} ${t.desc}` : "").toLowerCase();
+    return agentList().map((a) => {
+      let score = 0, titleHit = false;
+      (a.keywords || []).forEach((kw) => {
+        const w = String(kw).toLowerCase();
+        if (title.includes(w)) { score += w.length * 3; titleHit = true; }
+        else if (ctx.includes(w)) score += w.length;
+      });
+      return { agent: a, score, titleHit };
+    }).sort((x, y) => y.score - x.score);
+  }
+  function suggestAgent(k) {
+    const ranked = scoreAgents(k).filter((r) => r.score > 0);
+    const top = ranked[0];
+    return {
+      agent: top ? top.agent : (agentList()[0] || null),
+      matched: !!(top && top.titleHit),   // chỉ "chắc chắn" khi trúng từ khóa ngay trong tên việc
+      ranked: ranked.slice(0, 3),
+    };
+  }
+
+  function buildPrompt(k, agent) {
+    const t = ticketById(k.ticket);
+    const p = t && projectById(t.project);
+    const globals = (typeof GLOBAL_RULES !== "undefined" && Array.isArray(GLOBAL_RULES)) ? GLOBAL_RULES : [];
+    const rules = [...globals, ...(agent.rules || [])];
+    const lines = [
+      `Bạn là ${agent.name} — ${agent.role} của công ty. Hãy thực hiện nhiệm vụ dưới đây và trả về KẾT QUẢ BÀN GIAO ĐƯỢC, không hỏi lại.`,
+      "",
+      `## NHIỆM VỤ`,
+      k.title,
+      "",
+      `## BỐI CẢNH`,
+      p ? `- Dự án: ${p.name} (khách hàng: ${customerName(p.customer)})` : "- Dự án: (không rõ)",
+      p ? `- Mục tiêu dự án: ${p.desc}` : "",
+      t ? `- Phiếu yêu cầu #${t.code}: ${t.title}` : "",
+      t ? `- Nội dung yêu cầu: ${t.desc}` : "",
+      `- Thời hạn công việc: ${fmtD(k.deadline)} · độ ưu tiên: ${k.prio}`,
+      `- Người chịu trách nhiệm nghiệm thu: ${staffName(k.owner)}`,
+      k.reports.length ? `- Diễn biến trước đó: ${k.reports.slice(-2).map((r) => `${fmtD(r.at)} (${r.progress}%): ${r.note}`).join(" | ")}` : "",
+      "",
+      rules.length ? `## RULE BẮT BUỘC TUÂN THỦ\n${rules.map((r) => `- ${r}`).join("\n")}` : "",
+      "",
+      `## YÊU CẦU ĐẦU RA`,
+      `- Mở đầu bằng 2-3 dòng tóm tắt việc đã làm.`,
+      `- Sau đó là nội dung kết quả đầy đủ, dùng được ngay.`,
+      `- Cuối cùng nêu rõ điểm cần ${staffName(k.owner)} kiểm tra trước khi duyệt.`,
+    ];
+    return lines.filter((l) => l !== "").join("\n");
+  }
+
+  async function proxyHealth() {
+    const res = await fetch(`${WORK_PROXY_BASE}/api/health`, { method: "GET" });
+    if (!res.ok) throw new Error(`Proxy trả lỗi ${res.status}`);
+    return res.json();
+  }
+
+  // ---- Modal: giao việc cho Agent ----
+  function mAssignAgent(taskId) {
+    const k = taskById(taskId);
+    if (!k) return;
+    const { agent, matched, ranked } = suggestAgent(k);
+    const sel = agentList().map((a) => `<option value="${a.id}"${agent && a.id === agent.id ? " selected" : ""}>${esc(a.icon || "🤖")} ${esc(a.name)} — ${esc(a.model)}</option>`).join("");
+
+    openModal(modalHead("🤖", "Giao công việc cho AI Agent", "Agent thực thi, nhưng <b>nhân sự chịu trách nhiệm mới là người duyệt kết quả</b>.") + `
+      <div class="hr-intake-form">
+        <div class="wk-note">Công việc: <b>${esc(k.title)}</b></div>
+        <div class="hr-grid">
+          <label class="span2">Chọn Agent thực thi <span class="req">*</span><select id="wk_a_agent">${sel}</select></label>
+          <label class="span2">Người chịu trách nhiệm <span class="req">*</span><select id="wk_a_owner">${staffOpts(agent ? (S.agentOwners[agent.id] || k.owner) : k.owner)}</select></label>
+        </div>
+        <p class="bf-hint" style="margin:.6rem 0 0">${matched
+          ? `🧭 Gợi ý <b>${esc(agent.name)}</b> — trúng từ khóa nghiệp vụ ngay trong tên công việc.${ranked.length > 1 ? ` Ứng viên khác: ${ranked.slice(1).map((r) => esc(r.agent.name)).join(", ")}.` : ""}`
+          : `⚠️ Chưa nhận diện chắc chắn nghiệp vụ từ tên công việc — <b>hãy tự chọn Agent</b>. ${ranked.length ? `Gần đúng nhất theo mô tả phiếu: ${ranked.map((r) => esc(r.agent.name)).join(", ")}.` : "Không có Agent nào khớp từ khóa."}`}</p>
+        <h4>Ngữ cảnh sẽ gửi cho Agent</h4>
+        <div class="wk-output" id="wk_a_prompt">${esc(agent ? buildPrompt(k, agent) : "")}</div>
+        <div class="bf-actions" style="margin-top:1.2rem">
+          <button class="btn btn-ghost btn-sm" type="button" data-act="modal-close">Hủy</button>
+          <button class="btn btn-ghost btn-sm" type="button" data-act="confirm-assign" data-id="${k.id}">Chỉ giao, chưa chạy</button>
+          <button class="btn btn-primary btn-sm" type="button" data-act="confirm-assign-run" data-id="${k.id}">Giao &amp; chạy ngay ▶</button>
+        </div>
+      </div>`);
+
+    const agentSel = fld("wk_a_agent");
+    if (agentSel) agentSel.addEventListener("change", () => {
+      const a = agentById(agentSel.value);
+      if (!a) return;
+      fld("wk_a_owner").value = S.agentOwners[a.id] || k.owner;
+      fld("wk_a_prompt").textContent = buildPrompt(k, a);
+    });
+  }
+
+  function confirmAssign(taskId, runNow) {
+    const k = taskById(taskId);
+    if (!k) return;
+    const agentId = val("wk_a_agent");
+    if (!agentId) return say("Vui lòng chọn Agent");
+    k.executor = { type: "agent", id: agentId };
+    k.owner = val("wk_a_owner") || defaultOwner(k.executor);
+    save();
+    const a = agentById(agentId);
+    say(`Đã giao cho ${a ? a.name : agentId} ✓`);
+    if (typeof addFeed === "function") addFeed(`<b>${esc(a ? a.name : agentId)}</b> được giao công việc "${esc(k.title)}" — chịu trách nhiệm: ${esc(staffName(k.owner))}.`, "f-orches");
+    closeModal();
+    render();
+    if (runNow) mRunAgent(taskId);
+  }
+
+  function unassignAgent(taskId) {
+    const k = taskById(taskId);
+    if (!k) return;
+    k.executor = { type: "human", id: k.owner };
+    save(); say("Đã chuyển lại cho nhân sự thực hiện"); render();
+  }
+
+  // ---- Modal: chạy Agent ----
+  const RUN_STEPS = [
+    { id: "health", title: "Kiểm tra Backend Proxy", desc: `${WORK_PROXY_BASE}/api/health` },
+    { id: "context", title: "Dựng ngữ cảnh công việc", desc: "Dự án · phiếu yêu cầu · công việc · rule" },
+    { id: "call", title: "Gửi nhiệm vụ cho Agent", desc: "POST /api/agents/:id/chat" },
+    { id: "report", title: "Ghi kết quả thành báo cáo", desc: "Chuyển sang Chờ duyệt cho người chịu trách nhiệm" },
+  ];
+
+  function runStepsHtml(state) {
+    return `<div class="wk-steps">${RUN_STEPS.map((s, i) => {
+      const st = state[s.id] || {};
+      const cls = st.status === "ok" ? "ok" : st.status === "fail" ? "fail" : st.status === "doing" ? "on" : "";
+      const ic = st.status === "ok" ? "✓" : st.status === "fail" ? "✕" : st.status === "doing" ? '<span class="wk-spin"></span>' : i + 1;
+      return `<div class="wk-step ${cls}"><span class="ic">${ic}</span><span class="tx"><b>${esc(s.title)}</b><span>${st.note ? esc(st.note) : esc(s.desc)}</span></span></div>`;
+    }).join("")}</div>`;
+  }
+
+  let RUN_STATE = {};
+
+  function mRunAgent(taskId) {
+    const k = taskById(taskId);
+    if (!k || !isAgentTask(k)) return;
+    const a = agentById(k.executor.id);
+    RUN_STATE = {};
+    openModal(modalHead("▶", `Chạy ${a ? a.name : k.executor.id}`, `${esc(k.title)}`) + `
+      <div class="hr-intake-form">
+        <div class="wk-note">Kết quả Agent trả về sẽ được ghi thành báo cáo và chuyển công việc sang <b>Chờ duyệt</b> — <b>${esc(staffName(k.owner))}</b> là người xác nhận cuối cùng.</div>
+        <div id="wk_run_steps">${runStepsHtml(RUN_STATE)}</div>
+        <div id="wk_run_out"></div>
+        <div class="bf-actions" style="margin-top:1.2rem">
+          <button class="btn btn-ghost btn-sm" type="button" data-act="modal-close">Đóng</button>
+          <button class="btn btn-primary btn-sm" type="button" data-act="start-run" data-id="${k.id}" id="wk_run_btn">▶ Bắt đầu chạy</button>
+        </div>
+      </div>`);
+  }
+
+  function setStep(id, status, note) {
+    RUN_STATE[id] = { status, note };
+    const box = fld("wk_run_steps");
+    if (box) box.innerHTML = runStepsHtml(RUN_STATE);
+  }
+
+  async function startRun(taskId) {
+    const k = taskById(taskId);
+    if (!k || !isAgentTask(k)) return;
+    const a = agentById(k.executor.id);
+    const btn = fld("wk_run_btn");
+    if (btn) { btn.disabled = true; btn.textContent = "Đang chạy…"; }
+    const out = fld("wk_run_out");
+    const started = Date.now();
+    k.run = { status: "running", agentId: k.executor.id, startedAt: new Date().toISOString() };
+
+    const fail = (stepId, msg, hint) => {
+      setStep(stepId, "fail", msg);
+      k.run = { status: "failed", agentId: k.executor.id, error: msg, endedAt: new Date().toISOString() };
+      k.reports.push({ at: today(), progress: k.progress, note: `⚠️ Không chạy được ${a ? a.name : k.executor.id}: ${msg}`, by: k.owner, byType: "agent", agentId: k.executor.id });
+      save();
+      // hint là HTML do chính file này dựng (các giá trị động bên trong đã được esc)
+      if (out) out.innerHTML = `<div class="wk-note warn"><b>Chạy thất bại.</b> ${hint || ""}</div>`;
+      if (btn) { btn.disabled = false; btn.textContent = "▶ Chạy lại"; }
+      render();
+    };
+
+    // 1. Proxy
+    setStep("health", "doing");
+    let health;
+    try {
+      health = await proxyHealth();
+      setStep("health", "ok", `Proxy sống · MOCK_MODE=${health.mockMode} · ${(health.agents || []).length} agent`);
+    } catch (e) {
+      return fail("health", e.message,
+        `Backend Proxy chưa chạy hoặc origin bị chặn CORS. Chạy <code>node server/server.js</code> trong thư mục <code>project/aios/server</code>, và thêm <code>${location.origin}</code> vào <code>ALLOWED_ORIGIN</code> trong <code>server/.env</code>.`);
+    }
+
+    // 2. Ngữ cảnh
+    setStep("context", "doing");
+    const prompt = buildPrompt(k, a);
+    setStep("context", "ok", `${prompt.length} ký tự ngữ cảnh · ${(a.rules || []).length} rule của Agent`);
+
+    // 3. Gọi Agent
+    setStep("call", "doing", `Đang chờ ${a.name} (${a.model})…`);
+    let data;
+    try {
+      const res = await fetch(`${WORK_PROXY_BASE}/api/agents/${encodeURIComponent(k.executor.id)}/chat`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: prompt }),
+      });
+      data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || `Proxy trả lỗi ${res.status}`);
+      if (!data.reply) throw new Error("Agent không trả về nội dung");
+    } catch (e) {
+      return fail("call", e.message,
+        `Agent <b>${esc(a.name)}</b> chưa phản hồi được. Nếu <code>MOCK_MODE=false</code>, kiểm tra Hermes Profile <code>${esc(k.executor.id)}</code> đã bật gateway và đã điền <code>HERMES_KEY_*</code> chưa.`);
+    }
+    const mock = !!data.mock;
+    setStep("call", "ok", mock ? "Đã nhận phản hồi — MOCK_MODE, chưa phải Hermes thật" : `Đã nhận phản hồi thật từ ${a.name}`);
+
+    // 4. Ghi báo cáo
+    setStep("report", "doing");
+    const minutes = Math.max(1, Math.round((Date.now() - started) / 60000));
+    k.run = { status: "done", agentId: k.executor.id, mock, output: data.reply, endedAt: new Date().toISOString() };
+    k.progress = 100;
+    k.status = "Chờ duyệt";
+    k.reports.push({
+      at: today(), progress: 100,
+      note: (mock ? "🧪 [MOCK_MODE — chưa nối Hermes thật] " : "") + data.reply,
+      by: k.owner, byType: "agent", agentId: k.executor.id, minutes,
+    });
+    save();
+    setStep("report", "ok", `Đã ghi báo cáo · chờ ${staffName(k.owner)} duyệt`);
+
+    if (out) out.innerHTML = `
+      <h4>Kết quả Agent trả về ${mock ? '<span class="badge wk-badge-mock">MOCK_MODE</span>' : '<span class="badge model">Hermes thật</span>'}</h4>
+      <div class="wk-output">${esc(data.reply)}</div>
+      <div class="bf-actions" style="margin-top:.9rem">
+        <button class="btn btn-ghost btn-sm" type="button" data-act="reject" data-id="${k.id}">Trả lại Agent làm tiếp</button>
+        <button class="btn btn-primary btn-sm" type="button" data-act="approve" data-id="${k.id}">✓ Duyệt &amp; đóng việc</button>
+      </div>`;
+    if (btn) { btn.disabled = false; btn.textContent = "▶ Chạy lại"; }
+    if (typeof addFeed === "function") addFeed(`<b>${esc(a.name)}</b> hoàn thành "${esc(k.title)}" — chờ ${esc(staffName(k.owner))} duyệt.`, "f-done");
+    say("Agent đã trả kết quả — công việc chuyển sang Chờ duyệt ✓");
+    render();
   }
 
   /* ================= SỰ KIỆN ================= */
@@ -973,6 +1470,20 @@
         if (p) { p.public = !p.public; save(); say(p.public ? "Đã bật public — khách hàng xem được tiến độ" : "Đã tắt public"); render(); }
         break;
       }
+      case "pick-staff": SF = d.id || ""; render(); break;
+      // Sang mặt phẳng ra lệnh: mở đúng Agent trong Dashboard đội Agent
+      case "agent-chat":
+      case "agent-profile":
+        if (typeof showSection === "function") showSection("roster");
+        if (typeof openDrawer === "function") openDrawer(d.agent, d.act === "agent-chat" ? "chat" : "info");
+        else say("Không mở được hồ sơ Agent — thiếu js/app.js");
+        break;
+      case "assign-agent": mAssignAgent(d.id); break;
+      case "confirm-assign": confirmAssign(d.id, false); break;
+      case "confirm-assign-run": confirmAssign(d.id, true); break;
+      case "run-agent": mRunAgent(d.id); break;
+      case "start-run": startRun(d.id); break;
+      case "unassign-agent": unassignAgent(d.id); break;
       case "reset": reset(); say("Đã nạp lại dữ liệu mẫu điều hành công việc"); break;
     }
   }
@@ -983,7 +1494,7 @@
     // select/checkbox chỉ xử lý ở "change" để không render hai lần
     if (e.type === "input" && !(el.tagName === "INPUT" && el.type !== "checkbox")) return;
     const [group, key] = el.dataset.filter.split(".");
-    const store = group === "t" ? TF : KF;
+    const store = group === "t" ? TF : group === "r" ? RF : KF;
     store[key] = el.type === "checkbox" ? el.checked : el.value;
     if (key === "kw") renderKeepFocus(el.dataset.filter); else render();
   }
