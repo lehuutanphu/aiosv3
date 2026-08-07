@@ -1,0 +1,162 @@
+/* ============================================================
+   AI OS — Điều hành công việc (Dự án · Phiếu yêu cầu · Công việc)
+   Dùng chung design token của css/style.css. File này chỉ bổ sung,
+   không ghi đè component nào của Dashboard đội Agent.
+   ============================================================ */
+
+:root {
+  --wk-agent: #a78bfa;          /* việc do AI Agent thực thi */
+  --wk-human: #7dd3fc;          /* việc do nhân sự thực thi */
+  --wk-row: rgba(7, 11, 26, .5);
+}
+
+/* Ở chế độ điều hành, ẩn cột nhật ký để bảng có đủ bề ngang */
+.dash-layout.work-mode { grid-template-columns: 240px 1fr; }
+.dash-layout.work-mode .dash-feed { display: none; }
+
+/* ---------- Header của từng màn hình ---------- */
+.wk-head { display: flex; align-items: flex-start; gap: 1rem; flex-wrap: wrap; margin-bottom: 1.2rem; }
+.wk-head .wk-head-main { flex: 1; min-width: 240px; }
+.wk-head h1 { font-size: 1.35rem; display: flex; align-items: center; gap: .6rem; }
+.wk-head p { color: var(--muted); font-size: .88rem; margin-top: .25rem; }
+.wk-head-actions { display: flex; gap: .6rem; flex-wrap: wrap; align-items: center; }
+
+.wk-crumb { font-size: .8rem; color: var(--muted); margin-bottom: .6rem; }
+.wk-crumb button { color: var(--brand-2); font-weight: 600; }
+.wk-crumb button:hover { text-decoration: underline; }
+.wk-crumb .sep { margin: 0 .4rem; opacity: .5; }
+
+/* ---------- Dải KPI ---------- */
+.wk-kpis { display: grid; grid-template-columns: repeat(5, 1fr); gap: .8rem; margin-bottom: 1.4rem; }
+.wk-kpi {
+  background: var(--panel); border: 1px solid var(--line); border-radius: 14px;
+  padding: .85rem 1rem; min-width: 0;
+}
+.wk-kpi .lbl { font-size: .72rem; color: var(--muted); text-transform: uppercase; letter-spacing: .08em; }
+.wk-kpi .val { font-size: 1.45rem; font-weight: 800; margin-top: .15rem; }
+.wk-kpi .sub { font-size: .74rem; color: var(--muted); }
+.wk-kpi.warn { border-color: rgba(251,191,36,.35); }
+.wk-kpi.warn .val { color: var(--warn); }
+.wk-kpi.danger { border-color: rgba(248,113,113,.35); }
+.wk-kpi.danger .val { color: var(--danger); }
+.wk-kpi.ok .val { color: var(--ok); }
+.wk-kpi.agent { border-color: rgba(167,139,250,.35); }
+.wk-kpi.agent .val { color: var(--wk-agent); }
+
+/* ---------- Panel chung ---------- */
+.wk-panel {
+  background: var(--panel); border: 1px solid var(--line); border-radius: 16px;
+  margin-bottom: 1.2rem; overflow: hidden;
+}
+.wk-panel-head {
+  display: flex; align-items: center; gap: .7rem; flex-wrap: wrap;
+  padding: .9rem 1.1rem; border-bottom: 1px solid var(--line);
+}
+.wk-panel-head h3 { font-size: .95rem; display: flex; align-items: center; gap: .5rem; }
+.wk-panel-head .spacer { flex: 1; }
+.wk-panel-body { padding: 1.1rem; }
+
+/* ---------- Bảng ---------- */
+.wk-table-wrap { overflow-x: auto; }
+.wk-table { width: 100%; border-collapse: collapse; font-size: .84rem; }
+.wk-table th {
+  text-align: left; font-size: .7rem; text-transform: uppercase; letter-spacing: .08em;
+  color: var(--muted); font-weight: 700; padding: .6rem .8rem;
+  border-bottom: 1px solid var(--line); white-space: nowrap; background: rgba(7,11,26,.35);
+}
+.wk-table th.sortable { cursor: pointer; user-select: none; }
+.wk-table th.sortable:hover { color: var(--brand-2); }
+.wk-table td { padding: .65rem .8rem; border-bottom: 1px solid rgba(148,163,216,.09); vertical-align: middle; }
+.wk-table tbody tr:hover td { background: rgba(91,124,250,.06); }
+.wk-table tr.clickable { cursor: pointer; }
+.wk-table .empty { color: var(--muted); font-style: italic; padding: 1.1rem .8rem; }
+.wk-link { color: var(--brand-2); font-weight: 600; cursor: pointer; }
+.wk-link:hover { text-decoration: underline; }
+.wk-sub { display: block; color: var(--muted); font-size: .74rem; margin-top: .15rem; }
+
+/* ---------- Pill trạng thái ---------- */
+.wk-pill {
+  display: inline-flex; align-items: center; gap: .3rem; white-space: nowrap;
+  font-size: .72rem; font-weight: 700; border-radius: 999px; padding: .2rem .6rem;
+  border: 1px solid var(--line); color: var(--muted);
+}
+.wk-pill.new    { border-color: rgba(91,124,250,.45);  color: #93aefb;      background: rgba(91,124,250,.08); }
+.wk-pill.doing  { border-color: rgba(251,191,36,.45);  color: var(--warn);  background: rgba(251,191,36,.07); }
+.wk-pill.review { border-color: rgba(167,139,250,.45); color: var(--accent);background: rgba(167,139,250,.08); }
+.wk-pill.done   { border-color: rgba(52,211,153,.45);  color: var(--ok);    background: rgba(52,211,153,.07); }
+.wk-pill.pause  { border-color: var(--line);           color: var(--muted); background: rgba(148,163,216,.06); }
+.wk-pill.late   { border-color: rgba(248,113,113,.5);  color: var(--danger);background: rgba(248,113,113,.08); }
+
+.wk-prio { font-size: .72rem; font-weight: 700; white-space: nowrap; }
+.wk-prio.hi { color: var(--danger); } .wk-prio.md { color: var(--warn); } .wk-prio.lo { color: var(--muted); }
+.wk-late { color: var(--danger); font-weight: 700; }
+.wk-ok { color: var(--ok); }
+.wk-muted { color: var(--muted); }
+
+/* ---------- Người thực hiện: người vs Agent ---------- */
+.wk-who {
+  display: inline-flex; align-items: center; gap: .35rem; white-space: nowrap;
+  font-size: .76rem; font-weight: 600; border-radius: 999px; padding: .18rem .6rem;
+  border: 1px solid var(--line); color: var(--text); background: rgba(7,11,26,.5);
+}
+.wk-who.agent { border-color: rgba(167,139,250,.45); color: #c7b6ff; background: rgba(167,139,250,.1); }
+.wk-who.human { border-color: rgba(125,211,252,.35); color: #bae6fd; background: rgba(125,211,252,.08); }
+.wk-owner { font-size: .72rem; color: var(--muted); }
+
+.wk-avt {
+  display: inline-grid; place-items: center; width: 26px; height: 26px; border-radius: 50%;
+  font-size: .64rem; font-weight: 800; color: #071022; flex-shrink: 0;
+  background: linear-gradient(135deg, var(--brand), var(--brand-2));
+  border: 2px solid var(--panel); margin-left: -7px;
+}
+.wk-avts { display: inline-flex; padding-left: 7px; vertical-align: middle; }
+.wk-avt.agent { background: linear-gradient(135deg, var(--accent), #f0abfc); }
+
+/* ---------- Thanh tiến độ ---------- */
+.wk-bar {
+  position: relative; min-width: 96px; height: 16px; border-radius: 999px;
+  background: rgba(148,163,216,.15); overflow: hidden;
+}
+.wk-bar i { display: block; height: 100%; border-radius: 999px; background: linear-gradient(90deg, var(--brand), var(--brand-2)); }
+.wk-bar.full i { background: linear-gradient(90deg, #1eb980, var(--ok)); }
+.wk-bar b {
+  position: absolute; inset: 0; display: grid; place-items: center;
+  font-size: .66rem; font-weight: 800; color: var(--text); text-shadow: 0 1px 3px rgba(3,7,24,.9);
+}
+
+/* ---------- Thanh lọc ---------- */
+.wk-filters { display: flex; gap: .55rem; flex-wrap: wrap; align-items: center; padding: .8rem 1.1rem; border-bottom: 1px solid var(--line); }
+.wk-search { display: flex; align-items: center; gap: .45rem; flex: 1; min-width: 180px; max-width: 300px;
+  background: rgba(7,11,26,.65); border: 1px solid var(--line); border-radius: 10px; padding: .4rem .7rem; }
+.wk-search input { flex: 1; min-width: 0; background: none; border: 0; outline: none; color: var(--text); font-size: .84rem; }
+.wk-select {
+  background: rgba(7,11,26,.65); border: 1px solid var(--line); border-radius: 10px;
+  padding: .42rem .7rem; color: var(--muted); font-size: .8rem; outline: none; max-width: 220px;
+}
+.wk-select:focus { border-color: var(--brand-2); color: var(--text); }
+.wk-check { display: flex; align-items: center; gap: .4rem; font-size: .8rem; color: var(--muted); cursor: pointer; user-select: none; }
+
+/* ---------- Placeholder cho các phase chưa làm ---------- */
+.wk-todo {
+  border: 1px dashed rgba(148,163,216,.35); border-radius: 16px;
+  padding: 2rem 1.6rem; text-align: center; color: var(--muted); background: rgba(16,23,49,.4);
+}
+.wk-todo .ic { font-size: 1.8rem; }
+.wk-todo b { display: block; color: var(--text); font-size: 1rem; margin: .5rem 0 .3rem; }
+.wk-todo p { font-size: .86rem; max-width: 34rem; margin: 0 auto; }
+.wk-todo .phase-tag {
+  display: inline-block; margin-top: .9rem; font-size: .72rem; font-weight: 800; letter-spacing: .08em;
+  color: var(--brand-2); border: 1px solid rgba(34,211,238,.35); background: rgba(34,211,238,.07);
+  border-radius: 999px; padding: .25rem .8rem;
+}
+
+/* ---------- Responsive ---------- */
+@media (max-width: 1180px) {
+  .dash-layout.work-mode { grid-template-columns: 220px 1fr; }
+  .wk-kpis { grid-template-columns: repeat(3, 1fr); }
+}
+@media (max-width: 768px) {
+  .dash-layout.work-mode { grid-template-columns: 1fr; }
+  .wk-kpis { grid-template-columns: repeat(2, 1fr); }
+  .wk-head h1 { font-size: 1.15rem; }
+}

@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>AI OS Dashboard — Quản lý đội AI Agent theo phòng ban</title>
 <link rel="stylesheet" href="css/style.css" />
+<link rel="stylesheet" href="css/work.css" />
 </head>
 <body>
 
@@ -27,6 +28,15 @@
 
   <!-- SIDEBAR -->
   <aside class="dash-sidebar" id="sidebar">
+    <h4>Điều hành công việc</h4>
+    <button class="side-link" data-work="control"><span class="sic">🛰️</span> Phòng điều hành</button>
+    <button class="side-link" data-work="projects"><span class="sic">📁</span> Dự án<span class="cnt" data-work-cnt="projects"></span></button>
+    <button class="side-link" data-work="tickets"><span class="sic">🎫</span> Phiếu yêu cầu<span class="cnt" data-work-cnt="tickets"></span></button>
+    <button class="side-link" data-work="tasks"><span class="sic">✅</span> Công việc<span class="cnt" data-work-cnt="tasks"></span></button>
+    <button class="side-link" data-work="staff"><span class="sic">👥</span> Nhân sự &amp; Agent</button>
+    <button class="side-link" data-work="reports"><span class="sic">📈</span> Báo cáo<span class="cnt" data-work-cnt="reports"></span></button>
+    <button class="side-link" data-work="portal"><span class="sic">🌐</span> Portal khách hàng</button>
+    <button class="side-link" data-work="flow"><span class="sic">🔄</span> Luồng nghiệp vụ</button>
     <h4>Điều phối</h4>
     <button class="side-link active" data-dept="all"><span class="sic">🧭</span> Toàn bộ đội Agent</button>
     <h4>Phòng ban</h4>
@@ -37,6 +47,12 @@
 
   <!-- MAIN -->
   <main class="dash-main">
+
+   <!-- ===== VIEW A: ĐIỀU HÀNH CÔNG VIỆC (js/work.js) ===== -->
+   <div id="workView" hidden></div>
+
+   <!-- ===== VIEW B: ĐỘI AGENT (js/app.js) ===== -->
+   <div id="rosterView">
     <div class="dash-title-row">
       <div>
         <h1>Đội ngũ AI Agent của bạn</h1>
@@ -88,6 +104,7 @@
 
     <!-- DEPARTMENTS + AGENTS injected by JS -->
     <div id="deptContainer"></div>
+   </div><!-- /#rosterView -->
   </main>
 
   <!-- ACTIVITY FEED -->
@@ -337,5 +354,6 @@
 <div class="toast" id="toast"></div>
 
 <script src="js/app.js"></script>
+<script src="js/work.js"></script>
 </body>
 </html>

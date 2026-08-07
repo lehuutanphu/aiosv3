@@ -422,6 +422,21 @@ function addFeed(html, cls = "") {
 }
 
 // ---------- RENDER: SIDEBAR ----------
+/* Chuyển giữa 2 mặt phẳng của Dashboard:
+   - "roster" = đội Agent (Orches + phòng ban) — logic trong file này
+   - "work"   = điều hành Dự án/Phiếu/Công việc — logic trong js/work.js
+   Ở chế độ work, cột nhật ký bên phải được ẩn để bảng có đủ bề ngang. */
+function showSection(section, workView) {
+  const isWork = section === "work";
+  const roster = $("#rosterView"), work = $("#workView");
+  if (roster) roster.hidden = isWork;
+  if (work) work.hidden = !isWork;
+  const layout = document.querySelector(".dash-layout");
+  if (layout) layout.classList.toggle("work-mode", isWork);
+  if (isWork && window.AIOS_WORK) window.AIOS_WORK.show(workView || "control");
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
 function renderSidebar() {
   const sb = $("#sidebar");
   const slot = $("#deptLinks") || sb;
@@ -432,9 +447,20 @@ function renderSidebar() {
   });
   sb.addEventListener("click", (e) => {
     const btn = e.target.closest(".side-link");
-    if (!btn || !btn.dataset.dept) return;
+    if (!btn) return;
+
+    // Nhóm "Điều hành công việc" — do js/work.js đảm nhiệm
+    if (btn.dataset.work) {
+      sb.querySelectorAll(".side-link").forEach(x => x.classList.remove("active"));
+      btn.classList.add("active");
+      showSection("work", btn.dataset.work);
+      return;
+    }
+
+    if (!btn.dataset.dept) return;
     sb.querySelectorAll(".side-link").forEach(x => x.classList.remove("active"));
     btn.classList.add("active");
+    showSection("roster");
     const dept = btn.dataset.dept;
     document.querySelectorAll(".dept-section").forEach(sec => {
       sec.style.display = (dept === "all" || sec.dataset.dept === dept) ? "" : "none";
