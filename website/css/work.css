@@ -304,19 +304,77 @@
 .wk-day { padding: .3rem 1.1rem 0; }
 .wk-day .d { font-size: .74rem; font-weight: 800; letter-spacing: .06em; color: var(--brand-2); text-transform: uppercase; margin: .8rem 0 .5rem; }
 
-/* ---------- Placeholder cho các phase chưa làm ---------- */
-.wk-todo {
-  border: 1px dashed rgba(148,163,216,.35); border-radius: 16px;
-  padding: 2rem 1.6rem; text-align: center; color: var(--muted); background: rgba(16,23,49,.4);
+/* ---------- Portal khách hàng ---------- */
+.wk-hero {
+  background: linear-gradient(135deg, rgba(91,124,250,.2), rgba(34,211,238,.1)), var(--panel);
+  border: 1px solid rgba(91,124,250,.35); border-radius: 18px;
+  padding: 1.4rem 1.6rem; margin-bottom: 1.2rem;
 }
-.wk-todo .ic { font-size: 1.8rem; }
-.wk-todo b { display: block; color: var(--text); font-size: 1rem; margin: .5rem 0 .3rem; }
-.wk-todo p { font-size: .86rem; max-width: 34rem; margin: 0 auto; }
-.wk-todo .phase-tag {
-  display: inline-block; margin-top: .9rem; font-size: .72rem; font-weight: 800; letter-spacing: .08em;
-  color: var(--brand-2); border: 1px solid rgba(34,211,238,.35); background: rgba(34,211,238,.07);
-  border-radius: 999px; padding: .25rem .8rem;
+.wk-hero h2 { font-size: 1.25rem; }
+.wk-hero p { color: var(--muted); font-size: .86rem; margin-top: .3rem; }
+.wk-hero .stats { display: flex; gap: 1.8rem; margin-top: 1rem; flex-wrap: wrap; }
+.wk-hero .stats b { display: block; font-size: 1.3rem; }
+.wk-hero .stats span { font-size: .76rem; color: var(--muted); }
+
+.wk-milestone { display: flex; gap: .9rem; }
+.wk-milestone .dot {
+  width: 13px; height: 13px; border-radius: 50%; flex-shrink: 0; margin-top: .3rem;
+  background: var(--panel-2); border: 3px solid rgba(148,163,216,.3);
 }
+.wk-milestone.doing .dot { background: var(--brand-2); border-color: rgba(34,211,238,.3); }
+.wk-milestone.done .dot { background: var(--ok); border-color: rgba(52,211,153,.3); }
+.wk-milestone .line {
+  flex: 1; min-width: 0; border-left: 2px solid rgba(148,163,216,.18);
+  margin-left: -7px; padding: 0 0 1.1rem 1.5rem;
+}
+.wk-milestone:last-child .line { border-left-color: transparent; padding-bottom: .2rem; }
+.wk-milestone .line b { font-size: .87rem; }
+.wk-milestone .line .sub { color: var(--muted); font-size: .76rem; margin-top: .25rem; display: block; }
+
+/* ---------- Luồng nghiệp vụ ---------- */
+.wk-flow { display: flex; align-items: stretch; gap: .7rem; flex-wrap: wrap; padding: 1.1rem; }
+.wk-fbox {
+  flex: 1; min-width: 165px; border: 1px solid var(--line); border-radius: 14px;
+  padding: .85rem 1rem; background: rgba(7,11,26,.5);
+}
+.wk-fbox b { display: block; font-size: .88rem; }
+.wk-fbox span { display: block; font-size: .75rem; color: var(--muted); margin-top: .25rem; line-height: 1.5; }
+.wk-fbox.p { border-color: rgba(91,124,250,.45); background: rgba(91,124,250,.08); }
+.wk-fbox.t { border-color: rgba(34,211,238,.4); background: rgba(34,211,238,.06); }
+.wk-fbox.k { border-color: rgba(52,211,153,.4); background: rgba(52,211,153,.06); }
+.wk-fbox.a { border-color: rgba(167,139,250,.45); background: rgba(167,139,250,.08); }
+.wk-farr { align-self: center; color: var(--muted); font-weight: 800; font-size: .8rem; white-space: nowrap; }
+.wk-steps-num { counter-reset: wkst; padding: 0 1.1rem 1.1rem; }
+.wk-stepitem {
+  display: grid; grid-template-columns: 34px 1fr; gap: .9rem; align-items: start;
+  padding: .7rem 0; border-bottom: 1px dashed rgba(148,163,216,.14);
+}
+.wk-stepitem:last-child { border-bottom: 0; }
+.wk-stepitem::before {
+  counter-increment: wkst; content: counter(wkst);
+  width: 34px; height: 34px; border-radius: 10px; display: grid; place-items: center;
+  font-weight: 800; font-size: .85rem; color: var(--brand-2);
+  background: rgba(34,211,238,.08); border: 1px solid rgba(34,211,238,.3);
+}
+.wk-stepitem b { font-size: .9rem; }
+.wk-stepitem p { color: var(--muted); font-size: .83rem; margin-top: .25rem; line-height: 1.6; }
+
+/* ---------- Chat theo ngữ cảnh công việc ---------- */
+.wk-chatbox {
+  height: 320px; overflow-y: auto; background: rgba(7,11,26,.45);
+  border: 1px solid var(--line); border-radius: 12px; padding: .9rem;
+  display: flex; flex-direction: column; gap: .7rem;
+}
+.wk-chatbox .msg { max-width: 88%; }
+.wk-chatbox .empty { color: var(--muted); font-size: .82rem; font-style: italic; margin: auto; text-align: center; }
+.wk-chatrow { display: flex; gap: .6rem; align-items: flex-end; margin-top: .7rem; }
+.wk-chatrow textarea {
+  flex: 1; resize: none; background: rgba(7,11,26,.7); border: 1px solid var(--line);
+  border-radius: 12px; padding: .6rem .8rem; color: var(--text); font-size: .86rem;
+  font-family: inherit; outline: none; max-height: 120px;
+}
+.wk-chatrow textarea:focus { border-color: var(--brand); }
+.wk-msgact { display: flex; justify-content: flex-end; margin-top: .4rem; }
 
 /* ---------- Responsive ---------- */
 @media (max-width: 1180px) {

@@ -248,11 +248,13 @@
 
   // Nút ra lệnh cho AI Agent ngay trên dòng công việc
   function runBtn(k) {
-    if (isDone(k.status)) return "";
     if (isAgentTask(k)) {
+      const chat = `<button class="wk-minibtn" data-act="task-chat" data-id="${k.id}" title="Trao đổi trực tiếp với Agent về công việc này">💬</button>`;
+      if (isDone(k.status)) return chat;
       const ran = k.run && k.run.status === "done";
-      return `<button class="wk-minibtn go" data-act="run-agent" data-id="${k.id}" title="Cho Agent thực thi công việc này">▶ ${ran ? "Chạy lại" : "Chạy Agent"}</button>`;
+      return `<button class="wk-minibtn go" data-act="run-agent" data-id="${k.id}" title="Cho Agent thực thi trọn công việc này">▶ ${ran ? "Chạy lại" : "Chạy Agent"}</button>${chat}`;
     }
+    if (isDone(k.status)) return "";
     return `<button class="wk-minibtn" data-act="assign-agent" data-id="${k.id}" title="Giao công việc này cho AI Agent">🤖 Giao Agent</button>`;
   }
 
@@ -350,21 +352,6 @@
       <div class="wk-kpi agent"><div class="lbl">AI Agent đảm nhiệm</div><div class="val">${m.byAgent}</div><div class="sub">việc đang mở · ${m.review} chờ duyệt</div></div>
     </div>`;
   }
-
-  function todoPanel(phase, what) {
-    return `
-    <div class="wk-todo">
-      <div class="ic">🚧</div>
-      <b>Màn hình này được dựng ở ${esc(phase)}</b>
-      <p>${what}</p>
-      <span class="phase-tag">KHUNG DỮ LIỆU ĐÃ SẴN SÀNG</span>
-    </div>`;
-  }
-
-  const VIEW_TODO = {
-    portal: ["P4", "Trang tiến độ dành cho khách hàng theo tone tối của AI OS, chỉ hiện dự án đã bật public."],
-    flow: ["P4", "Sơ đồ mô hình dữ liệu 3 cấp, ma trận trạng thái và luồng giao việc cho AI Agent."],
-  };
 
   /* ================= 1. DỰ ÁN ================= */
   function vProjects() {
@@ -888,6 +875,114 @@
     );
   }
 
+  /* ================= 7. PORTAL KHÁCH HÀNG ================= */
+  let PC = ""; // khách hàng đang xem (giả lập)
+
+  function vPortal() {
+    if (!PC) {
+      const firstPublic = S.projects.find((p) => p.public);
+      PC = firstPublic ? firstPublic.customer : (S.customers[0] || {}).id || "";
+    }
+    const pubs = S.projects.filter((p) => p.customer === PC && p.public);
+    const avg = pubs.length ? Math.round(pubs.reduce((s, p) => s + projectProgress(p.id), 0) / pubs.length) : 0;
+
+    const note = `
+    <div class="wk-note">
+      🌐 <b>Đây là những gì khách hàng nhìn thấy</b> — trang riêng theo đường dẫn cấp cho từng khách, không cần đăng nhập nội bộ.
+      Khách chỉ thấy dự án đã bật public, tiến độ và các mốc; <b>không</b> thấy nhân sự nội bộ, không thấy Agent nào chạy, không thấy ghi chú nội bộ hay chi phí.
+      &nbsp;Giả lập khách hàng: <select class="wk-select" data-filter="c.pc">${customerOpts(PC)}</select>
+    </div>`;
+
+    const body = pubs.length ? pubs.map((p) => {
+      const ts = projectTickets(p.id);
+      return `<div class="wk-panel">
+        <div class="wk-panel-head">
+          <h3>${esc(p.name)}</h3>${pill(p.status)}
+          <span class="spacer"></span>
+          <span style="font-size:.82rem;color:var(--muted)">Dự kiến hoàn thành: <b style="color:var(--text)">${fmtD(p.deadline)}</b></span>
+        </div>
+        <div class="wk-panel-body">
+          <div style="max-width:340px;margin-bottom:.7rem">${bar(projectProgress(p.id))}</div>
+          <p style="color:var(--muted);font-size:.86rem;line-height:1.6">${esc(p.desc)}</p>
+          <div class="lbl" style="font-size:.7rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin:1rem 0 .7rem">Các hạng mục (${ts.length})</div>
+          ${ts.map((t) => {
+            const tp = ticketProgress(t.id);
+            return `<div class="wk-milestone ${tp >= 100 ? "done" : tp > 0 ? "doing" : ""}">
+              <div class="dot"></div>
+              <div class="line">
+                <b>${esc(t.title)}</b> ${pill(t.status)}
+                <div style="max-width:260px;margin-top:.45rem">${bar(tp)}</div>
+                <span class="sub">Dự kiến: ${fmtD(t.deadline)}</span>
+              </div>
+            </div>`;
+          }).join("") || '<div class="wk-muted">Chưa có hạng mục nào.</div>'}
+        </div>
+      </div>`;
+    }).join("") : `<div class="wk-panel"><div class="wk-panel-body wk-muted">Khách hàng này chưa có dự án nào được bật public. Bật ở trang chi tiết dự án.</div></div>`;
+
+    return note + `
+      <div class="wk-hero">
+        <h2>Kính gửi ${esc(customerName(PC))}</h2>
+        <p>Tiến độ các dự án đang thực hiện cho Quý khách — cập nhật ngày ${fmtD(today())}</p>
+        <div class="stats">
+          <div><b>${pubs.length}</b><span>Dự án đang theo dõi</span></div>
+          <div><b>${pubs.reduce((s, p) => s + projectTickets(p.id).length, 0)}</b><span>Hạng mục công việc</span></div>
+          <div><b style="color:var(--ok)">${avg}%</b><span>Mức độ hoàn thành</span></div>
+        </div>
+      </div>` + body;
+  }
+
+  /* ================= 8. LUỒNG NGHIỆP VỤ ================= */
+  function vFlow() {
+    const model = panel("🧩 Mô hình dữ liệu & người thực hiện", "", `
+      <div class="wk-flow">
+        <div class="wk-fbox p"><b>📁 Dự án</b><span>Khách hàng · PM · nhân sự · thời hạn · tài liệu</span></div>
+        <span class="wk-farr">1 ⟶ n</span>
+        <div class="wk-fbox t"><b>🎫 Phiếu yêu cầu</b><span>Nội dung · người xử lý · độ ưu tiên · thời hạn</span></div>
+        <span class="wk-farr">1 ⟶ n</span>
+        <div class="wk-fbox k"><b>✅ Công việc</b><span>Người thực hiện · tiến độ % · báo cáo</span></div>
+      </div>
+      <div class="wk-flow" style="padding-top:0">
+        <div class="wk-fbox"><b>👤 Nhân sự thực hiện</b><span>Tự làm và tự báo cáo tiến độ</span></div>
+        <span class="wk-farr">hoặc</span>
+        <div class="wk-fbox a"><b>🤖 AI Agent thực hiện</b><span>Chạy qua Backend Proxy, kết quả thành báo cáo</span></div>
+        <span class="wk-farr">⟶</span>
+        <div class="wk-fbox"><b>🙋 Nhân sự chịu trách nhiệm</b><span>Luôn là người — duyệt kết quả và đóng việc</span></div>
+      </div>
+      <div class="wk-panel-body" style="padding-top:0">
+        <div class="wk-note"><b>Tiến độ cuộn lên:</b> % công việc → trung bình thành % phiếu yêu cầu → trung bình thành % dự án. Mọi con số trên Phòng điều hành đều tính ngược từ báo cáo thật của từng công việc, không nhập tay ở cấp trên.</div>
+      </div>`);
+
+    const steps = [
+      ["Khởi tạo dự án", "PM tạo dự án: chọn khách hàng, nhập nội dung, thời hạn, gán PM và nhân sự, đính kèm hợp đồng/SRS/design."],
+      ["Tiếp nhận yêu cầu", "Yêu cầu từ khách hàng hoặc nội bộ được lập thành phiếu và gắn vào đúng dự án. Khách hàng được kế thừa từ dự án cha."],
+      ["Tách việc & giao người", "Người xử lý phiếu tách thành các công việc, giao cho từng nhân sự với thời hạn riêng. Nhiều việc chạy song song trong một phiếu."],
+      ["Hoặc giao cho AI Agent", "Việc nào Agent làm được thì bấm “🤖 Giao Agent”. Hệ thống gợi ý Agent theo từ khóa nghiệp vụ và tự gán nhân sự chịu trách nhiệm theo bảng phân công Agent."],
+      ["Agent thực thi", "Ngữ cảnh (dự án · phiếu · việc · Global Rule · Rule riêng của Agent) được gửi tới Agent qua Backend Proxy. Kết quả trả về được ghi thành báo cáo, việc chuyển “Chờ duyệt”."],
+      ["Báo cáo tiến độ", "Người tự nhập % và ghi chú; Agent sinh báo cáo tự động. Cùng một dòng thời gian, cùng định dạng. Việc đang chạy mà quá " + REPORT_GRACE_DAYS + " ngày không có báo cáo bị gắn nhãn “im lặng”."],
+      ["Nghiệm thu & đóng việc", "Người chịu trách nhiệm duyệt kết quả mới đóng được việc. Agent không bao giờ tự đóng việc của mình."],
+      ["Giám sát & công khai", "PM theo dõi roll-up ở Phòng điều hành, phát hiện quá tải và trễ hạn. Dự án bật public sinh trang riêng cho khách hàng xem tiến độ."],
+    ];
+
+    const flowSteps = panel("🔄 Luồng vận hành", "", `<div class="wk-steps-num">${steps.map(([t, d]) => `<div class="wk-stepitem"><div><b>${esc(t)}</b><p>${esc(d)}</p></div></div>`).join("")}</div>`);
+
+    const matrix = panel("📐 Ma trận trạng thái", "", table(
+      "<th>Đối tượng</th><th>Trạng thái</th><th>Điều kiện chuyển</th>",
+      `<tr><td><b>Dự án</b></td><td>${["Mới", "Đang thực hiện", "Tạm dừng", "Hoàn tất"].map(pill).join(" ")}</td><td>Hoàn tất khi mọi phiếu đã đóng và PM xác nhận nghiệm thu</td></tr>
+       <tr><td><b>Phiếu yêu cầu</b></td><td>${["Mới", "Đang thực hiện", "Tạm dừng", "Hoàn tất"].map(pill).join(" ")}</td><td>Hoàn tất khi mọi công việc đạt 100% và người xử lý đóng phiếu</td></tr>
+       <tr><td><b>Công việc</b></td><td>${STATUS_LIST.map(pill).join(" ")}</td><td><b>Chờ duyệt</b> chỉ dành cho kết quả cần nghiệm thu — thường là việc do AI Agent làm. Hoàn tất khi người chịu trách nhiệm bấm Duyệt</td></tr>`,
+      "", 3));
+
+    const rules = panel("🛡️ Quy ước kiểm soát", "", `<div class="wk-panel-body">
+      <div class="wk-stepitem" style="grid-template-columns:1fr;border:0;padding-top:0"><div><b>Agent không tự đóng việc</b><p>Mọi kết quả Agent trả về đều dừng ở “Chờ duyệt”. Người chịu trách nhiệm là chốt chặn cuối cùng — đây là lý do mỗi Agent bắt buộc có đúng một nhân sự phụ trách.</p></div></div>
+      <div class="wk-stepitem" style="grid-template-columns:1fr;border:0"><div><b>Báo cáo áp dụng cho cả người lẫn máy</b><p>Không có ngoại lệ. Agent chạy xong ghi báo cáo; người làm tay cũng phải ghi. Việc im lặng quá ${REPORT_GRACE_DAYS} ngày hiện ở Phòng điều hành và trang Báo cáo.</p></div></div>
+      <div class="wk-stepitem" style="grid-template-columns:1fr;border:0"><div><b>Rule đi theo Agent vào từng lệnh</b><p>Global Rule toàn công ty và Rule riêng của Agent được nhét vào ngữ cảnh mỗi lần chạy — xem trước được toàn văn trước khi bấm chạy.</p></div></div>
+      <div class="wk-stepitem" style="grid-template-columns:1fr;border:0;padding-bottom:0"><div><b>Khách hàng chỉ thấy phần được mở</b><p>Portal khách hàng hiện tên dự án, nội dung, tiến độ và mốc thời gian. Không lộ nhân sự, không lộ việc Agent nào đã chạy, không lộ ghi chú nội bộ.</p></div></div>
+    </div>`);
+
+    return model + flowSteps + matrix + rules;
+  }
+
   /* ================= RENDER ================= */
   const VIEW_RENDER = {
     control: vControl,
@@ -898,6 +993,8 @@
     tasks: vTasks,
     staff: vStaff,
     reports: vReports,
+    portal: vPortal,
+    flow: vFlow,
   };
 
   function render() {
@@ -918,15 +1015,7 @@
         </div>
       </div>`;
 
-    let body;
-    if (renderer) {
-      body = renderer();
-    } else {
-      const [phase, what] = VIEW_TODO[VIEW];
-      body = kpiStrip() + todoPanel(phase, what);
-    }
-
-    host.innerHTML = header + body;
+    host.innerHTML = header + (renderer ? renderer() : kpiStrip());
     setSidebarActive();
     refreshCounters();
     bindKanbanDnd(host);
@@ -1214,34 +1303,146 @@
     };
   }
 
-  function buildPrompt(k, agent) {
+  // Khối bối cảnh dùng chung cho cả lệnh chạy và khung chat theo công việc
+  function contextLines(k, agent) {
     const t = ticketById(k.ticket);
     const p = t && projectById(t.project);
     const globals = (typeof GLOBAL_RULES !== "undefined" && Array.isArray(GLOBAL_RULES)) ? GLOBAL_RULES : [];
-    const rules = [...globals, ...(agent.rules || [])];
-    const lines = [
-      `Bạn là ${agent.name} — ${agent.role} của công ty. Hãy thực hiện nhiệm vụ dưới đây và trả về KẾT QUẢ BÀN GIAO ĐƯỢC, không hỏi lại.`,
-      "",
-      `## NHIỆM VỤ`,
-      k.title,
-      "",
+    const rules = [...globals, ...((agent && agent.rules) || [])];
+    return [
       `## BỐI CẢNH`,
       p ? `- Dự án: ${p.name} (khách hàng: ${customerName(p.customer)})` : "- Dự án: (không rõ)",
       p ? `- Mục tiêu dự án: ${p.desc}` : "",
       t ? `- Phiếu yêu cầu #${t.code}: ${t.title}` : "",
       t ? `- Nội dung yêu cầu: ${t.desc}` : "",
-      `- Thời hạn công việc: ${fmtD(k.deadline)} · độ ưu tiên: ${k.prio}`,
+      `- Công việc: ${k.title}`,
+      `- Thời hạn: ${fmtD(k.deadline)} · độ ưu tiên: ${k.prio}`,
       `- Người chịu trách nhiệm nghiệm thu: ${staffName(k.owner)}`,
-      k.reports.length ? `- Diễn biến trước đó: ${k.reports.slice(-2).map((r) => `${fmtD(r.at)} (${r.progress}%): ${r.note}`).join(" | ")}` : "",
+      k.reports.length ? `- Diễn biến trước đó: ${k.reports.slice(-2).map((r) => `${fmtD(r.at)} (${r.progress}%): ${r.note.slice(0, 200)}`).join(" | ")}` : "",
       "",
       rules.length ? `## RULE BẮT BUỘC TUÂN THỦ\n${rules.map((r) => `- ${r}`).join("\n")}` : "",
+    ].filter((l) => l !== "").join("\n");
+  }
+
+  function buildPrompt(k, agent) {
+    return [
+      `Bạn là ${agent.name} — ${agent.role} của công ty. Hãy thực hiện nhiệm vụ dưới đây và trả về KẾT QUẢ BÀN GIAO ĐƯỢC, không hỏi lại.`,
+      "",
+      `## NHIỆM VỤ`,
+      k.title,
+      "",
+      contextLines(k, agent),
       "",
       `## YÊU CẦU ĐẦU RA`,
       `- Mở đầu bằng 2-3 dòng tóm tắt việc đã làm.`,
       `- Sau đó là nội dung kết quả đầy đủ, dùng được ngay.`,
       `- Cuối cùng nêu rõ điểm cần ${staffName(k.owner)} kiểm tra trước khi duyệt.`,
-    ];
-    return lines.filter((l) => l !== "").join("\n");
+    ].join("\n");
+  }
+
+  /* ---- Chat theo ngữ cảnh công việc: nơi ra lệnh từng tác vụ cụ thể ----
+     Khác với nút "Chạy Agent" (giao trọn nhiệm vụ), khung này để trao đổi
+     qua lại: chỉnh lại kết quả, hỏi thêm, yêu cầu làm gọn hơn… Lượt trả lời
+     nào ưng ý thì bấm ghi thẳng thành báo cáo của công việc. */
+  function chatBoxHtml(k) {
+    const a = agentById(k.executor.id);
+    const msgs = k.chat || [];
+    if (!msgs.length) {
+      return `<div class="empty">Chưa có trao đổi nào.<br>Nhắn cho ${esc(a ? a.name : "Agent")} yêu cầu cụ thể cho công việc này — ví dụ “rút gọn còn 150 chữ”, “thêm mốc thời gian vào email”, “giải thích vì sao chọn phương án này”.</div>`;
+    }
+    return msgs.map((m, i) => {
+      const isAgent = m.role === "agent";
+      const last = i === msgs.length - 1;
+      return `<div class="msg ${isAgent ? "agent" : "user"}">${isAgent ? `<div class="m-from">${esc(a ? a.name : "Agent")}${m.mock ? " · MOCK" : ""}</div>` : ""}${esc(m.text)}</div>`
+        + (isAgent && last && !m.error ? `<div class="wk-msgact"><button class="wk-minibtn go" data-act="chat-to-report" data-id="${k.id}">＋ Ghi lượt trả lời này thành báo cáo</button></div>` : "");
+    }).join("");
+  }
+
+  function refreshChatBox(k, typing) {
+    const box = fld("wk_chat_box");
+    if (!box) return;
+    box.innerHTML = chatBoxHtml(k) + (typing ? `<div class="msg agent typing">${esc((agentById(k.executor.id) || {}).name || "Agent")} đang soạn…</div>` : "");
+    box.scrollTop = box.scrollHeight;
+  }
+
+  function mTaskChat(taskId) {
+    const k = taskById(taskId);
+    if (!k || !isAgentTask(k)) return;
+    const a = agentById(k.executor.id);
+
+    openModal(modalHead("💬", `Trao đổi với ${a ? a.name : k.executor.id}`, `${esc(k.title)}`) + `
+      <div class="hr-intake-form">
+        <div class="wk-note">Khung này để <b>ra lệnh từng tác vụ cụ thể</b> cho Agent. Bối cảnh dự án · phiếu · công việc · rule được gửi kèm ở lượt đầu, những lượt sau chỉ cần nói ngắn gọn.</div>
+        <div class="wk-chatbox" id="wk_chat_box">${chatBoxHtml(k)}</div>
+        <div class="wk-chatrow">
+          <textarea id="wk_chat_input" rows="2" placeholder="Nhắn cho Agent… (Enter để gửi, Shift+Enter xuống dòng)"></textarea>
+          <button class="btn btn-primary btn-sm" type="button" data-act="chat-send" data-id="${k.id}">Gửi</button>
+        </div>
+        <div class="bf-actions" style="margin-top:1rem">
+          <button class="btn btn-ghost btn-sm" type="button" data-act="modal-close">Đóng</button>
+          ${k.status === "Chờ duyệt" ? `<button class="btn btn-primary btn-sm" type="button" data-act="approve" data-id="${k.id}">✓ Duyệt &amp; đóng việc</button>` : ""}
+        </div>
+      </div>`);
+
+    const ta = fld("wk_chat_input");
+    if (ta) {
+      ta.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendChat(taskId); }
+      });
+      setTimeout(() => ta.focus(), 0);
+    }
+    refreshChatBox(k);
+  }
+
+  async function sendChat(taskId) {
+    const k = taskById(taskId);
+    if (!k || !isAgentTask(k)) return;
+    const a = agentById(k.executor.id);
+    const ta = fld("wk_chat_input");
+    const text = ta ? ta.value.trim() : "";
+    if (!text) return;
+
+    k.chat = k.chat || [];
+    const first = k.chat.length === 0;
+    k.chat.push({ role: "user", text, at: new Date().toISOString() });
+    if (ta) ta.value = "";
+    save();
+    refreshChatBox(k, true);
+
+    const history = k.chat.slice(0, -1).map((m) => ({ role: m.role === "user" ? "user" : "agent", text: m.text }));
+    const message = first
+      ? `Bạn là ${a.name} — ${a.role} của công ty. Dưới đây là bối cảnh công việc, sau đó là yêu cầu cụ thể.\n\n${contextLines(k, a)}\n\n## YÊU CẦU CỤ THỂ\n${text}`
+      : text;
+
+    try {
+      const res = await fetch(`${WORK_PROXY_BASE}/api/agents/${encodeURIComponent(k.executor.id)}/chat`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message, history }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || `Proxy trả lỗi ${res.status}`);
+      if (!data.reply) throw new Error("Agent không trả về nội dung");
+      k.chat.push({ role: "agent", text: data.reply, at: new Date().toISOString(), mock: !!data.mock });
+    } catch (e) {
+      k.chat.push({ role: "agent", text: `⚠️ Không gọi được Agent: ${e.message}. Backend Proxy có đang chạy tại ${WORK_PROXY_BASE} không?`, at: new Date().toISOString(), error: true });
+    }
+    save();
+    refreshChatBox(k);
+  }
+
+  function chatToReport(taskId) {
+    const k = taskById(taskId);
+    if (!k || !k.chat || !k.chat.length) return;
+    const last = [...k.chat].reverse().find((m) => m.role === "agent" && !m.error);
+    if (!last) return say("Chưa có lượt trả lời nào của Agent để ghi");
+    k.reports.push({
+      at: today(), progress: k.progress,
+      note: (last.mock ? "🧪 [MOCK_MODE] " : "") + last.text,
+      by: k.owner, byType: "agent", agentId: k.executor.id, minutes: 1,
+    });
+    if (k.status === "Mới") k.status = "Đang thực hiện";
+    save(); say("Đã ghi lượt trả lời thành báo cáo ✓"); refreshChatBox(k); render();
   }
 
   async function proxyHealth() {
@@ -1424,6 +1625,7 @@
       <h4>Kết quả Agent trả về ${mock ? '<span class="badge wk-badge-mock">MOCK_MODE</span>' : '<span class="badge model">Hermes thật</span>'}</h4>
       <div class="wk-output">${esc(data.reply)}</div>
       <div class="bf-actions" style="margin-top:.9rem">
+        <button class="btn btn-ghost btn-sm" type="button" data-act="task-chat" data-id="${k.id}">💬 Trao đổi thêm</button>
         <button class="btn btn-ghost btn-sm" type="button" data-act="reject" data-id="${k.id}">Trả lại Agent làm tiếp</button>
         <button class="btn btn-primary btn-sm" type="button" data-act="approve" data-id="${k.id}">✓ Duyệt &amp; đóng việc</button>
       </div>`;
@@ -1482,6 +1684,9 @@
       case "confirm-assign": confirmAssign(d.id, false); break;
       case "confirm-assign-run": confirmAssign(d.id, true); break;
       case "run-agent": mRunAgent(d.id); break;
+      case "task-chat": mTaskChat(d.id); break;
+      case "chat-send": sendChat(d.id); break;
+      case "chat-to-report": chatToReport(d.id); break;
       case "start-run": startRun(d.id); break;
       case "unassign-agent": unassignAgent(d.id); break;
       case "reset": reset(); say("Đã nạp lại dữ liệu mẫu điều hành công việc"); break;
@@ -1494,6 +1699,7 @@
     // select/checkbox chỉ xử lý ở "change" để không render hai lần
     if (e.type === "input" && !(el.tagName === "INPUT" && el.type !== "checkbox")) return;
     const [group, key] = el.dataset.filter.split(".");
+    if (group === "c") { PC = el.value; render(); return; } // chọn khách hàng ở Portal
     const store = group === "t" ? TF : group === "r" ? RF : KF;
     store[key] = el.type === "checkbox" ? el.checked : el.value;
     if (key === "kw") renderKeepFocus(el.dataset.filter); else render();
