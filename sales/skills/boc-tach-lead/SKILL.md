@@ -25,14 +25,14 @@ description: Bóc tách thông tin liên hệ từ khối bình luận mạng x�
 
 | Dạng gặp thật | Chuẩn hóa về |
 |---|---|
-| `0903112233`, `0903.112.233`, `0903 112 233`, `0903-112-233` | `0903112233` |
-| `+84903112233`, `84903112233` | `0903112233` |
+| `0900000101`, `0900.000.101`, `0900 000 101`, `0900-000-101` | `0900000101` |
+| `+84900000101`, `84900000101` | `0900000101` |
 | Cố định `02838221234` (10–11 số, đầu `02`) | giữ nguyên |
 
 Hợp lệ: di động `0(3\|5\|7\|8\|9)` + 8 số · cố định `02` + 8–9 số. Ngoài khuôn này → **không phải
 số điện thoại**, bỏ qua (rất hay gặp: năm sinh, giá tiền, số nhà, mã đơn hàng).
 
-Cạm bẫy: số nằm cuối dòng và dòng sau bắt đầu bằng chữ số ("…0987445566" xuống dòng "30 phút trước")
+Cạm bẫy: số nằm cuối dòng và dòng sau bắt đầu bằng chữ số ("…0900000103" xuống dòng "30 phút trước")
 — **không** được nối hai dòng thành một số.
 
 ## Nhiễu giao diện cần bỏ khỏi `comment`
@@ -47,7 +47,7 @@ Cạm bẫy: số nằm cuối dòng và dòng sau bắt đầu bằng chữ s�
   "leads": [
     {
       "ten": "Trần Minh Khoa",
-      "sdt": "0903112233",
+      "sdt": "0900000101",
       "email": "",
       "comment": "<nguyên văn bình luận, có thể cắt bớt>",
       "nhu_cau": "<1 câu: họ cần gì, hoặc họ cung cấp dịch vụ gì>",

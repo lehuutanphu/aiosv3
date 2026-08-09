@@ -38,28 +38,33 @@
   const agentById = (id) => agentList().find((a) => a.id === id) || null;
 
   // ---------- Dữ liệu mẫu ----------
+  // 🔴 TOÀN BỘ DỮ LIỆU DƯỚI ĐÂY LÀ HƯ CẤU — tên nhân sự, tên khách hàng, tên dự án,
+  // số điện thoại và email đều bịa ra để demo. Kho mã này công khai, nên KHÔNG thay
+  // bằng nhân sự/khách hàng thật; muốn dùng dữ liệu thật thì nhập trên giao diện
+  // (lưu ở localStorage của máy bạn) hoặc nối vào nguồn dữ liệu riêng.
+  //
   // Ngày sinh theo thời điểm mở dashboard để phần trễ hạn / thiếu báo cáo
   // luôn có ý nghĩa, không bị "chết cứng" ở một mốc quá khứ.
   function seed() {
     const staff = [
-      { id: "s1", name: "Lê Kính Hảo", title: "Trưởng nhóm giải pháp" },
-      { id: "s2", name: "Nguyễn Huy Hoàng", title: "Quản lý dự án" },
-      { id: "s3", name: "Đỗ Quốc Thắng", title: "Kỹ sư phần mềm" },
-      { id: "s4", name: "Lê Hữu Tấn Phú", title: "Kỹ sư phần mềm" },
-      { id: "s5", name: "Phạm Anh Tu", title: "Lập trình viên ứng dụng" },
-      { id: "s6", name: "Nguyễn Thành Đạt", title: "Lập trình viên backend" },
-      { id: "s7", name: "Ngọc Duy", title: "Kỹ sư AI / NLU" },
-      { id: "s8", name: "Trần Thảo Uyển", title: "Chuyên viên tư vấn" },
-      { id: "s9", name: "Trần Thanh Trà", title: "Quản lý sản phẩm" },
-      { id: "s10", name: "Nguyễn Hà Duy Anh", title: "Chuyên viên hỗ trợ" },
+      { id: "s1", name: "Nguyễn Minh An", title: "Trưởng nhóm giải pháp" },
+      { id: "s2", name: "Trần Quốc Bảo", title: "Quản lý dự án" },
+      { id: "s3", name: "Lê Hoàng Cường", title: "Kỹ sư phần mềm" },
+      { id: "s4", name: "Phạm Tiến Dũng", title: "Kỹ sư phần mềm" },
+      { id: "s5", name: "Vũ Nhật Khang", title: "Lập trình viên ứng dụng" },
+      { id: "s6", name: "Đỗ Gia Lâm", title: "Lập trình viên backend" },
+      { id: "s7", name: "Hoàng Bảo Nam", title: "Kỹ sư AI / NLU" },
+      { id: "s8", name: "Ngô Thanh Mai", title: "Chuyên viên tư vấn" },
+      { id: "s9", name: "Bùi Khánh Linh", title: "Quản lý sản phẩm" },
+      { id: "s10", name: "Đặng Hải Yến", title: "Chuyên viên hỗ trợ" },
     ];
 
     const customers = [
-      { id: "c1", name: "TriAnh Solutions Company (Nội bộ)" },
-      { id: "c2", name: "CTY TNHH MTV Cấp Nước Tiền Giang" },
-      { id: "c3", name: "CN CTY CP Nhãn Khoa Mắt Sài Gòn" },
-      { id: "c4", name: "CTY TNHH TM Huỳnh Thành" },
-      { id: "c5", name: "CTY CP Cấp Nước Chợ Lớn" },
+      { id: "c1", name: "Công ty TNHH Giải Pháp An Khang (Nội bộ)" },
+      { id: "c2", name: "CTY TNHH MTV Cấp Nước Bình Minh" },
+      { id: "c3", name: "CN CTY CP Phòng Khám Mắt Ánh Dương" },
+      { id: "c4", name: "CTY TNHH TM Hưng Thịnh Phát" },
+      { id: "c5", name: "CTY CP Cấp Nước Sao Mai" },
     ];
 
     // Mỗi AI Agent được giao cho đúng 1 nhân sự chịu trách nhiệm.
@@ -70,22 +75,22 @@
     };
 
     const projects = [
-      { id: "p1", name: "Upgrade SmartBot 2.0", customer: "c1", pm: "s1", members: ["s1", "s3", "s7", "s5"], start: dOff(-68), deadline: dOff(54), status: "Đang thực hiện", desc: "Nâng cấp SmartBot lên phiên bản 2.0: NLU mới, tích hợp kênh Zalo/FB, dashboard giám sát.", docs: ["SRS_SmartBot2.pdf", "Wireframe_v3.fig"], public: true },
-      { id: "p2", name: "TCRM App — Mobile & Desktop", customer: "c1", pm: "s9", members: ["s9", "s5", "s3", "s6", "s7"], start: dOff(-84), deadline: dOff(24), status: "Đang thực hiện", desc: "Phát triển TCRM trên Desktop và Mobile: danh sách công việc UI mới, chức năng File link, chat nội bộ.", docs: ["UI_Design_TCRM.fig"], public: false },
-      { id: "p3", name: "Triển khai TCRM — CN Tiền Giang", customer: "c2", pm: "s2", members: ["s2", "s1", "s4", "s3"], start: dOff(-37), deadline: dOff(39), status: "Đang thực hiện", desc: "Triển khai TCRM cho Cấp Nước Tiền Giang: tổ chức chi nhánh cha–con, phân quyền xem phiếu/chat/khách hàng theo tổ chức con.", docs: ["HopDong_TG_2026.pdf", "BienBan_KhaoSat.docx"], public: true },
-      { id: "p4", name: "Bảo trì Contact Center CNCL", customer: "c5", pm: "s2", members: ["s2", "s10"], start: dOff(-218), deadline: dOff(146), status: "Đang thực hiện", desc: "Gói bảo trì hệ thống Contact Center cho Cấp Nước Chợ Lớn năm 2026.", docs: ["HD_BaoTri_CNCL.pdf"], public: true },
-      { id: "p5", name: "Tổng đài Nhãn Khoa MSG", customer: "c3", pm: "s8", members: ["s8", "s1", "s10"], start: dOff(-28), deadline: dOff(23), status: "Mới", desc: "Tư vấn và triển khai tổng đài 1 số nhiều ext cho hệ thống Nhãn Khoa Mắt Sài Gòn.", docs: [], public: false },
+      { id: "p1", name: "Nâng cấp Trợ lý ảo 2.0", customer: "c1", pm: "s1", members: ["s1", "s3", "s7", "s5"], start: dOff(-68), deadline: dOff(54), status: "Đang thực hiện", desc: "Nâng cấp Trợ lý ảo lên phiên bản 2.0: NLU mới, tích hợp kênh Zalo/FB, dashboard giám sát.", docs: ["SRS_TroLyAo_2.0.pdf", "Wireframe_v3.fig"], public: true },
+      { id: "p2", name: "Ứng dụng CRM — Mobile & Desktop", customer: "c1", pm: "s9", members: ["s9", "s5", "s3", "s6", "s7"], start: dOff(-84), deadline: dOff(24), status: "Đang thực hiện", desc: "Phát triển CRM trên Desktop và Mobile: danh sách công việc UI mới, chức năng File link, chat nội bộ.", docs: ["UI_Design_CRM.fig"], public: false },
+      { id: "p3", name: "Triển khai CRM — CN Bình Minh", customer: "c2", pm: "s2", members: ["s2", "s1", "s4", "s3"], start: dOff(-37), deadline: dOff(39), status: "Đang thực hiện", desc: "Triển khai CRM cho Cấp Nước Bình Minh: tổ chức chi nhánh cha–con, phân quyền xem phiếu/chat/khách hàng theo tổ chức con.", docs: ["HopDong_BinhMinh_2026.pdf", "BienBan_KhaoSat.docx"], public: true },
+      { id: "p4", name: "Bảo trì Contact Center Sao Mai", customer: "c5", pm: "s2", members: ["s2", "s10"], start: dOff(-218), deadline: dOff(146), status: "Đang thực hiện", desc: "Gói bảo trì hệ thống Contact Center cho Cấp Nước Sao Mai năm 2026.", docs: ["HD_BaoTri_SaoMai.pdf"], public: true },
+      { id: "p5", name: "Tổng đài Phòng khám Ánh Dương", customer: "c3", pm: "s8", members: ["s8", "s1", "s10"], start: dOff(-28), deadline: dOff(23), status: "Mới", desc: "Tư vấn và triển khai tổng đài 1 số nhiều ext cho hệ thống Phòng Khám Mắt Ánh Dương.", docs: [], public: false },
     ];
 
     const tickets = [
-      { id: "t1", code: 49357, title: "Các việc phát triển cho TCRM CN Tiền Giang", project: "p3", type: "Yêu cầu phát triển phần mềm", status: "Mới", prio: "Trung bình", deadline: dOff(3), assignees: ["s10", "s1", "s2", "s3"], desc: "Tạo tổ chức chi nhánh (cha–con); phân quyền xem phiếu yêu cầu, chat, khách hàng của các tổ chức con." },
+      { id: "t1", code: 49357, title: "Các việc phát triển cho CRM CN Bình Minh", project: "p3", type: "Yêu cầu phát triển phần mềm", status: "Mới", prio: "Trung bình", deadline: dOff(3), assignees: ["s10", "s1", "s2", "s3"], desc: "Tạo tổ chức chi nhánh (cha–con); phân quyền xem phiếu yêu cầu, chat, khách hàng của các tổ chức con." },
       { id: "t2", code: 49354, title: "Chức năng File link trên Desktop", project: "p2", type: "Testing phần mềm", status: "Đang thực hiện", prio: "Trung bình", deadline: dOff(3), assignees: ["s3", "s5"], desc: "Khi người dùng gửi đường dẫn file trên desktop, hệ thống nhận diện và mở nhanh file link." },
-      { id: "t3", code: 49351, title: "Nhãn Khoa MSG — tổng đài 1 số ext", project: "p5", type: "Hỗ trợ khách hàng", status: "Mới", prio: "Trung bình", deadline: dOff(12), assignees: ["s8", "s1"], desc: "KH có nhu cầu hệ thống tổng đài 1 số nhiều máy nhánh, cần khảo sát và báo giá." },
-      { id: "t4", code: 49348, title: "Điều chỉnh lại mẫu khảo sát SMS & ZNS", project: "p4", type: "Hỗ trợ khách hàng", status: "Đang thực hiện", prio: "Trung bình", deadline: dOff(-1), assignees: ["s10"], desc: "KH Huỳnh Thành nhờ thay đổi nội dung mẫu khảo sát gửi qua SMS & ZNS." },
+      { id: "t3", code: 49351, title: "Phòng khám Ánh Dương — tổng đài 1 số ext", project: "p5", type: "Hỗ trợ khách hàng", status: "Mới", prio: "Trung bình", deadline: dOff(12), assignees: ["s8", "s1"], desc: "KH có nhu cầu hệ thống tổng đài 1 số nhiều máy nhánh, cần khảo sát và báo giá." },
+      { id: "t4", code: 49348, title: "Điều chỉnh lại mẫu khảo sát SMS & ZNS", project: "p4", type: "Hỗ trợ khách hàng", status: "Đang thực hiện", prio: "Trung bình", deadline: dOff(-1), assignees: ["s10"], desc: "KH Hưng Thịnh Phát nhờ thay đổi nội dung mẫu khảo sát gửi qua SMS & ZNS." },
       { id: "t5", code: 49345, title: "Cập nhật màn hình danh sách công việc theo UI design mới", project: "p2", type: "Yêu cầu phát triển phần mềm", status: "Hoàn tất", prio: "Trung bình", deadline: dOff(0), assignees: ["s5"], desc: "Làm lại màn hình danh sách công việc desktop theo UI design mới." },
       { id: "t6", code: 49288, title: "Khắc phục giật màn hình khi chuyển đổi menu trong màn hình chat", project: "p2", type: "Yêu cầu phát triển phần mềm", status: "Tạm dừng", prio: "Trung bình", deadline: dOff(7), assignees: ["s5"], desc: "Giật màn hình khi chuyển đổi giữa menu chức năng, ảnh và bàn phím trong màn hình chat." },
       { id: "t7", code: 49290, title: "Chức năng kho lưu trữ chat nội bộ", project: "p2", type: "Yêu cầu phát triển phần mềm", status: "Đang thực hiện", prio: "Trung bình", deadline: dOff(10), assignees: ["s6", "s7"], desc: "API /internal-chat: links, files, media cho kho lưu trữ." },
-      { id: "t8", code: 49120, title: "Huấn luyện intent tiếng Việt cho SmartBot", project: "p1", type: "Yêu cầu phát triển phần mềm", status: "Đang thực hiện", prio: "Cao", deadline: dOff(28), assignees: ["s7", "s1"], desc: "Bộ intent nghiệp vụ cấp nước + huấn luyện mô hình NLU." },
+      { id: "t8", code: 49120, title: "Huấn luyện intent tiếng Việt cho Trợ lý ảo", project: "p1", type: "Yêu cầu phát triển phần mềm", status: "Đang thực hiện", prio: "Cao", deadline: dOff(28), assignees: ["s7", "s1"], desc: "Bộ intent nghiệp vụ cấp nước + huấn luyện mô hình NLU." },
       { id: "t9", code: 49362, title: "Chăm sóc & truyền thông cho các dự án đang chạy", project: "p3", type: "Hỗ trợ khách hàng", status: "Đang thực hiện", prio: "Cao", deadline: dOff(5), assignees: ["s8", "s2"], desc: "Các đầu việc mềm quanh dự án: cập nhật tiến độ cho KH, nội dung giới thiệu tính năng, rà soát phụ lục hợp đồng, tổng hợp công nợ gói bảo trì." },
     ];
 
@@ -108,10 +113,10 @@
       { id: "k13", ticket: "t3", title: "Khảo sát hạ tầng tổng đài hiện tại của KH", executor: H("s8"), owner: "s8", status: "Mới", prio: "Trung bình", start: dOff(1), deadline: dOff(6), progress: 0, reports: [] },
 
       // Việc giao cho AI Agent — người chịu trách nhiệm vẫn là nhân sự phụ trách Agent đó
-      { id: "k14", ticket: "t9", title: "Soạn email cập nhật tiến độ tuần cho CN Tiền Giang", executor: A("sales-1"), owner: "s8", status: "Đang thực hiện", prio: "Cao", start: dOff(-1), deadline: dOff(1), progress: 50, reports: [{ at: dOff(-1), progress: 50, note: "Đã dựng bản nháp email theo mốc tiến độ phiếu #49357, chờ người phụ trách rà lại số liệu.", by: "s8", byType: "agent", agentId: "sales-1", minutes: 4 }] },
-      { id: "k15", ticket: "t9", title: "Viết bài giới thiệu tính năng mới của SmartBot 2.0", executor: A("mkt-1"), owner: "s9", status: "Mới", prio: "Trung bình", start: dOff(0), deadline: dOff(4), progress: 0, reports: [] },
+      { id: "k14", ticket: "t9", title: "Soạn email cập nhật tiến độ tuần cho CN Bình Minh", executor: A("sales-1"), owner: "s8", status: "Đang thực hiện", prio: "Cao", start: dOff(-1), deadline: dOff(1), progress: 50, reports: [{ at: dOff(-1), progress: 50, note: "Đã dựng bản nháp email theo mốc tiến độ phiếu #49357, chờ người phụ trách rà lại số liệu.", by: "s8", byType: "agent", agentId: "sales-1", minutes: 4 }] },
+      { id: "k15", ticket: "t9", title: "Viết bài giới thiệu tính năng mới của Trợ lý ảo 2.0", executor: A("mkt-1"), owner: "s9", status: "Mới", prio: "Trung bình", start: dOff(0), deadline: dOff(4), progress: 0, reports: [] },
       { id: "k16", ticket: "t9", title: "Rà soát điều khoản phụ lục gia hạn HĐ 878", executor: A("legal-1"), owner: "s2", status: "Chờ duyệt", prio: "Cao", start: dOff(-2), deadline: dOff(2), progress: 100, reports: [{ at: dOff(-2), progress: 100, note: "Phát hiện 2 điểm cần lưu ý: mốc thanh toán lệch 15 ngày so với hợp đồng gốc và thiếu điều khoản chấm dứt sớm. Đề xuất chỉnh trước khi gửi KH.", by: "s2", byType: "agent", agentId: "legal-1", minutes: 6 }] },
-      { id: "k17", ticket: "t9", title: "Tổng hợp công nợ gói bảo trì CNCL quý 2", executor: A("fin-1"), owner: "s1", status: "Mới", prio: "Trung bình", start: dOff(0), deadline: dOff(5), progress: 0, reports: [] },
+      { id: "k17", ticket: "t9", title: "Tổng hợp công nợ gói bảo trì Sao Mai quý 2", executor: A("fin-1"), owner: "s1", status: "Mới", prio: "Trung bình", start: dOff(0), deadline: dOff(5), progress: 0, reports: [] },
     ];
 
     return { version: SCHEMA_VERSION, staff, customers, agentOwners, projects, tickets, tasks, leads: seedLeads() };
@@ -120,23 +125,23 @@
   // Lead mẫu — đủ để thấy cả hai loại (khách / partner) và vài nhóm dịch vụ.
   function seedLeads() {
     return [
-      { id: "l1", ten: "Trần Minh Khoa", sdt: "0903112233", sdt_khac: [], email: "", nguon: "https://www.facebook.com/groups/dulichnhatrang/posts/123456", nguon_loai: "facebook",
-        comment: "Nhà mình có 4 xe 16 chỗ và 2 xe 29 chỗ chạy tuyến Nha Trang – Đà Lạt, bao trọn gói tài xế. Ai cần thì gọi mình 0903112233 nhé.",
+      { id: "l1", ten: "Trần Minh Khoa", sdt: "0900000101", sdt_khac: [], email: "", nguon: "https://www.facebook.com/groups/nhom-du-lich-mau/posts/1000000001", nguon_loai: "facebook",
+        comment: "Nhà mình có 4 xe 16 chỗ và 2 xe 29 chỗ chạy tuyến Nha Trang – Đà Lạt, bao trọn gói tài xế. Ai cần thì gọi mình 0900000101 nhé.",
         nhu_cau: "Cung cấp dịch vụ thuê xe 16–29 chỗ tuyến Nha Trang – Đà Lạt",
         loai: "partner", dich_vu: "xe", trang_thai: "moi", kenh_moi: [], do_tin_cay: "cao", can_nguoi_xac_nhan: false,
         cach_boc_tach: "llm", phu_trach: "s8", ticket: null, at: dOff(-2), ghi_chu: "" },
-      { id: "l2", ten: "Nguyễn Thị Hồng Vân", sdt: "0356778899", sdt_khac: [], email: "vannth.homestay@gmail.com", nguon: "https://www.facebook.com/groups/dulichnhatrang/posts/123456", nguon_loai: "facebook",
-        comment: "Bên em có homestay 6 phòng view biển ở Hòn Chồng, muốn hợp tác với bên tour để nhận khách đoàn. Liên hệ em qua zalo 0356778899 hoặc mail vannth.homestay@gmail.com",
+      { id: "l2", ten: "Nguyễn Thị Hồng Vân", sdt: "0900000102", sdt_khac: [], email: "homestay.mau@example.com", nguon: "https://www.facebook.com/groups/nhom-du-lich-mau/posts/1000000001", nguon_loai: "facebook",
+        comment: "Bên em có homestay 6 phòng view biển ở Hòn Chồng, muốn hợp tác với bên tour để nhận khách đoàn. Liên hệ em qua zalo 0900000102 hoặc mail homestay.mau@example.com",
         nhu_cau: "Chủ homestay 6 phòng, muốn hợp tác nhận khách đoàn",
         loai: "partner", dich_vu: "homestay", trang_thai: "da_lien_he", kenh_moi: [{ kenh: "Zalo", at: dOff(-1), note: "Đã gửi giới thiệu chương trình hợp tác partner." }],
         do_tin_cay: "cao", can_nguoi_xac_nhan: false, cach_boc_tach: "llm", phu_trach: "s8", ticket: null, at: dOff(-2), ghi_chu: "" },
-      { id: "l3", ten: "Phạm Quốc Huy", sdt: "0987445566", sdt_khac: [], email: "", nguon: "https://www.facebook.com/groups/dulichnhatrang/posts/123456", nguon_loai: "facebook",
-        comment: "Cho mình hỏi đoàn 25 người đi 3 ngày 2 đêm thì thuê xe với đặt phòng khoảng bao nhiêu vậy ạ? Sđt mình 0987445566.",
+      { id: "l3", ten: "Phạm Quốc Huy", sdt: "0900000103", sdt_khac: [], email: "", nguon: "https://www.facebook.com/groups/nhom-du-lich-mau/posts/1000000001", nguon_loai: "facebook",
+        comment: "Cho mình hỏi đoàn 25 người đi 3 ngày 2 đêm thì thuê xe với đặt phòng khoảng bao nhiêu vậy ạ? Sđt mình 0900000103.",
         nhu_cau: "Cần báo giá tour đoàn 25 người, 3 ngày 2 đêm",
         loai: "khach", dich_vu: "tour", trang_thai: "moi", kenh_moi: [], do_tin_cay: "cao", can_nguoi_xac_nhan: false,
         cach_boc_tach: "llm", phu_trach: "s8", ticket: null, at: dOff(-2), ghi_chu: "" },
-      { id: "l4", ten: "", sdt: "0913224466", sdt_khac: [], email: "", nguon: "Dán tay", nguon_loai: "thu-cong",
-        comment: "Quán mình chuyên hải sản ở đường Trần Phú, nhận đặt bàn đoàn trên 30 khách, có menu set sẵn. 0913224466",
+      { id: "l4", ten: "", sdt: "0900000104", sdt_khac: [], email: "", nguon: "Dán tay", nguon_loai: "thu-cong",
+        comment: "Quán mình chuyên hải sản ở đường Trần Phú, nhận đặt bàn đoàn trên 30 khách, có menu set sẵn. 0900000104",
         nhu_cau: "", loai: "partner", dich_vu: "quan-an", trang_thai: "moi", kenh_moi: [], do_tin_cay: "thap", can_nguoi_xac_nhan: true,
         cach_boc_tach: "regex", phu_trach: "s8", ticket: null, at: dOff(-1), ghi_chu: "Chưa có tên người liên hệ — cần gọi xác nhận." },
     ];
@@ -1618,7 +1623,7 @@
   function mNewProject() {
     openModal(modalHead("📁", "Tạo dự án mới", "Dự án là cấp cao nhất — gắn khách hàng, PM và nhóm nhân sự. Tiến độ tự cuộn lên từ các phiếu bên dưới.") + `
       <div class="hr-intake-form"><div class="hr-grid">
-        <label class="span2">Tên dự án <span class="req">*</span><input type="text" id="wk_p_name" placeholder="VD: Triển khai TCRM — CN Bến Tre"></label>
+        <label class="span2">Tên dự án <span class="req">*</span><input type="text" id="wk_p_name" placeholder="VD: Triển khai CRM — CN Bến Tre"></label>
         <label>Khách hàng <span class="req">*</span><select id="wk_p_cus">${customerOpts()}</select></label>
         <label>PM phụ trách <span class="req">*</span><select id="wk_p_pm">${staffOpts()}</select></label>
         <label>Ngày bắt đầu<input type="date" id="wk_p_start" value="${today()}"></label>

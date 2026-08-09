@@ -5,7 +5,7 @@ trong AI OS: tên khách hàng · số điện thoại · email · nguồn · n�
 (khách tiềm năng / partner tiềm năng) · phân loại dịch vụ (xe, homestay, quán ăn, tour, spa, khác).
 
 Gắn vào `sales-2 (Lead Hunter Agent)` trong AI OS Dashboard — port `8655` theo
-`server/agents.config.json`. Người chịu trách nhiệm mặc định: `s8 — Trần Thảo Uyển` (phòng Kinh doanh).
+`server/agents.config.json`. Người chịu trách nhiệm mặc định: `s8 — Ngô Thanh Mai` (phòng Kinh doanh, dữ liệu mẫu).
 
 ## 1. Kiến trúc
 
