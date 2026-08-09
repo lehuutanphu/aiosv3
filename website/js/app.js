@@ -65,6 +65,49 @@ const AGENTS = [
     skills: ["tao-bien-the-social-post"],
     rules: ["Không đăng trực tiếp — luôn xuất bản nháp chờ duyệt"],
   },
+  // --- 3 Agent bổ sung cho vòng lặp Content Cluster (cùng mkt-1 thành đủ 4 vai) ---
+  {
+    id: "mkt-3", dept: "mkt", icon: "🔎", name: "Research Agent",
+    role: "Agent 1 — nghiên cứu nguồn & bóc tách chủ đề con",
+    model: "Gemini 3 Pro", mode: "Planning",
+    modelWhy: "Cửa sổ ngữ cảnh lớn, đọc trọn bài dài và trang nguồn mà không mất chi tiết ở giữa.",
+    maturity: 62, stage: "Học việc",
+    status: "idle",
+    task: "Chờ lệnh — sẵn sàng nhận chủ đề gốc từ Orches",
+    keywords: ["nghiên cứu", "research", "bóc tách", "chủ đề con", "cẩm nang", "tổng hợp nguồn", "khảo sát nội dung"],
+    knowledge: ["Nguồn tin uy tín theo ngành", "Cách đọc SERP và People Also Ask"],
+    workflows: ["/nghien-cuu-chu-de — đọc nguồn → bóc tách N thực thể con"],
+    skills: ["nghien-cuu-chu-de"],
+    rules: ["Mọi dữ kiện phải kèm URL nguồn và ngày truy cập", "Không suy ra số liệu khi nguồn không nói"],
+  },
+  {
+    id: "mkt-4", dept: "mkt", icon: "🗺️", name: "SEO Architect Agent",
+    role: "Agent 2 — kiến trúc từ khóa & ma trận liên kết nội bộ",
+    model: "Claude Sonnet 4.5", mode: "Planning",
+    modelWhy: "Suy luận có cấu trúc, bám ràng buộc tốt — hợp việc phân tầng từ khóa và soát chồng lấn.",
+    maturity: 70, stage: "Thạo việc",
+    status: "idle",
+    task: "Chờ lệnh — sẵn sàng dựng blueprint SEO",
+    keywords: ["seo", "từ khóa", "keyword", "blueprint", "liên kết nội bộ", "internal link", "topic cluster", "pillar"],
+    knowledge: ["Nguyên tắc phân tầng từ khóa pillar/cluster", "Quy tắc anchor text nội bộ"],
+    workflows: ["/kien-truc-seo-cluster — phân tầng từ khóa + ma trận liên kết"],
+    skills: ["kien-truc-seo-cluster"],
+    rules: ["Cấm bịa số volume khi chưa nối công cụ SEO", "Không sang bước viết khi còn chồng lấn từ khóa"],
+  },
+  {
+    id: "mkt-5", dept: "mkt", icon: "🖼️", name: "Visual Prompt Agent",
+    role: "Agent 4 — sinh AI Image Prompt cho từng vị trí ảnh",
+    model: "Gemini 3 Flash", mode: "Fast",
+    modelWhy: "Nhanh và rẻ cho việc sinh nhiều prompt ngắn có cấu trúc cố định.",
+    maturity: 58, stage: "Học việc",
+    status: "idle",
+    task: "Chờ lệnh — sẵn sàng dựng prompt ảnh",
+    keywords: ["ảnh", "hình ảnh", "image prompt", "prompt ảnh", "minh họa", "visual", "midjourney", "ar 16:9"],
+    knowledge: ["Chuẩn prompt 5 thành phần: Subject · Scene · Lighting · Camera · Aspect"],
+    workflows: ["/prompt-anh-ai — sinh prompt cho mọi IMAGE_PLACEHOLDER"],
+    skills: ["prompt-anh-ai"],
+    rules: ["Không đưa tên thương hiệu đã đăng ký nhãn hiệu vào prompt", "Không yêu cầu chữ trong ảnh", "Sinh ảnh thật phải có duyệt credit"],
+  },
   {
     id: "hr-1", dept: "hr", icon: "🧑‍💼", name: "HR Agent",
     role: "Chuyên viên tuyển dụng & hồ sơ nhân sự",
@@ -1944,11 +1987,38 @@ function routeCommand(cmd) {
   return { agent: best, matched: bestScore > 0 };
 }
 
+// Lệnh yêu cầu sản xuất cả một bộ bài viết → không giao 1 Agent, mà mở phiếu và
+// chạy vòng lặp 4 Agent trong mặt phẳng điều hành công việc (js/work.js).
+const CLUSTER_TRIGGERS = [
+  "content cluster", "topic cluster", "bộ bài viết", "cụm bài viết", "pillar",
+  "bài trụ cột", "vệ tinh", "cẩm nang", "tách thành nhiều bài", "chuỗi bài viết",
+];
+function isClusterCommand(cmd) {
+  const t = cmd.toLowerCase();
+  return CLUSTER_TRIGGERS.some(k => t.includes(k));
+}
+
 function runOrches(cmd) {
   const flow = $("#routingFlow");
   const steps = ["rs1", "rs2", "rs3", "rs4"].map(id => $("#" + id));
   steps.forEach(s => s.classList.remove("on"));
   flow.classList.add("show");
+
+  // Nhánh riêng: sản xuất Topic Cluster
+  if (isClusterCommand(cmd) && window.AIOS_WORK && window.AIOS_WORK.startContentCluster) {
+    const urlMatch = cmd.match(/https?:\/\/\S+/);
+    $("#rs1txt").textContent = `"${cmd.length > 60 ? cmd.slice(0, 60) + "…" : cmd}"`;
+    $("#rs2txt").textContent = "Nghiệp vụ: sản xuất bộ bài viết SEO";
+    $("#rs3txt").textContent = "→ Mở phiếu yêu cầu, giao đội 4 Agent marketing";
+    $("#rs4txt").textContent = "Mỗi Agent một công việc + một báo cáo trong phiếu";
+    steps.forEach((s, i) => setTimeout(() => s.classList.add("on"), 100 + i * 400));
+    addFeed(`<b>Orches Agent</b> nhận lệnh sản xuất Content Cluster: "${cmd}"`, "f-orches");
+    setTimeout(() => {
+      showSection("work", "control");
+      window.AIOS_WORK.startContentCluster(cmd, urlMatch ? urlMatch[0] : "");
+    }, 1200);
+    return;
+  }
 
   const { agent, matched } = routeCommand(cmd);
 

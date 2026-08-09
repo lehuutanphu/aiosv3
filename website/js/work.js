@@ -64,8 +64,9 @@
 
     // Mỗi AI Agent được giao cho đúng 1 nhân sự chịu trách nhiệm.
     const agentOwners = {
-      "sales-1": "s8", "mkt-1": "s9", "mkt-2": "s9", "hr-1": "s2",
-      "fin-1": "s1", "fin-2": "s1", "legal-1": "s2", "cskh-1": "s10", "cskh-2": "s10",
+      "sales-1": "s8", "mkt-1": "s9", "mkt-2": "s9", "mkt-3": "s8", "mkt-4": "s9",
+      "mkt-5": "s8", "hr-1": "s2", "fin-1": "s1", "fin-2": "s1",
+      "legal-1": "s2", "cskh-1": "s10", "cskh-2": "s10",
     };
 
     const projects = [
@@ -1011,6 +1012,7 @@
           <p>${esc(meta.desc)}</p>
         </div>
         <div class="wk-head-actions">
+          <button class="btn btn-primary btn-sm" data-act="new-cluster" title="Tạo phiếu và chạy vòng lặp 4 Agent sản xuất Topic Cluster">🔁 Chạy Content Cluster</button>
           <button class="btn btn-ghost btn-sm" data-act="reset" title="Xóa dữ liệu đã lưu trên trình duyệt và nạp lại dữ liệu mẫu">↺ Nạp lại dữ liệu mẫu</button>
         </div>
       </div>`;
@@ -1635,6 +1637,252 @@
     render();
   }
 
+  /* ================= VÒNG LẶP CONTENT CLUSTER =================
+     Orches nhận một chủ đề → tạo NGAY một Phiếu yêu cầu giao cho AI, rồi chạy
+     lần lượt 4 Agent. Mỗi Agent thực thi = một Công việc trong phiếu đó; xong
+     mục nào ghi báo cáo mục đó; xong hết thì đóng phiếu kèm ghi chú.
+
+     Bốn vai: mkt-3 nghiên cứu → mkt-4 kiến trúc SEO → mkt-1 viết bài → mkt-5 prompt ảnh.
+  ============================================================================ */
+
+  const CLUSTER_AGENTS = { research: "mkt-3", seo: "mkt-4", writer: "mkt-1", visual: "mkt-5" };
+  const CLUSTER_PROJECT_NAME = "Marketing — Content Cluster";
+
+  // Dự án chứa mọi phiếu content cluster; tạo một lần rồi dùng lại
+  function ensureClusterProject() {
+    let p = S.projects.find((x) => x.name === CLUSTER_PROJECT_NAME);
+    if (p) return p;
+    const pm = S.agentOwners[CLUSTER_AGENTS.writer] || S.staff[0].id;
+    p = {
+      id: newId("p"), name: CLUSTER_PROJECT_NAME,
+      customer: (S.customers[0] || {}).id, pm,
+      members: [...new Set(Object.values(CLUSTER_AGENTS).map((a) => S.agentOwners[a]).filter(Boolean))],
+      start: today(), deadline: dOff(30), status: "Đang thực hiện",
+      desc: "Dự án thường trực chứa các phiếu sản xuất Topic Cluster do đội AI Agent marketing thực hiện.",
+      docs: [], public: false,
+    };
+    S.projects.push(p);
+    return p;
+  }
+
+  // Tạo một công việc đã gán sẵn cho Agent
+  function addAgentTask(ticketId, title, agentId, prio) {
+    const executor = { type: "agent", id: agentId };
+    const k = {
+      id: newId("k"), ticket: ticketId, title, executor,
+      owner: defaultOwner(executor), status: "Mới", prio: prio || "Cao",
+      start: today(), deadline: ticketById(ticketId).deadline,
+      progress: 0, reports: [],
+    };
+    S.tasks.push(k);
+    return k;
+  }
+
+  // Chạy một Agent trên một công việc, ghi kết quả thành báo cáo. Trả về text hoặc null.
+  async function runTaskViaProxy(k, promptOverride) {
+    const a = agentById(k.executor.id);
+    if (!a) return null;
+    const started = Date.now();
+    k.status = "Đang thực hiện"; k.progress = 10; save();
+    const prompt = promptOverride || buildPrompt(k, a);
+    try {
+      const res = await fetch(`${WORK_PROXY_BASE}/api/agents/${encodeURIComponent(k.executor.id)}/chat`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: prompt }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || `Proxy trả lỗi ${res.status}`);
+      if (!data.reply) throw new Error("Agent không trả về nội dung");
+      const minutes = Math.max(1, Math.round((Date.now() - started) / 60000));
+      k.run = { status: "done", agentId: k.executor.id, mock: !!data.mock, output: data.reply, endedAt: new Date().toISOString() };
+      k.progress = 100; k.status = "Chờ duyệt";
+      k.reports.push({
+        at: today(), progress: 100,
+        note: (data.mock ? "🧪 [MOCK_MODE — chưa nối Hermes thật] " : "") + data.reply,
+        by: k.owner, byType: "agent", agentId: k.executor.id, minutes,
+      });
+      save();
+      if (typeof addFeed === "function") addFeed(`<b>${esc(a.name)}</b> hoàn thành "${esc(k.title)}" — chờ ${esc(staffName(k.owner))} duyệt.`, "f-done");
+      return data.reply;
+    } catch (e) {
+      k.run = { status: "failed", agentId: k.executor.id, error: e.message, endedAt: new Date().toISOString() };
+      k.reports.push({
+        at: today(), progress: k.progress,
+        note: `⚠️ Không chạy được ${a.name}: ${e.message}`,
+        by: k.owner, byType: "agent", agentId: k.executor.id,
+      });
+      save();
+      return null;
+    }
+  }
+
+  // Tách danh sách bài từ blueprint của mkt-4. Không parse được thì trả mảng rỗng —
+  // KHÔNG bịa ra danh sách bài, vì như vậy sẽ sinh công việc cho những bài không có thật.
+  function parseBlueprint(text) {
+    if (!text) return [];
+    const m = text.match(/```json\s*([\s\S]*?)```/i);
+    if (!m) return [];
+    try {
+      const d = JSON.parse(m[1]);
+      const list = [];
+      if (d.pillar && d.pillar.tieu_de) list.push({ ma_bai: "P-00", tieu_de: d.pillar.tieu_de, tu_khoa: d.pillar.tu_khoa_chinh || "" });
+      (d.cluster || []).forEach((c, i) =>
+        list.push({ ma_bai: c.ma_bai || `C-${String(i + 1).padStart(2, "0")}`, tieu_de: c.tieu_de || `Bài ${i + 1}`, tu_khoa: c.tu_khoa_chinh || "" }));
+      return list;
+    } catch (e) { return []; }
+  }
+
+  const PIPE_LOG = [];
+  function pipeLog(icon, text) {
+    PIPE_LOG.push({ icon, text, at: new Date().toLocaleTimeString("vi-VN") });
+    const box = fld("wk_pipe_log");
+    if (box) {
+      box.innerHTML = PIPE_LOG.map((l) => `<div class="wk-step ok"><span class="ic">${l.icon}</span><span class="tx">${esc(l.text)}<span>${l.at}</span></span></div>`).join("");
+      box.scrollTop = box.scrollHeight;
+    }
+  }
+
+  function mNewCluster() {
+    const ags = Object.entries(CLUSTER_AGENTS).map(([vai, id]) => {
+      const a = agentById(id);
+      return `<span class="wk-chip">${esc(a ? a.icon || "🤖" : "")} ${esc(a ? a.name : id)} <span class="wk-owner">· ${esc(staffName(S.agentOwners[id]))}</span></span>`;
+    }).join("");
+    openModal(modalHead("🔁", "Chạy vòng lặp Content Cluster", "Orches giao chủ đề → tạo phiếu → 4 Agent chạy lần lượt, mỗi Agent một công việc + một báo cáo.") + `
+      <div class="hr-intake-form">
+        <div class="hr-grid">
+          <label class="span2">Chủ đề hoặc tiêu đề nguồn <span class="req">*</span><input type="text" id="wk_cl_topic" placeholder="VD: Cẩm nang du lịch Nha Trang từ A đến Z"></label>
+          <label class="span2">Link nguồn (nếu có)<input type="text" id="wk_cl_url" placeholder="https://..."></label>
+        </div>
+        <h4>Đội thực thi</h4>
+        <div>${ags}</div>
+        <p class="bf-hint" style="margin:.7rem 0 0">Mỗi Agent chạy xong tạo một công việc kèm báo cáo trong phiếu. Kết quả dừng ở <b>Chờ duyệt</b> — Agent không tự đóng việc của mình.</p>
+        <div class="bf-actions" style="margin-top:1.2rem">
+          <button class="btn btn-ghost btn-sm" type="button" data-act="modal-close">Hủy</button>
+          <button class="btn btn-primary btn-sm" type="button" data-act="start-cluster">▶ Tạo phiếu &amp; chạy</button>
+        </div>
+      </div>`);
+  }
+
+  async function startContentCluster(topic, sourceUrl) {
+    if (!topic || !topic.trim()) return say("Cần một chủ đề hoặc link nguồn");
+    PIPE_LOG.length = 0;
+
+    const p = ensureClusterProject();
+    const maxCode = S.tickets.reduce((m, t) => Math.max(m, t.code || 0), 49000);
+    const ticket = {
+      id: newId("t"), code: maxCode + 1,
+      title: `Content Cluster: ${topic.slice(0, 90)}`,
+      project: p.id, type: "Yêu cầu phát triển phần mềm",
+      status: "Đang thực hiện", prio: "Cao", deadline: dOff(7),
+      assignees: [...new Set(Object.values(CLUSTER_AGENTS).map((a) => S.agentOwners[a]).filter(Boolean))],
+      desc: `Sản xuất trọn bộ Topic Cluster (1 Pillar + N Cluster) từ nguồn: ${sourceUrl || topic}.\nToàn bộ do đội AI Agent marketing thực hiện, người chịu trách nhiệm duyệt từng mục.`,
+    };
+    S.tickets.push(ticket);
+    save();
+    say(`Đã tạo phiếu #${ticket.code} — giao đội AI Agent ✓`);
+    if (typeof addFeed === "function") addFeed(`<b>Orches</b> mở phiếu <b>#${ticket.code}</b> "Content Cluster" và giao cho đội marketing.`, "f-orches");
+
+    openModal(modalHead("🔁", `Vòng lặp Content Cluster — phiếu #${ticket.code}`, esc(topic.slice(0, 120))) + `
+      <div class="hr-intake-form">
+        <div class="wk-note">Mỗi Agent chạy xong sẽ tạo <b>một công việc</b> trong phiếu này kèm <b>báo cáo</b>.
+        Hết vòng lặp, phiếu được ghi chú hoàn thành. Người chịu trách nhiệm vẫn phải duyệt từng mục.</div>
+        <div id="wk_pipe_log" class="wk-steps" style="max-height:340px;overflow-y:auto"></div>
+        <div class="bf-actions" style="margin-top:1rem">
+          <button class="btn btn-ghost btn-sm" type="button" data-act="modal-close">Đóng</button>
+          <button class="btn btn-primary btn-sm" type="button" data-act="go" data-view="ticketDetail" data-id="${ticket.id}">Mở phiếu #${ticket.code}</button>
+        </div>
+      </div>`);
+
+    pipeLog("📋", `Đã tạo phiếu #${ticket.code} trong dự án "${p.name}"`);
+
+    // ---- S1: nghiên cứu & bóc tách ----
+    const k1 = addAgentTask(ticket.id, "S1 · Nghiên cứu nguồn & bóc tách chủ đề con", CLUSTER_AGENTS.research);
+    save(); render();
+    pipeLog("🔎", `Công việc S1 giao ${agentById(CLUSTER_AGENTS.research).name} — đang chạy…`);
+    const out1 = await runTaskViaProxy(k1, [
+      `Bạn là Research Agent. Đọc nguồn sau và bóc tách danh sách chủ đề con để làm Topic Cluster.`,
+      `NGUỒN: ${sourceUrl || topic}`,
+      ``,
+      `Trả về: (1) tóm tắt nguồn, (2) danh sách thực thể/chủ đề con kèm lý do chọn hoặc loại.`,
+      `Chỉ liệt kê thực thể có trong nguồn. Không thêm địa danh/hạng mục vì "thường thấy".`,
+    ].join("\n"));
+    pipeLog(out1 ? "✅" : "⚠️", out1 ? "S1 xong — đã ghi báo cáo, chờ duyệt" : "S1 lỗi — xem báo cáo trong công việc");
+
+    // ---- S2: kiến trúc SEO ----
+    const k2 = addAgentTask(ticket.id, "S2 · Kiến trúc SEO & ma trận liên kết", CLUSTER_AGENTS.seo);
+    save(); render();
+    pipeLog("🗺️", `Công việc S2 giao ${agentById(CLUSTER_AGENTS.seo).name} — đang chạy…`);
+    const out2 = await runTaskViaProxy(k2, [
+      `Bạn là SEO Architect Agent. Dựa trên kết quả nghiên cứu dưới đây, dựng blueprint Topic Cluster.`,
+      ``,
+      `KẾT QUẢ NGHIÊN CỨU:`, (out1 || "(S1 chưa có kết quả)").slice(0, 4000),
+      ``,
+      `Phân tầng từ khóa: pillar dùng head term, cluster dùng long-tail gắn thực thể cụ thể.`,
+      `Không để hai bài trùng từ khóa chính. Không bịa số volume.`,
+      ``,
+      `Cuối câu trả lời, in ra một khối \`\`\`json đúng định dạng:`,
+      `{"pillar":{"tieu_de":"...","tu_khoa_chinh":"..."},"cluster":[{"ma_bai":"C-01","tieu_de":"...","tu_khoa_chinh":"..."}]}`,
+    ].join("\n"));
+    pipeLog(out2 ? "✅" : "⚠️", out2 ? "S2 xong — đã ghi báo cáo, chờ duyệt" : "S2 lỗi — xem báo cáo trong công việc");
+
+    // ---- S3 + S4: vòng lặp từng bài ----
+    const bai = parseBlueprint(out2);
+    if (!bai.length) {
+      pipeLog("⛔", "Không đọc được danh sách bài từ blueprint S2 — dừng vòng lặp, KHÔNG tự bịa danh sách bài.");
+      ticket.status = "Tạm dừng";
+      const kx = addAgentTask(ticket.id, "⚠️ Cần người chốt danh sách bài trước khi viết", CLUSTER_AGENTS.seo, "Cao");
+      kx.status = "Chờ duyệt"; kx.progress = 0;
+      kx.reports.push({
+        at: today(), progress: 0,
+        note: "S2 không trả về khối JSON blueprint nên không biết cần viết bao nhiêu bài. Hãy duyệt/nhập tay danh sách bài rồi chạy lại vòng lặp. Ở MOCK_MODE điều này là bình thường — Agent chưa nối Hermes thật nên không sinh được blueprint.",
+        by: kx.owner, byType: "agent", agentId: CLUSTER_AGENTS.seo,
+      });
+      save(); render();
+      say("Vòng lặp dừng ở S2 — cần chốt danh sách bài");
+      return ticket;
+    }
+
+    pipeLog("📝", `Blueprint có ${bai.length} bài — bắt đầu vòng lặp viết`);
+    for (const b of bai) {
+      const kw = addAgentTask(ticket.id, `S3 · Viết bài ${b.ma_bai} — ${b.tieu_de}`.slice(0, 120), CLUSTER_AGENTS.writer);
+      save(); render();
+      pipeLog("✍️", `${b.ma_bai} — đang viết…`);
+      const outW = await runTaskViaProxy(kw, [
+        `Bạn là Content Agent. Viết trọn bài ${b.ma_bai === "P-00" ? "TRỤ CỘT" : "vệ tinh"} sau, chuẩn SEO.`,
+        `Tiêu đề: ${b.tieu_de}`, `Từ khóa chính: ${b.tu_khoa}`,
+        `Độ dài: ${b.ma_bai === "P-00" ? "2.000–2.500" : "1.200–1.800"} từ.`,
+        `Chèn liên kết nội bộ và các thẻ [IMAGE_PLACEHOLDER_X: bối cảnh].`,
+        `Số liệu có hạn sử dụng phải kèm nguồn; không bịa con số.`,
+      ].join("\n"));
+      pipeLog(outW ? "✅" : "⚠️", `${b.ma_bai} ${outW ? "viết xong" : "lỗi"} — đã ghi báo cáo`);
+
+      const kp = addAgentTask(ticket.id, `S4 · Prompt ảnh ${b.ma_bai}`, CLUSTER_AGENTS.visual, "Trung bình");
+      save(); render();
+      pipeLog("🖼️", `${b.ma_bai} — đang dựng prompt ảnh…`);
+      const outP = await runTaskViaProxy(kp, [
+        `Bạn là Visual Prompt Agent. Sinh AI Image Prompt tiếng Anh cho mọi [IMAGE_PLACEHOLDER_X] trong bài dưới đây.`,
+        `Mỗi prompt đủ 5 thành phần: Subject · Scene · Lighting · Camera angle · Aspect ratio (--ar 16:9).`,
+        `Kèm alt_text_vi bằng tiếng Việt. Không đưa tên thương hiệu đã đăng ký, không yêu cầu chữ trong ảnh.`,
+        ``, `BÀI VIẾT:`, (outW || "(chưa có nội dung bài)").slice(0, 4000),
+      ].join("\n"));
+      pipeLog(outP ? "✅" : "⚠️", `${b.ma_bai} prompt ảnh ${outP ? "xong" : "lỗi"} — đã ghi báo cáo`);
+    }
+
+    // ---- Đóng phiếu ----
+    const ks = ticketTasks(ticket.id);
+    const loi = ks.filter((k) => k.run && k.run.status === "failed").length;
+    ticket.status = loi ? "Tạm dừng" : "Hoàn tất";
+    ticket.desc += `\n\n— Vòng lặp kết thúc ${fmtD(today())}: ${ks.length} công việc, ${ks.length - loi} thành công, ${loi} lỗi.`
+      + (loi ? " Phiếu để Tạm dừng do có mục chạy lỗi." : " Mọi mục đã có báo cáo, chờ người chịu trách nhiệm duyệt để đóng từng công việc.");
+    save(); render();
+    pipeLog(loi ? "⚠️" : "🏁", loi
+      ? `Xong vòng lặp nhưng có ${loi} mục lỗi — phiếu #${ticket.code} để Tạm dừng`
+      : `Hoàn tất phiếu #${ticket.code} — ${ks.length} công việc đều có báo cáo`);
+    if (typeof addFeed === "function") addFeed(`Phiếu <b>#${ticket.code}</b> Content Cluster kết thúc — ${ks.length} công việc, ${loi} lỗi.`, loi ? "f-rule" : "f-done");
+    say(loi ? `Phiếu #${ticket.code}: có ${loi} mục lỗi` : `Phiếu #${ticket.code} hoàn tất ✓`);
+    return ticket;
+  }
+
   /* ================= SỰ KIỆN ================= */
   function renderKeepFocus(filterKey) {
     render();
@@ -1689,6 +1937,13 @@
       case "chat-to-report": chatToReport(d.id); break;
       case "start-run": startRun(d.id); break;
       case "unassign-agent": unassignAgent(d.id); break;
+      case "new-cluster": mNewCluster(); break;
+      case "start-cluster": {
+        const topic = val("wk_cl_topic");
+        if (!topic) return say("Nhập chủ đề hoặc dán link nguồn");
+        startContentCluster(topic, val("wk_cl_url") || topic);
+        break;
+      }
       case "reset": reset(); say("Đã nạp lại dữ liệu mẫu điều hành công việc"); break;
     }
   }
@@ -1761,8 +2016,25 @@
     document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeModal(); });
   }
 
+  /* Không Agent nào được phép không có người chịu trách nhiệm. Dữ liệu đã lưu từ
+     trước khi thêm Agent mới sẽ thiếu, nên vá ngay lúc nạp thay vì để rơi về
+     nhân sự đầu danh sách một cách âm thầm. */
+  function ensureAgentOwners() {
+    let added = 0;
+    agentList().forEach((a) => {
+      if (!S.agentOwners[a.id]) {
+        const byDept = { mkt: "s9", sales: "s8", hr: "s2", fin: "s1", legal: "s2", cskh: "s10" };
+        S.agentOwners[a.id] = byDept[a.dept] || S.staff[0].id;
+        added++;
+      }
+    });
+    if (added) save();
+    return added;
+  }
+
   // ---------- Khởi động ----------
   S = load();
+  ensureAgentOwners();
   save();
   refreshCounters();
   bindHost();
@@ -1779,5 +2051,8 @@
       projectById, ticketById, taskById, ticketTasks, projectTickets, agentById,
     },
     PROXY_BASE: WORK_PROXY_BASE,
+    // Orches gọi vào đây khi nhận lệnh sản xuất content cluster
+    startContentCluster,
+    CLUSTER_AGENTS,
   };
 })();
