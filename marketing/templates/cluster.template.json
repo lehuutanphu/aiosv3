@@ -1,0 +1,75 @@
+{
+  "cluster_id": "CLS-YYYY-NNN",
+  "trang_thai": "dang_mo",
+  "buoc_hien_tai": 1,
+  "ngay_mo": null,
+  "ngay_dong": null,
+
+  "nguon": {
+    "loai": null,
+    "url": null,
+    "chu_de_goc": null,
+    "ngay_truy_cap": null,
+    "ghi_chu_nguon": null
+  },
+
+  "dinh_huong": {
+    "ngon_ngu": "vi",
+    "doi_tuong_doc": null,
+    "giong_van": null,
+    "thi_truong": null,
+    "website_dich": null,
+    "cta_mac_dinh": null
+  },
+
+  "pillar": {
+    "ma_bai": "P-00",
+    "tieu_de_lam_viec": null,
+    "tu_khoa_chinh": null,
+    "tu_khoa_phu": [],
+    "tu_khoa_lsi": [],
+    "title_tag": null,
+    "meta_description": null,
+    "slug": null,
+    "do_dai_muc_tieu": 2500,
+    "trang_thai": "chua_bat_dau",
+    "duong_dan_bai": null,
+    "so_prompt_anh": 0
+  },
+
+  "cluster": [
+    {
+      "ma_bai": "C-01",
+      "chu_de_con": null,
+      "tieu_de_lam_viec": null,
+      "tu_khoa_chinh": null,
+      "tu_khoa_phu": [],
+      "tu_khoa_lsi": [],
+      "title_tag": null,
+      "meta_description": null,
+      "slug": null,
+      "do_dai_muc_tieu": 1500,
+      "trang_thai": "chua_bat_dau",
+      "duong_dan_bai": null,
+      "so_prompt_anh": 0,
+      "ghi_chu_phan_dinh_tu_khoa": null
+    }
+  ],
+
+  "lien_ket_noi_bo": {
+    "da_kiem_tra": false,
+    "ngay_kiem_tra": null,
+    "thieu_link_ve_pillar": [],
+    "thieu_link_tu_pillar": []
+  },
+
+  "anh": {
+    "che_do": "chi_tao_prompt",
+    "model_da_xac_nhan": null,
+    "cau_hinh_da_xac_nhan": null,
+    "credit_da_duyet": false,
+    "task_id_base": []
+  },
+
+  "nhat_ky": []
+}
