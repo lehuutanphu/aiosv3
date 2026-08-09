@@ -114,7 +114,32 @@
       { id: "k17", ticket: "t9", title: "Tổng hợp công nợ gói bảo trì CNCL quý 2", executor: A("fin-1"), owner: "s1", status: "Mới", prio: "Trung bình", start: dOff(0), deadline: dOff(5), progress: 0, reports: [] },
     ];
 
-    return { version: SCHEMA_VERSION, staff, customers, agentOwners, projects, tickets, tasks };
+    return { version: SCHEMA_VERSION, staff, customers, agentOwners, projects, tickets, tasks, leads: seedLeads() };
+  }
+
+  // Lead mẫu — đủ để thấy cả hai loại (khách / partner) và vài nhóm dịch vụ.
+  function seedLeads() {
+    return [
+      { id: "l1", ten: "Trần Minh Khoa", sdt: "0903112233", sdt_khac: [], email: "", nguon: "https://www.facebook.com/groups/dulichnhatrang/posts/123456", nguon_loai: "facebook",
+        comment: "Nhà mình có 4 xe 16 chỗ và 2 xe 29 chỗ chạy tuyến Nha Trang – Đà Lạt, bao trọn gói tài xế. Ai cần thì gọi mình 0903112233 nhé.",
+        nhu_cau: "Cung cấp dịch vụ thuê xe 16–29 chỗ tuyến Nha Trang – Đà Lạt",
+        loai: "partner", dich_vu: "xe", trang_thai: "moi", kenh_moi: [], do_tin_cay: "cao", can_nguoi_xac_nhan: false,
+        cach_boc_tach: "llm", phu_trach: "s8", ticket: null, at: dOff(-2), ghi_chu: "" },
+      { id: "l2", ten: "Nguyễn Thị Hồng Vân", sdt: "0356778899", sdt_khac: [], email: "vannth.homestay@gmail.com", nguon: "https://www.facebook.com/groups/dulichnhatrang/posts/123456", nguon_loai: "facebook",
+        comment: "Bên em có homestay 6 phòng view biển ở Hòn Chồng, muốn hợp tác với bên tour để nhận khách đoàn. Liên hệ em qua zalo 0356778899 hoặc mail vannth.homestay@gmail.com",
+        nhu_cau: "Chủ homestay 6 phòng, muốn hợp tác nhận khách đoàn",
+        loai: "partner", dich_vu: "homestay", trang_thai: "da_lien_he", kenh_moi: [{ kenh: "Zalo", at: dOff(-1), note: "Đã gửi giới thiệu chương trình hợp tác partner." }],
+        do_tin_cay: "cao", can_nguoi_xac_nhan: false, cach_boc_tach: "llm", phu_trach: "s8", ticket: null, at: dOff(-2), ghi_chu: "" },
+      { id: "l3", ten: "Phạm Quốc Huy", sdt: "0987445566", sdt_khac: [], email: "", nguon: "https://www.facebook.com/groups/dulichnhatrang/posts/123456", nguon_loai: "facebook",
+        comment: "Cho mình hỏi đoàn 25 người đi 3 ngày 2 đêm thì thuê xe với đặt phòng khoảng bao nhiêu vậy ạ? Sđt mình 0987445566.",
+        nhu_cau: "Cần báo giá tour đoàn 25 người, 3 ngày 2 đêm",
+        loai: "khach", dich_vu: "tour", trang_thai: "moi", kenh_moi: [], do_tin_cay: "cao", can_nguoi_xac_nhan: false,
+        cach_boc_tach: "llm", phu_trach: "s8", ticket: null, at: dOff(-2), ghi_chu: "" },
+      { id: "l4", ten: "", sdt: "0913224466", sdt_khac: [], email: "", nguon: "Dán tay", nguon_loai: "thu-cong",
+        comment: "Quán mình chuyên hải sản ở đường Trần Phú, nhận đặt bàn đoàn trên 30 khách, có menu set sẵn. 0913224466",
+        nhu_cau: "", loai: "partner", dich_vu: "quan-an", trang_thai: "moi", kenh_moi: [], do_tin_cay: "thap", can_nguoi_xac_nhan: true,
+        cach_boc_tach: "regex", phu_trach: "s8", ticket: null, at: dOff(-1), ghi_chu: "Chưa có tên người liên hệ — cần gọi xác nhận." },
+    ];
   }
 
   // ---------- Lưu trữ ----------
@@ -319,6 +344,7 @@
     tasks: { icon: "✅", title: "Công việc", desc: "Đơn vị nhỏ nhất để giao việc — cho nhân sự hoặc cho AI Agent." },
     staff: { icon: "👥", title: "Nhân sự & Agent", desc: "Khối lượng việc của từng người, kèm các AI Agent mà người đó chịu trách nhiệm." },
     reports: { icon: "📈", title: "Báo cáo", desc: "Nhật ký báo cáo tiến độ. Người tự nhập, Agent tự sinh — cùng một dòng thời gian." },
+    leads: { icon: "🧲", title: "Lead — Khách & Partner tiềm năng", desc: "Kho liên hệ do Lead Hunter Agent thu thập từ mạng xã hội, phân loại theo khách/partner và nhóm dịch vụ để mời qua các kênh khác." },
     portal: { icon: "🌐", title: "Portal khách hàng", desc: "Trang khách hàng nhìn thấy: tiến độ và mốc thời gian, không lộ nhân sự hay ghi chú nội bộ." },
     flow: { icon: "🔄", title: "Luồng nghiệp vụ", desc: "Mô hình dữ liệu và luồng vận hành, bao gồm cả nhánh giao việc cho AI Agent." },
   };
@@ -984,6 +1010,511 @@
     return model + flowSteps + matrix + rules;
   }
 
+  /* ================= 9. LEAD — KHÁCH & PARTNER TIỀM NĂNG =================
+     Kho liên hệ thu được từ mạng xã hội. Một Lead luôn phải có ít nhất một cách
+     liên hệ (số điện thoại hoặc email) — không có thì không phải Lead.
+  ========================================================================= */
+
+  const LEAD_TYPES = { khach: "Khách tiềm năng", partner: "Partner tiềm năng", chua_ro: "Chưa rõ" };
+  const LEAD_SERVICES = {
+    xe: "🚐 Xe & vận chuyển", homestay: "🏡 Homestay & lưu trú", "quan-an": "🍜 Quán ăn & nhà hàng",
+    tour: "🧭 Tour & vé", "spa-lam-dep": "💆 Spa & làm đẹp", khac: "📦 Khác",
+  };
+  const LEAD_STATUS = { moi: "Mới", da_lien_he: "Đã liên hệ", da_moi: "Đã mời", quan_tam: "Quan tâm", tu_choi: "Từ chối", da_chot: "Đã chốt" };
+  const LEAD_STCLASS = { moi: "new", da_lien_he: "doing", da_moi: "review", quan_tam: "doing", tu_choi: "pause", da_chot: "done" };
+  const LEAD_CHANNELS = ["Zalo", "Gọi điện", "SMS", "Email", "Messenger", "Gặp trực tiếp"];
+
+  const leadById = (id) => S.leads.find((l) => l.id === id) || null;
+  const leadStPill = (st) => `<span class="wk-pill ${LEAD_STCLASS[st] || "new"}">${esc(LEAD_STATUS[st] || st)}</span>`;
+  const leadTypeTag = (t) => `<span class="wk-tag ${t === "partner" ? "partner" : t === "khach" ? "khach" : ""}">${esc(LEAD_TYPES[t] || t)}</span>`;
+  const leadSvcTag = (s) => `<span class="wk-tag svc">${esc(LEAD_SERVICES[s] || s)}</span>`;
+
+  // Chuẩn hóa số Việt Nam để so trùng: +84/84 → 0, bỏ mọi ký tự ngăn cách.
+  function normPhone(raw) {
+    let d = String(raw || "").replace(/[^\d+]/g, "");
+    if (d.startsWith("+84")) d = "0" + d.slice(3);
+    else if (/^84\d{9,10}$/.test(d)) d = "0" + d.slice(2);
+    return /^0\d{8,10}$/.test(d) ? d : "";
+  }
+  const leadKey = (l) => normPhone(l.sdt) || String(l.email || "").toLowerCase().trim() || (String(l.ten || "") + "|" + String(l.comment || "").slice(0, 40)).toLowerCase();
+
+  // Gộp danh sách lead mới vào kho, bỏ qua bản trùng (cùng số điện thoại / email).
+  function mergeLeads(list, meta) {
+    const existing = new Set(S.leads.map(leadKey));
+    let added = 0, dup = 0;
+    list.forEach((raw) => {
+      const l = {
+        id: newId("l"),
+        ten: String(raw.ten || "").trim(),
+        sdt: normPhone(raw.sdt),
+        sdt_khac: (raw.sdt_khac || []).map(normPhone).filter(Boolean),
+        email: String(raw.email || "").toLowerCase().trim(),
+        nguon: raw.nguon || (meta && meta.nguon) || "",
+        nguon_loai: /facebook\.com/i.test(raw.nguon || (meta && meta.nguon) || "") ? "facebook" : (meta && meta.nguon_loai) || "khac",
+        comment: String(raw.comment || "").trim(),
+        nhu_cau: String(raw.nhu_cau || "").trim(),
+        loai: LEAD_TYPES[raw.loai] ? raw.loai : "chua_ro",
+        dich_vu: LEAD_SERVICES[raw.dich_vu] ? raw.dich_vu : "khac",
+        trang_thai: "moi",
+        kenh_moi: [],
+        do_tin_cay: raw.do_tin_cay || "thap",
+        can_nguoi_xac_nhan: raw.can_nguoi_xac_nhan !== false,
+        cach_boc_tach: raw.cach_boc_tach || "regex",
+        phu_trach: (meta && meta.phu_trach) || S.agentOwners[LEAD_AGENT] || S.staff[0].id,
+        ticket: (meta && meta.ticket) || null,
+        at: today(),
+        ghi_chu: "",
+      };
+      if (!l.sdt && !l.email) return; // không có cách liên hệ → bỏ
+      const key = leadKey(l);
+      if (existing.has(key)) { dup++; return; }
+      existing.add(key);
+      S.leads.push(l);
+      added++;
+    });
+    save();
+    return { added, dup };
+  }
+
+  const LF = { kw: "", loai: "", dich_vu: "", trang_thai: "", nguon: "" };
+
+  function filteredLeads() {
+    const kw = LF.kw.toLowerCase();
+    return S.leads.filter((l) =>
+      (!LF.loai || l.loai === LF.loai)
+      && (!LF.dich_vu || l.dich_vu === LF.dich_vu)
+      && (!LF.trang_thai || l.trang_thai === LF.trang_thai)
+      && (!LF.nguon || (l.nguon_loai || "khac") === LF.nguon)
+      && (!kw || [l.ten, l.sdt, l.email, l.comment, l.nhu_cau].join(" ").toLowerCase().includes(kw))
+    );
+  }
+
+  function vLeads() {
+    const list = filteredLeads();
+    const khach = S.leads.filter((l) => l.loai === "khach").length;
+    const partner = S.leads.filter((l) => l.loai === "partner").length;
+    const chuaMoi = S.leads.filter((l) => l.trang_thai === "moi").length;
+    const canRa = S.leads.filter((l) => l.can_nguoi_xac_nhan).length;
+
+    const kpis = `
+    <div class="wk-kpis">
+      <div class="wk-kpi"><div class="lbl">Tổng Lead</div><div class="val">${S.leads.length}</div><div class="sub">${list.length} khớp bộ lọc</div></div>
+      <div class="wk-kpi"><div class="lbl">Khách tiềm năng</div><div class="val">${khach}</div><div class="sub">đang có nhu cầu</div></div>
+      <div class="wk-kpi agent"><div class="lbl">Partner tiềm năng</div><div class="val">${partner}</div><div class="sub">có dịch vụ để mời hợp tác</div></div>
+      <div class="wk-kpi ${chuaMoi ? "warn" : "ok"}"><div class="lbl">Chưa liên hệ</div><div class="val">${chuaMoi}</div><div class="sub">còn ở trạng thái "Mới"</div></div>
+      <div class="wk-kpi ${canRa ? "warn" : "ok"}"><div class="lbl">Cần người rà lại</div><div class="val">${canRa}</div><div class="sub">Agent bóc tách độ tin cậy thấp</div></div>
+    </div>`;
+
+    const rows = list.map((l) => `
+      <tr class="clickable" data-act="lead-detail" data-id="${l.id}">
+        <td><b>${esc(l.ten || "(chưa có tên)")}</b>${l.can_nguoi_xac_nhan ? ' <span class="wk-pill late" title="Agent chưa chắc chắn — cần người xác nhận">cần rà</span>' : ""}<span class="wk-sub">${fmtD(l.at)} · ${esc(staffName(l.phu_trach))}</span></td>
+        <td>${l.sdt ? `<span class="wk-mono">${esc(l.sdt)}</span>` : '<span class="wk-muted">—</span>'}${l.sdt_khac && l.sdt_khac.length ? `<span class="wk-sub">+${l.sdt_khac.length} số khác</span>` : ""}</td>
+        <td>${l.email ? esc(l.email) : '<span class="wk-muted">—</span>'}</td>
+        <td>${l.nguon ? (/^https?:/i.test(l.nguon)
+          ? `<a class="wk-link" href="${esc(l.nguon)}" target="_blank" rel="noopener" title="${esc(l.nguon)}">${l.nguon_loai === "facebook" ? "Facebook" : "Link nguồn"} ↗</a>`
+          : esc(l.nguon)) : '<span class="wk-muted">—</span>'}</td>
+        <td class="wk-cmt" title="${esc(l.comment)}">${esc(l.comment.slice(0, 110))}${l.comment.length > 110 ? "…" : ""}${l.nhu_cau ? `<span class="wk-sub">→ ${esc(l.nhu_cau)}</span>` : ""}</td>
+        <td>${leadTypeTag(l.loai)}</td>
+        <td>${leadSvcTag(l.dich_vu)}</td>
+        <td>${leadStPill(l.trang_thai)}${l.kenh_moi && l.kenh_moi.length ? `<span class="wk-sub">${esc(l.kenh_moi[l.kenh_moi.length - 1].kenh)}</span>` : ""}</td>
+        <td><div class="wk-cellflex">
+          <button class="wk-minibtn go" data-act="lead-invite" data-id="${l.id}" title="Ghi nhận đã mời qua một kênh">✉ Mời</button>
+          <button class="wk-minibtn" data-act="lead-detail" data-id="${l.id}">Sửa</button>
+        </div></td>
+      </tr>`).join("");
+
+    const filters = `
+    <div class="wk-filters">
+      <div class="wk-search">🔍<input placeholder="Tìm theo tên, số điện thoại, nội dung…" value="${esc(LF.kw)}" data-filter="l.kw"></div>
+      <select class="wk-select" data-filter="l.loai"><option value="">— Tất cả loại —</option>${Object.entries(LEAD_TYPES).map(([k, v]) => `<option value="${k}"${LF.loai === k ? " selected" : ""}>${esc(v)}</option>`).join("")}</select>
+      <select class="wk-select" data-filter="l.dich_vu"><option value="">— Tất cả dịch vụ —</option>${Object.entries(LEAD_SERVICES).map(([k, v]) => `<option value="${k}"${LF.dich_vu === k ? " selected" : ""}>${esc(v)}</option>`).join("")}</select>
+      <select class="wk-select" data-filter="l.trang_thai"><option value="">— Trạng thái —</option>${Object.entries(LEAD_STATUS).map(([k, v]) => `<option value="${k}"${LF.trang_thai === k ? " selected" : ""}>${esc(v)}</option>`).join("")}</select>
+      <select class="wk-select" data-filter="l.nguon"><option value="">— Nguồn —</option><option value="facebook"${LF.nguon === "facebook" ? " selected" : ""}>Facebook</option><option value="thu-cong"${LF.nguon === "thu-cong" ? " selected" : ""}>Nhập/dán tay</option><option value="khac"${LF.nguon === "khac" ? " selected" : ""}>Khác</option></select>
+    </div>`;
+
+    const note = `<div class="wk-note" style="margin:1.1rem 1.1rem 0">
+      <b>Lead vào kho bằng hai đường:</b> Agent <b>🧲 Lead Hunter</b> bóc tách từ link bài viết/bình luận, hoặc người nhập tay.
+      Số điện thoại và email chỉ được ghi khi <b>xuất hiện nguyên văn trong nguồn</b> — Agent không được suy đoán.
+      Lead gắn nhãn <span class="wk-pill late">cần rà</span> là những bản Agent chưa chắc chắn, phải có người xác nhận trước khi đem đi mời.
+    </div>`;
+
+    const acts = `
+      <button class="btn btn-primary btn-sm" data-act="lead-harvest">🧲 Thu thập từ link</button>
+      <button class="btn btn-ghost btn-sm" data-act="lead-new">＋ Thêm Lead</button>
+      <button class="btn btn-ghost btn-sm" data-act="lead-csv" title="Tải file CSV mở được bằng Excel">⬇ CSV</button>
+      <button class="btn btn-ghost btn-sm" data-act="lead-backup" title="Ghi danh sách Lead xuống sales/data/leads/leads.json trên máy chủ">☁ Sao lưu</button>
+      <button class="btn btn-ghost btn-sm" data-act="lead-restore" title="Nạp lại danh sách Lead đã sao lưu trên máy chủ">↧ Khôi phục</button>`;
+
+    return kpis + panel(
+      `🧲 Kho Lead <span class="wk-pill new">${list.length}/${S.leads.length}</span>`, acts,
+      note + filters + table(
+        "<th>Tên khách hàng</th><th>Số điện thoại</th><th>Email</th><th>Nguồn</th><th>Nội dung comment</th><th>Loại</th><th>Phân loại dịch vụ</th><th>Trạng thái</th><th></th>",
+        rows, "Chưa có Lead nào khớp bộ lọc. Bấm “🧲 Thu thập từ link” để Agent quét bình luận.", 9)
+    );
+  }
+
+  // ---- Thêm / sửa một Lead ----
+  function leadForm(l) {
+    const sel = (id, map, cur) => `<select id="${id}">${Object.entries(map).map(([k, v]) => `<option value="${k}"${cur === k ? " selected" : ""}>${esc(v)}</option>`).join("")}</select>`;
+    return `
+      <div class="hr-intake-form"><div class="hr-grid">
+        <label>Tên khách hàng<input type="text" id="wk_l_ten" value="${esc(l.ten || "")}" placeholder="VD: Trần Minh Khoa"></label>
+        <label>Số điện thoại<input type="text" id="wk_l_sdt" value="${esc(l.sdt || "")}" placeholder="09xxxxxxxx"></label>
+        <label>Email<input type="text" id="wk_l_email" value="${esc(l.email || "")}" placeholder="ten@email.com"></label>
+        <label>Người phụ trách<select id="wk_l_ph">${staffOpts(l.phu_trach || S.agentOwners[LEAD_AGENT])}</select></label>
+        <label class="span2">Nguồn<input type="text" id="wk_l_nguon" value="${esc(l.nguon || "")}" placeholder="Dán link bài viết Facebook hoặc ghi nguồn"></label>
+        <label class="span2">Nội dung comment<textarea id="wk_l_cmt" placeholder="Nguyên văn bình luận của người này">${esc(l.comment || "")}</textarea></label>
+        <label class="span2">Nhu cầu / dịch vụ họ cung cấp<input type="text" id="wk_l_nc" value="${esc(l.nhu_cau || "")}" placeholder="Tóm tắt một câu"></label>
+        <label>Loại${sel("wk_l_loai", LEAD_TYPES, l.loai || "chua_ro")}</label>
+        <label>Phân loại dịch vụ${sel("wk_l_dv", LEAD_SERVICES, l.dich_vu || "khac")}</label>
+        <label>Trạng thái${sel("wk_l_st", LEAD_STATUS, l.trang_thai || "moi")}</label>
+        <label class="wk-check-cell">Đã người xác nhận<select id="wk_l_ok"><option value="1"${l.can_nguoi_xac_nhan ? "" : " selected"}>Đã xác nhận</option><option value="0"${l.can_nguoi_xac_nhan ? " selected" : ""}>Chưa — cần rà lại</option></select></label>
+        <label class="span2">Ghi chú nội bộ<textarea id="wk_l_note" placeholder="Ghi chú khi gọi, kết quả trao đổi…">${esc(l.ghi_chu || "")}</textarea></label>
+      </div>`;
+  }
+
+  function mNewLead() {
+    openModal(modalHead("🧲", "Thêm Lead thủ công", "Dùng khi bạn có số điện thoại từ nguồn khác (gọi đến, danh thiếp, hội chợ). Phải có ít nhất số điện thoại hoặc email.")
+      + leadForm({ nguon: "Dán tay", can_nguoi_xac_nhan: false }) + modalFoot("lead-save", "Lưu Lead") + "</div>");
+  }
+
+  function mLeadDetail(id) {
+    const l = leadById(id);
+    if (!l) return;
+    const history = (l.kenh_moi || []).length
+      ? `<h4 style="margin-top:1rem">Lịch sử mời</h4>` + l.kenh_moi.slice().reverse().map((m) => `
+          <div class="wk-report">${esc(m.note || "(không ghi chú)")}<div class="meta">${fmtD(m.at)} · kênh ${esc(m.kenh)}</div></div>`).join("")
+      : "";
+    const meta = `<div class="wk-note">Bóc tách bằng <b>${l.cach_boc_tach === "llm" ? "mô hình ngôn ngữ + đối chiếu regex" : l.cach_boc_tach === "regex" ? "regex tất định" : "nhập tay"}</b> · độ tin cậy <b>${esc(l.do_tin_cay || "—")}</b>${l.ticket ? ` · từ phiếu <b>#${(ticketById(l.ticket) || {}).code || "?"}</b>` : ""}</div>`;
+    openModal(modalHead("🧲", l.ten || "Lead chưa có tên", `${esc(l.sdt || l.email || "—")} · ${esc(LEAD_TYPES[l.loai] || "")}`)
+      + meta.replace('class="wk-note"', 'class="wk-note" style="margin:0 0 1rem"')
+      + leadForm(l) + history + `
+      <div class="bf-actions" style="margin-top:1.2rem">
+        <button class="btn btn-ghost btn-sm" type="button" data-act="lead-delete" data-id="${l.id}" style="margin-right:auto;color:var(--danger)">🗑 Xóa Lead</button>
+        <button class="btn btn-ghost btn-sm" type="button" data-act="modal-close">Hủy</button>
+        <button class="btn btn-primary btn-sm" type="button" data-act="lead-save" data-id="${l.id}">Lưu thay đổi</button>
+      </div></div>`);
+  }
+
+  function saveLead(id) {
+    const sdt = normPhone(val("wk_l_sdt"));
+    const rawSdt = val("wk_l_sdt");
+    const email = val("wk_l_email").toLowerCase();
+    if (rawSdt && !sdt) return say("Số điện thoại không đúng định dạng Việt Nam");
+    if (!sdt && !email) return say("Lead phải có ít nhất số điện thoại hoặc email");
+    const patch = {
+      ten: val("wk_l_ten"), sdt, email,
+      nguon: val("wk_l_nguon"), comment: val("wk_l_cmt"), nhu_cau: val("wk_l_nc"),
+      loai: val("wk_l_loai"), dich_vu: val("wk_l_dv"), trang_thai: val("wk_l_st"),
+      phu_trach: val("wk_l_ph"), ghi_chu: val("wk_l_note"),
+      can_nguoi_xac_nhan: val("wk_l_ok") === "0",
+    };
+    patch.nguon_loai = /facebook\.com/i.test(patch.nguon) ? "facebook" : patch.nguon === "Dán tay" ? "thu-cong" : "khac";
+    const cur = id ? leadById(id) : null;
+    if (cur) Object.assign(cur, patch);
+    else S.leads.push(Object.assign({ id: newId("l"), sdt_khac: [], kenh_moi: [], do_tin_cay: "cao", cach_boc_tach: "thu-cong", ticket: null, at: today() }, patch));
+    save(); closeModal(); render();
+    say(cur ? "Đã cập nhật Lead ✓" : "Đã thêm Lead ✓");
+  }
+
+  function deleteLead(id) {
+    const l = leadById(id);
+    if (!l) return;
+    if (!confirm(`Xóa Lead "${l.ten || l.sdt || l.email}"? Thao tác này không hoàn tác được.`)) return;
+    S.leads = S.leads.filter((x) => x.id !== id);
+    save(); closeModal(); render(); say("Đã xóa Lead");
+  }
+
+  // ---- Ghi nhận đã mời qua một kênh ----
+  function mLeadInvite(id) {
+    const l = leadById(id);
+    if (!l) return;
+    const goi = l.loai === "partner"
+      ? "Mời hợp tác: giới thiệu chương trình partner, chính sách hoa hồng, cách đưa dịch vụ lên hệ thống."
+      : "Mời sử dụng dịch vụ: báo giá theo đúng nhu cầu họ nêu trong bình luận, kèm ưu đãi nếu có.";
+    openModal(modalHead("✉️", "Ghi nhận đã mời", `${esc(l.ten || l.sdt || l.email)} · ${esc(LEAD_TYPES[l.loai] || "")}`) + `
+      <div class="hr-intake-form">
+        <div class="wk-note"><b>Gợi ý nội dung:</b> ${esc(goi)}<br>Nguyên văn bình luận: “${esc(l.comment.slice(0, 200))}${l.comment.length > 200 ? "…" : ""}”</div>
+        <div class="hr-grid">
+          <label>Kênh đã mời <span class="req">*</span><select id="wk_li_kenh">${LEAD_CHANNELS.map((c) => `<option value="${esc(c)}">${esc(c)}</option>`).join("")}</select></label>
+          <label>Trạng thái sau khi mời<select id="wk_li_st">${Object.entries(LEAD_STATUS).map(([k, v]) => `<option value="${k}"${k === "da_moi" ? " selected" : ""}>${esc(v)}</option>`).join("")}</select></label>
+          <label class="span2">Ghi chú<textarea id="wk_li_note" placeholder="Nội dung đã gửi, phản hồi của họ…"></textarea></label>
+        </div>
+        <p class="bf-hint" style="margin:.7rem 0 0">AI OS <b>không tự nhắn tin cho Lead</b>. Bạn gửi bằng kênh của mình rồi ghi nhận lại ở đây để không mời trùng.</p>`
+      + modalFoot("lead-invite-save", "Ghi nhận") + `<input type="hidden" id="wk_li_id" value="${l.id}"></div>`);
+  }
+
+  function saveLeadInvite() {
+    const l = leadById(val("wk_li_id"));
+    if (!l) return;
+    l.kenh_moi = l.kenh_moi || [];
+    l.kenh_moi.push({ kenh: val("wk_li_kenh"), at: today(), note: val("wk_li_note") });
+    l.trang_thai = val("wk_li_st");
+    save(); closeModal(); render(); say(`Đã ghi nhận mời qua ${l.kenh_moi[l.kenh_moi.length - 1].kenh} ✓`);
+  }
+
+  // ---- Xuất CSV (BOM để Excel đọc đúng tiếng Việt) ----
+  function exportLeadsCsv() {
+    const list = filteredLeads();
+    if (!list.length) return say("Không có Lead nào để xuất");
+    const cols = ["Tên khách hàng", "Số điện thoại", "Email", "Nguồn", "Nội dung comment", "Nhu cầu", "Loại", "Phân loại dịch vụ", "Trạng thái", "Kênh đã mời", "Người phụ trách", "Ngày ghi nhận", "Ghi chú"];
+    const cell = (v) => `"${String(v == null ? "" : v).replace(/"/g, '""')}"`;
+    const lines = [cols.map(cell).join(",")].concat(list.map((l) => [
+      l.ten, l.sdt ? `'${l.sdt}` : "", l.email, l.nguon, l.comment, l.nhu_cau,
+      LEAD_TYPES[l.loai] || l.loai, LEAD_SERVICES[l.dich_vu] || l.dich_vu, LEAD_STATUS[l.trang_thai] || l.trang_thai,
+      (l.kenh_moi || []).map((m) => m.kenh).join(" / "), staffName(l.phu_trach), fmtD(l.at), l.ghi_chu,
+    ].map(cell).join(",")));
+    const blob = new Blob(["﻿" + lines.join("\r\n")], { type: "text/csv;charset=utf-8" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `lead-aios-${today()}.csv`;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+    say(`Đã xuất ${list.length} Lead ra CSV ✓`);
+  }
+
+  // ---- Sao lưu / khôi phục qua Backend Proxy ----
+  async function backupLeads() {
+    try {
+      const res = await fetch(`${WORK_PROXY_BASE}/api/sales/leads`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ leads: S.leads }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || `Máy chủ trả lỗi ${res.status}`);
+      say(`Đã sao lưu ${data.count} Lead vào ${data.file} ✓`);
+    } catch (e) {
+      say(`Không sao lưu được: ${e.message}. Backend Proxy đã chạy chưa (server/server.js)?`);
+    }
+  }
+
+  async function restoreLeads() {
+    try {
+      const res = await fetch(`${WORK_PROXY_BASE}/api/sales/leads`);
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || `Máy chủ trả lỗi ${res.status}`);
+      if (!data.leads || !data.leads.length) return say("Trên máy chủ chưa có bản sao lưu Lead nào");
+      const { added, dup } = mergeLeads(data.leads, { nguon_loai: "khac" });
+      render();
+      say(`Khôi phục: thêm ${added} Lead mới, bỏ qua ${dup} bản đã có`);
+    } catch (e) {
+      say(`Không khôi phục được: ${e.message}`);
+    }
+  }
+
+  /* ========== PIPELINE THU THẬP LEAD (Agent sales-2) ==========
+     S1 tải nội dung nguồn (deterministic, qua Backend Proxy vì trình duyệt bị CORS chặn)
+     S2 bóc tách & phân loại → ghi thẳng vào kho Lead.
+     Nguồn bị chặn hoặc không bóc được thì DỪNG và nói rõ, không tự bịa Lead.
+  ============================================================== */
+
+  const LEAD_AGENT = "sales-2";
+  const LEAD_PROJECT_NAME = "Kinh doanh — Thu thập Lead";
+
+  function ensureLeadProject() {
+    let p = S.projects.find((x) => x.name === LEAD_PROJECT_NAME);
+    if (p) return p;
+    const pm = S.agentOwners[LEAD_AGENT] || S.staff[0].id;
+    p = {
+      id: newId("p"), name: LEAD_PROJECT_NAME,
+      customer: (S.customers[0] || {}).id, pm, members: [pm],
+      start: today(), deadline: dOff(90), status: "Đang thực hiện",
+      desc: "Dự án thường trực chứa các phiếu thu thập Lead từ mạng xã hội do Lead Hunter Agent thực hiện.",
+      docs: [], public: false,
+    };
+    S.projects.push(p);
+    return p;
+  }
+
+  // Ghi kết quả một bước deterministic thành báo cáo của Agent (không qua LLM).
+  function agentStepReport(k, ok, note, progress, minutes) {
+    k.progress = progress;
+    k.status = ok ? "Chờ duyệt" : "Tạm dừng";
+    k.run = { status: ok ? "done" : "failed", agentId: k.executor.id, output: note, endedAt: new Date().toISOString() };
+    k.reports.push({ at: today(), progress, note, by: k.owner, byType: "agent", agentId: k.executor.id, minutes: minutes || 1 });
+    save();
+  }
+
+  async function startLeadHarvest(url, rawText) {
+    const src = String(url || "").trim();
+    const pasted = String(rawText || "").trim();
+    if (!src && !pasted) return say("Cần link nguồn hoặc nội dung dán tay");
+    PIPE_LOG.length = 0;
+
+    const p = ensureLeadProject();
+    const maxCode = S.tickets.reduce((m, t) => Math.max(m, t.code || 0), 49000);
+    const owner = S.agentOwners[LEAD_AGENT] || S.staff[0].id;
+    const ticket = {
+      id: newId("t"), code: maxCode + 1,
+      title: `Thu thập Lead: ${(src || "nội dung dán tay").slice(0, 80)}`,
+      project: p.id, type: "Tư vấn & khảo sát",
+      status: "Đang thực hiện", prio: "Cao", deadline: dOff(2), assignees: [owner],
+      desc: `Quét bình luận từ nguồn: ${src || "(người dùng dán nội dung trực tiếp)"}\nBóc tách tên · số điện thoại · email · nội dung bình luận, phân loại khách/partner tiềm năng và nhóm dịch vụ, ghi vào kho Lead.`,
+    };
+    S.tickets.push(ticket);
+    save(); render();
+    if (typeof addFeed === "function") addFeed(`<b>Orches</b> mở phiếu <b>#${ticket.code}</b> "Thu thập Lead" và giao Lead Hunter Agent.`, "f-orches");
+
+    openModal(modalHead("🧲", `Thu thập Lead — phiếu #${ticket.code}`, esc((src || "nội dung dán tay").slice(0, 120))) + `
+      <div class="hr-intake-form">
+        <div class="wk-note">Agent chỉ ghi số điện thoại/email <b>có nguyên văn trong nguồn</b>. Nguồn bị chặn thì dừng và báo rõ — không suy đoán bình luận.</div>
+        <div id="wk_pipe_log" class="wk-steps" style="max-height:320px;overflow-y:auto"></div>
+        <div class="bf-actions" style="margin-top:1rem">
+          <button class="btn btn-ghost btn-sm" type="button" data-act="modal-close">Đóng</button>
+          <button class="btn btn-ghost btn-sm" type="button" data-act="go" data-view="ticketDetail" data-id="${ticket.id}">Mở phiếu #${ticket.code}</button>
+          <button class="btn btn-primary btn-sm" type="button" data-act="go" data-view="leads">Xem kho Lead</button>
+        </div>
+      </div>`);
+    pipeLog("📋", `Đã tạo phiếu #${ticket.code} trong dự án "${p.name}"`);
+
+    // Nguồn được gắn vào từng công việc để chạy lại đúng đầu vào cũ, không phải nhớ lại.
+    // Cắt bớt phần dán tay cho vừa localStorage — vẫn đủ dài cho một trang bình luận.
+    const leadSrc = { url: src, pasted: pasted.slice(0, 20000) };
+    const tagLead = (k) => { k.engine = "lead-harvest"; k.leadSrc = leadSrc; return k; };
+
+    // ---- S1: lấy nội dung nguồn ----
+    const k1 = tagLead(addAgentTask(ticket.id, "S1 · Tải nội dung nguồn", LEAD_AGENT));
+    save(); render();
+    let text = pasted;
+    if (pasted) {
+      pipeLog("📄", `Dùng nội dung bạn dán (${pasted.length} ký tự) — không cần gọi mạng`);
+      agentStepReport(k1, true, `Dùng nội dung người dùng dán trực tiếp: ${pasted.length} ký tự. Không gọi ra ngoài mạng.`, 100);
+    } else {
+      pipeLog("🌐", `Đang tải nguồn: ${src}`);
+      try {
+        const res = await fetch(`${WORK_PROXY_BASE}/api/sales/fetch`, {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ url: src }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || `Máy chủ trả lỗi ${res.status}`);
+        if (!data.ok) {
+          const note = `⚠️ Không lấy được nội dung từ ${src}.\n${data.note || ""}\nĐã thử: ${(data.tried || []).map((t) => `${t.url} → ${t.error || t.status}`).join(" | ")}`;
+          agentStepReport(k1, false, note, 40);
+          pipeLog("⛔", "Nguồn bị chặn — dừng lại, không bịa dữ liệu");
+          const kx = tagLead(addAgentTask(ticket.id, "⚠️ Cần người dán nội dung bình luận", LEAD_AGENT, "Cao"));
+          kx.status = "Chờ duyệt";
+          kx.reports.push({
+            at: today(), progress: 0, by: kx.owner, byType: "agent", agentId: LEAD_AGENT,
+            note: "Mở bài viết bằng tài khoản của bạn → bấm 'Xem thêm bình luận' cho hết → bôi đen toàn bộ phần bình luận → chạy lại '🧲 Thu thập từ link' và dán vào ô 'Nội dung dán tay'.",
+          });
+          ticket.status = "Tạm dừng";
+          ticket.desc += `\n\n— Dừng ở S1 ${fmtD(today())}: nguồn không tải được. ${data.note || ""}`;
+          save(); render();
+          say("Nguồn bị chặn — xem hướng dẫn trong phiếu");
+          return ticket;
+        }
+        text = data.text;
+        agentStepReport(k1, true, `Tải được ${data.chars} ký tự từ ${data.url}.` + (data.note ? `\n⚠️ ${data.note}` : ""), 100);
+        pipeLog("✅", `Tải xong ${data.chars} ký tự`);
+        if (data.note) pipeLog("⚠️", data.note);
+      } catch (e) {
+        agentStepReport(k1, false, `⚠️ Không gọi được Backend Proxy: ${e.message}. Chạy "node server/server.js" rồi thử lại, hoặc dán nội dung bình luận trực tiếp.`, 10);
+        pipeLog("⛔", `Lỗi kết nối máy chủ: ${e.message}`);
+        ticket.status = "Tạm dừng";
+        save(); render();
+        say("Không gọi được Backend Proxy");
+        return ticket;
+      }
+    }
+
+    // ---- S2: bóc tách & phân loại ----
+    const k2 = tagLead(addAgentTask(ticket.id, "S2 · Bóc tách & phân loại Lead", LEAD_AGENT));
+    save(); render();
+    pipeLog("🔎", `Đang bóc tách bằng ${agentById(LEAD_AGENT) ? agentById(LEAD_AGENT).name : LEAD_AGENT}…`);
+    let out;
+    try {
+      const res = await fetch(`${WORK_PROXY_BASE}/api/sales/extract`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text, url: src }),
+      });
+      out = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(out.error || `Máy chủ trả lỗi ${res.status}`);
+    } catch (e) {
+      agentStepReport(k2, false, `⚠️ Bóc tách lỗi: ${e.message}`, 20);
+      pipeLog("⛔", `Bóc tách lỗi: ${e.message}`);
+      ticket.status = "Tạm dừng";
+      save(); render();
+      return ticket;
+    }
+
+    const { added, dup } = mergeLeads(out.leads || [], { nguon: src || "Dán tay", nguon_loai: src ? (/facebook\.com/i.test(src) ? "facebook" : "khac") : "thu-cong", phu_trach: owner, ticket: ticket.id });
+    const canRa = (out.leads || []).filter((l) => l.can_nguoi_xac_nhan !== false).length;
+    const note = [
+      `Bóc tách bằng: ${out.method === "llm+regex" ? "mô hình ngôn ngữ + đối chiếu regex" : "regex tất định (chưa nối mô hình)"}.`,
+      `Quét ${out.stats ? out.stats.blocks : "?"} khối bình luận, thấy ${out.stats ? out.stats.phones : "?"} số điện thoại và ${out.stats ? out.stats.emails : "?"} email hợp lệ.`,
+      `Ghi vào kho Lead: ${added} bản mới, bỏ qua ${dup} bản trùng. ${canRa} bản cần người rà lại trước khi đem đi mời.`,
+      ...(out.warnings || []).map((w) => `⚠️ ${w}`),
+    ].join("\n");
+    agentStepReport(k2, true, note, 100, 2);
+    pipeLog(added || dup ? "✅" : "⚠️", added
+      ? `Ghi ${added} Lead mới (bỏ ${dup} trùng)`
+      : dup ? `Không có Lead mới — cả ${dup} liên hệ trong nguồn đều đã có trong kho`
+      : "Nguồn không chứa số điện thoại hay email nào");
+    (out.warnings || []).forEach((w) => pipeLog("⚠️", w));
+
+    // Trùng hết cũng là một lượt chạy thành công — nguồn này đã khai thác xong.
+    // Chỉ khi nguồn không có nổi một cách liên hệ nào mới cần người xem lại.
+    ticket.status = (added || dup) ? "Hoàn tất" : "Tạm dừng";
+    ticket.desc += `\n\n— Kết thúc ${fmtD(today())}: ${added} Lead mới, ${dup} trùng, ${canRa} cần rà lại.`
+      + (added ? " Kết quả chờ người chịu trách nhiệm duyệt."
+        : dup ? " Không có Lead mới — mọi liên hệ trong nguồn đều đã có sẵn trong kho."
+        : " Nguồn không chứa số điện thoại hay email nào — để Tạm dừng để người kiểm tra lại nguồn.");
+    save(); render();
+    if (typeof addFeed === "function") addFeed(`Phiếu <b>#${ticket.code}</b> thu thập Lead kết thúc — <b>${added}</b> Lead mới vào kho.`, added ? "f-done" : "f-rule");
+    say(added ? `Đã ghi ${added} Lead vào kho ✓` : dup ? `${dup} liên hệ trong nguồn đều đã có sẵn trong kho` : "Nguồn không có liên hệ nào để ghi");
+    return ticket;
+  }
+
+  /* Việc S1/S2 của pipeline Lead không chạy được bằng khung chat Agent: nó là chuỗi
+     tải nguồn → bóc tách → đối chiếu số, không phải một lượt hỏi đáp. Nút "▶ Chạy Agent"
+     trên những việc này mở đúng cửa này thay vì gửi prompt sang Hermes. */
+  function mRunLeadTask(k) {
+    const src = k.leadSrc || {};
+    const t = ticketById(k.ticket);
+    const nguon = src.url
+      ? `<code>${esc(src.url)}</code>`
+      : src.pasted ? `nội dung dán tay (${src.pasted.length} ký tự)` : "<i>không còn lưu nguồn gốc</i>";
+    openModal(modalHead("🧲", "Việc này chạy bằng pipeline thu thập Lead", esc(k.title)) + `
+      <div class="hr-intake-form">
+        <div class="wk-note"><b>Không chạy qua khung chat Agent.</b> Hai bước của pipeline là tất định:
+          <code>/api/sales/fetch</code> tải nguồn, rồi <code>/api/sales/extract</code> bóc tách và
+          <b>đối chiếu từng số điện thoại với văn bản nguồn</b>. Gửi việc này sang khung chat chỉ nhận lại
+          một đoạn văn — không Lead nào được ghi vào kho.</div>
+        <div class="wk-info">
+          <div class="cell"><div class="lbl">Nguồn của lần chạy này</div><div class="val normal">${nguon}</div></div>
+          <div class="cell"><div class="lbl">Phiếu</div><div class="val">${t ? `#${t.code}` : "—"} · ${esc(staffName(k.owner))} chịu trách nhiệm</div></div>
+        </div>
+        <p class="bf-hint" style="margin:.8rem 0 0">Chạy lại sẽ tạo <b>một phiếu mới</b> và chỉ ghi thêm Lead chưa có trong kho — bản trùng số điện thoại bị bỏ qua, không đè lên dữ liệu bạn đã sửa tay.</p>
+        <div class="bf-actions" style="margin-top:1.2rem">
+          <button class="btn btn-ghost btn-sm" type="button" data-act="modal-close">Đóng</button>
+          <button class="btn btn-ghost btn-sm" type="button" data-act="go" data-view="leads">Xem kho Lead</button>
+          <button class="btn btn-primary btn-sm" type="button" data-act="lead-harvest" data-id="${k.id}">▶ Chạy lại thu thập</button>
+        </div>
+      </div>`);
+  }
+
+  function mLeadHarvest(prefill) {
+    const a = agentById(LEAD_AGENT);
+    const pre = prefill || {};
+    openModal(modalHead("🧲", "Thu thập Lead từ link", "Agent tải nội dung nguồn, bóc tách tên · số điện thoại · email · bình luận, phân loại rồi ghi vào kho Lead.") + `
+      <div class="hr-intake-form">
+        <div class="hr-grid">
+          <label class="span2">Link bài viết / bình luận <input type="text" id="wk_lh_url" value="${esc(pre.url || "")}" placeholder="https://www.facebook.com/groups/.../posts/..."></label>
+          <label class="span2">Hoặc dán trực tiếp nội dung bình luận
+            <textarea id="wk_lh_text" rows="6" placeholder="Bôi đen phần bình luận trên Facebook rồi dán vào đây — cách chắc ăn nhất, không phụ thuộc việc Facebook có cho tải hay không.">${esc(pre.pasted || "")}</textarea></label>
+        </div>
+        <div class="wk-note warn"><b>Về Facebook:</b> bài viết công khai vẫn thường bị chặn với máy chủ chưa đăng nhập.
+          Nếu link không tải được, Agent sẽ dừng và báo rõ — lúc đó dùng ô dán tay. Xem <b>sales/README.md</b> mục Giới hạn công cụ.</div>
+        <div>${a ? `<span class="wk-chip">${esc(a.icon || "🤖")} ${esc(a.name)} <span class="wk-owner">· ${esc(staffName(S.agentOwners[LEAD_AGENT]))}</span></span>` : ""}</div>
+        <p class="bf-hint" style="margin:.7rem 0 0">Thu thập xong sẽ có một phiếu yêu cầu kèm hai công việc có báo cáo. Lead vào kho ở trạng thái <b>Mới</b> — chưa mời ai cả.</p>
+        <div class="bf-actions" style="margin-top:1.2rem">
+          <button class="btn btn-ghost btn-sm" type="button" data-act="modal-close">Hủy</button>
+          <button class="btn btn-primary btn-sm" type="button" data-act="lead-harvest-run">▶ Tạo phiếu &amp; chạy</button>
+        </div>
+      </div>`);
+  }
+
   /* ================= RENDER ================= */
   const VIEW_RENDER = {
     control: vControl,
@@ -994,6 +1525,7 @@
     tasks: vTasks,
     staff: vStaff,
     reports: vReports,
+    leads: vLeads,
     portal: vPortal,
     flow: vFlow,
   };
@@ -1013,6 +1545,7 @@
         </div>
         <div class="wk-head-actions">
           <button class="btn btn-primary btn-sm" data-act="new-cluster" title="Tạo phiếu và chạy vòng lặp 4 Agent sản xuất Topic Cluster">🔁 Chạy Content Cluster</button>
+          <button class="btn btn-primary btn-sm" data-act="lead-harvest" title="Giao Lead Hunter Agent quét bình luận từ một link và ghi vào kho Lead">🧲 Thu thập Lead</button>
           <button class="btn btn-ghost btn-sm" data-act="reset" title="Xóa dữ liệu đã lưu trên trình duyệt và nạp lại dữ liệu mẫu">↺ Nạp lại dữ liệu mẫu</button>
         </div>
       </div>`;
@@ -1034,6 +1567,7 @@
     set("tickets", m.ticketsOpen);
     set("tasks", m.tasksOpen);
     set("reports", m.silent);
+    set("leads", (S.leads || []).filter((l) => l.trang_thai === "moi").length);
   }
 
   /* ================= MODAL ================= */
@@ -1533,6 +2067,9 @@
   function mRunAgent(taskId) {
     const k = taskById(taskId);
     if (!k || !isAgentTask(k)) return;
+    // Việc do pipeline tất định sinh ra thì phải chạy lại bằng chính pipeline đó —
+    // đẩy qua khung chat Agent chỉ ra một đoạn văn, không ghi được Lead nào.
+    if (k.engine === "lead-harvest") return mRunLeadTask(k);
     const a = agentById(k.executor.id);
     RUN_STATE = {};
     openModal(modalHead("▶", `Chạy ${a ? a.name : k.executor.id}`, `${esc(k.title)}`) + `
@@ -1583,6 +2120,13 @@
     } catch (e) {
       return fail("health", e.message,
         `Backend Proxy chưa chạy hoặc origin bị chặn CORS. Chạy <code>node server/server.js</code> trong thư mục <code>project/aios/server</code>, và thêm <code>${location.origin}</code> vào <code>ALLOWED_ORIGIN</code> trong <code>server/.env</code>.`);
+    }
+
+    // Proxy sống nhưng là tiến trình cũ: agents.config.json đã thêm Agent mới mà proxy
+    // chưa nạp lại. Bắt ở đây thay vì để bước gọi trả 404 khó hiểu.
+    if (Array.isArray(health.agents) && !health.agents.includes(k.executor.id)) {
+      return fail("health", `Proxy đang chạy không biết agent "${k.executor.id}"`,
+        `Proxy sống nhưng là <b>tiến trình cũ</b> — nó nạp <code>agents.config.json</code> một lần lúc khởi động, mà <code>${esc(k.executor.id)}</code> được thêm sau đó. Hãy <b>tắt và chạy lại</b> <code>node server/server.js</code>. Agent proxy đang biết: <code>${esc((health.agents || []).join(", "))}</code>.`);
     }
 
     // 2. Ngữ cảnh
@@ -1895,7 +2439,9 @@
     if (!el) return;
     const d = el.dataset;
     switch (d.act) {
-      case "go": show(d.view, d.id); break;
+      // Điều hướng luôn thay màn hình chính, nên modal đang che phải đóng theo —
+      // không thì bấm "Mở phiếu" xong vẫn thấy y nguyên cửa sổ cũ.
+      case "go": closeModal(); show(d.view, d.id); break;
       case "sort":
         if (KF.sortKey === d.key) KF.sortDir *= -1; else { KF.sortKey = d.key; KF.sortDir = 1; }
         render(); break;
@@ -1944,6 +2490,29 @@
         startContentCluster(topic, val("wk_cl_url") || topic);
         break;
       }
+      // ---- Kho Lead ----
+      case "lead-harvest": {
+        // Bấm từ cửa "chạy lại" của một việc trong pipeline → điền sẵn đúng nguồn cũ
+        const k = d.id ? taskById(d.id) : null;
+        mLeadHarvest(k && k.leadSrc ? k.leadSrc : null);
+        break;
+      }
+      case "lead-harvest-run": {
+        const u = val("wk_lh_url");
+        const txt = fld("wk_lh_text") ? fld("wk_lh_text").value.trim() : "";
+        if (!u && !txt) return say("Dán link nguồn hoặc nội dung bình luận");
+        startLeadHarvest(u, txt);
+        break;
+      }
+      case "lead-new": mNewLead(); break;
+      case "lead-detail": mLeadDetail(d.id); break;
+      case "lead-save": saveLead(d.id || ""); break;
+      case "lead-delete": deleteLead(d.id); break;
+      case "lead-invite": mLeadInvite(d.id); break;
+      case "lead-invite-save": saveLeadInvite(); break;
+      case "lead-csv": exportLeadsCsv(); break;
+      case "lead-backup": backupLeads(); break;
+      case "lead-restore": restoreLeads(); break;
       case "reset": reset(); say("Đã nạp lại dữ liệu mẫu điều hành công việc"); break;
     }
   }
@@ -1955,7 +2524,7 @@
     if (e.type === "input" && !(el.tagName === "INPUT" && el.type !== "checkbox")) return;
     const [group, key] = el.dataset.filter.split(".");
     if (group === "c") { PC = el.value; render(); return; } // chọn khách hàng ở Portal
-    const store = group === "t" ? TF : group === "r" ? RF : KF;
+    const store = group === "t" ? TF : group === "r" ? RF : group === "l" ? LF : KF;
     store[key] = el.type === "checkbox" ? el.checked : el.value;
     if (key === "kw") renderKeepFocus(el.dataset.filter); else render();
   }
@@ -2032,9 +2601,30 @@
     return added;
   }
 
+  /* Kho Lead được thêm sau P4 — dữ liệu đã lưu trước đó không có mảng này.
+     Vá lúc nạp thay vì đổi SCHEMA_VERSION, để người dùng không mất dự án/phiếu đang chạy. */
+  function ensureLeads() {
+    if (!Array.isArray(S.leads)) { S.leads = seedLeads(); save(); return true; }
+    return false;
+  }
+
+  /* Công việc thu thập Lead tạo trước khi có cờ "engine" sẽ bị nút ▶ Chạy Agent đẩy
+     nhầm sang khung chat Hermes. Gắn cờ lại theo dự án chứa chúng. */
+  function ensureLeadTaskTags() {
+    const p = S.projects.find((x) => x.name === LEAD_PROJECT_NAME);
+    if (!p) return 0;
+    const tids = new Set(S.tickets.filter((t) => t.project === p.id).map((t) => t.id));
+    let n = 0;
+    S.tasks.forEach((k) => { if (!k.engine && tids.has(k.ticket)) { k.engine = "lead-harvest"; n++; } });
+    if (n) save();
+    return n;
+  }
+
   // ---------- Khởi động ----------
   S = load();
   ensureAgentOwners();
+  ensureLeads();
+  ensureLeadTaskTags();
   save();
   refreshCounters();
   bindHost();
@@ -2054,5 +2644,9 @@
     // Orches gọi vào đây khi nhận lệnh sản xuất content cluster
     startContentCluster,
     CLUSTER_AGENTS,
+    // Orches gọi vào đây khi nhận lệnh thu thập Lead từ mạng xã hội
+    startLeadHarvest,
+    LEAD_AGENT,
+    leads: { types: LEAD_TYPES, services: LEAD_SERVICES, status: LEAD_STATUS, merge: mergeLeads },
   };
 })();

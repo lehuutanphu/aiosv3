@@ -38,6 +38,33 @@ const AGENTS = [
     rules: ["Cấm gửi bảng giá gốc ra ngoài domain công ty", "Mọi email gửi khách phải qua bước duyệt của trưởng phòng"],
   },
   {
+    id: "sales-2", dept: "sales", icon: "🧲", name: "Lead Hunter Agent",
+    role: "Chuyên viên thu thập & phân loại Lead từ mạng xã hội",
+    leadIntake: true, // có pipeline thu thập Lead THẬT (project/aios/sales) — xem sales/README.md
+    model: "DeepSeek V4 Flash", mode: "Fast",
+    modelWhy: "Việc bóc tách văn bản lặp đi lặp lại, cần rẻ và nhanh trên khối bình luận dài. Số điện thoại/email do lượt regex tất định chốt, mô hình chỉ lo đặt tên và phân loại nên không cần model đắt.",
+    maturity: 55, stage: "Học việc",
+    status: "idle",
+    task: "Chờ lệnh — sẵn sàng nhận link bài viết để quét bình luận",
+    keywords: ["lead", "thu thập", "crawl", "quét", "bình luận", "comment", "facebook", "số điện thoại", "sđt", "khách tiềm năng", "partner", "đối tác tiềm năng", "danh sách khách", "gom data", "quét fanpage"],
+    knowledge: ["Bảng phân loại dịch vụ: xe · homestay · quán ăn · tour · spa – làm đẹp · khác", "Dấu hiệu phân biệt khách tiềm năng và partner tiềm năng trong bình luận", "Định dạng số điện thoại Việt Nam (di động 10 số, cố định 10–11 số)"],
+    workflows: [
+      "/thu-thap-lead — nhận link/nội dung → bóc tách → ghi vào màn hình Lead",
+      "/boc-tach-lead — chuẩn JSON của một Lead và luật chống bịa số",
+      "/phan-loai-lead — gán loại (khách/partner) và nhóm dịch vụ",
+      "/moi-lead-da-kenh — soạn lời mời theo từng kênh cho lead đã chốt",
+    ],
+    skills: ["thu-thap-lead", "boc-tach-lead", "phan-loai-lead", "moi-lead-da-kenh"],
+    rules: [
+      "🔴 Chỉ ghi số điện thoại/email xuất hiện NGUYÊN VĂN trong nguồn — số do mô hình sinh ra mà nguồn không có sẽ bị loại bỏ tự động",
+      "Không có cách liên hệ (sđt hoặc email) thì không tạo Lead — không tạo bản ghi rỗng để lấy số lượng",
+      "Nguồn bị chặn (Facebook yêu cầu đăng nhập) phải báo rõ là chặn, cấm suy đoán nội dung bình luận",
+      "Giữ nguyên văn nội dung bình luận, không viết lại theo ý mình",
+      "Không tự nhắn tin/gọi cho Lead — chỉ soạn nội dung mời, người bấm gửi",
+      "Dữ liệu cá nhân thu thập được chỉ dùng cho mục đích liên hệ kinh doanh đã khai báo, xóa khi người ta yêu cầu (Nghị định 13/2023/NĐ-CP)",
+    ],
+  },
+  {
     id: "mkt-1", dept: "mkt", icon: "✍️", name: "Content Agent",
     role: "Chuyên viên nội dung dài (blog, email campaign, landing page)",
     model: "Claude Sonnet 4.5", mode: "Planning",
@@ -445,6 +472,7 @@ const SECTION_META = {
 // ---------- HELPERS ----------
 const $ = (s) => document.querySelector(s);
 const el = (html) => { const t = document.createElement("template"); t.innerHTML = html.trim(); return t.content.firstElementChild; };
+const escHtml = (s) => (s == null ? "" : String(s)).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 const timeNow = () => new Date().toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" });
 const stageClass = (s) => s === "Chuyên gia" ? "stage-chuyengia" : s === "Thạo việc" ? "stage-thaoviec" : "stage-hocviec";
 const statusLabel = { working: "Đang thực thi", idle: "Sẵn sàng", review: "Chờ duyệt" };
@@ -1685,6 +1713,45 @@ function renderChat(a, key = a.id) {
 // không có tool/state của riêng requisition nào (xem hr.chatGeneral ở backend).
 const HR_GENERAL_VALUE = "__general__";
 const HR_GENERAL_LABEL = "💬 Hỏi chung — không gắn REQ nào";
+const HR_INTAKE_VALUE = "__intake__";
+
+/* ---------- Định tuyến giữa các khung chat của hr-1 ----------
+   Backend (hr.js) trả kèm { routing: { to, label } } khi câu hỏi thuộc về một khu vực chat khác:
+   một requisition khác, khung Hỏi chung, hay form mở đợt tuyển mới. Ở đây nó thành nút bấm gắn
+   dưới câu trả lời. Bấm nút = chuyển đúng khu vực RỒI hỏi lại chính câu đó, để câu trả lời và mọi
+   thay đổi được ghi vào đúng hồ sơ — chứ không phải để user tự chuyển rồi gõ lại từ đầu. */
+function hrRouteBlock(routing, originalMessage) {
+  if (!routing || !routing.to) return "";
+  const msg = encodeURIComponent(originalMessage || "");
+  const btn = (to, cls, label) =>
+    `<button class="btn ${cls} btn-sm" data-hr-route="${to}" data-hr-msg="${msg}" style="margin:.15rem .3rem 0 0">${label}</button>`;
+  const buttons = routing.to === HR_INTAKE_VALUE
+    ? btn(HR_INTAKE_VALUE, "btn-primary", "📋 Mở form đợt tuyển mới") + btn(HR_GENERAL_VALUE, "btn-ghost", "💬 Sang Hỏi chung")
+    : routing.to === HR_GENERAL_VALUE
+      ? btn(HR_GENERAL_VALUE, "btn-primary", "💬 Chuyển sang Hỏi chung &amp; hỏi lại")
+      : btn(routing.to, "btn-primary", `➡️ Hỏi lại trong ${escHtml(routing.label || routing.to)}`);
+  return `<div class="hr-route"><span class="hr-route-note">↪ Việc này thuộc khu vực chat khác — <b>${escHtml(routing.label || routing.to)}</b>. `
+    + `Hỏi ở đúng chỗ thì câu trả lời và dữ liệu mới được ghi vào đúng hồ sơ.</span><div>${buttons}</div></div>`;
+}
+
+// Chuyển khung chat rồi gửi lại đúng câu hỏi cũ ở khu vực mới.
+async function hrRouteTo(target, message) {
+  const a = AGENTS.find((x) => x.id === "hr-1");
+  if (!a) return;
+  if (target === HR_INTAKE_VALUE) return openHrIntake(a);
+
+  const sel = $("#hrChatReqSelect");
+  if (!sel) return;
+  if (![...sel.options].some((o) => o.value === target)) await populateHrChatReqSelect();
+  if (![...sel.options].some((o) => o.value === target)) return toast(`⚠️ Không còn thấy "${target}" trong danh sách requisition`);
+  sel.value = target;
+  // Phải CHỜ khôi phục xong lịch sử của khung chat đích rồi mới gửi lại câu hỏi: hàm khôi phục
+  // gán đè chatHistory[key] bằng log tải từ server, chạy song song sẽ nuốt mất tin nhắn vừa gửi.
+  if (target === HR_GENERAL_VALUE) await hydrateGeneralChat(a);
+  else await kickoffHrChat(a, target, selectedHrBuoc());
+  if (message) sendHrMessage(a, target, message);
+  else toast(`Đã chuyển sang ${target === HR_GENERAL_VALUE ? "khung Hỏi chung" : target}`);
+}
 
 async function populateHrChatReqSelect() {
   const sel = $("#hrChatReqSelect");
@@ -1804,7 +1871,7 @@ async function fetchHrGeneralReply(a, text, opts = {}) {
       method: "POST",
       body: JSON.stringify({ message: text, silent: !!opts.silent, rules: a.rules || [], globalRules: GLOBAL_RULES || [] }),
     });
-    return data.reply;
+    return data.reply + (opts.silent ? "" : hrRouteBlock(data.routing, text));
   } catch (e) {
     return `⚠️ Không gọi được mô hình (DeepSeek V4 Flash): ${e.message}\n\nKiểm tra OPENROUTER_API_KEY trong server/.env và Backend Proxy (project/aios/server) có đang chạy trên ${HERMES_PROXY_BASE} không.`;
   }
@@ -1847,7 +1914,7 @@ async function fetchHrSonnetReply(a, reqId, text, opts = {}) {
       refreshOrgChart();
       populateHrChatReqSelect();
     }
-    return data.reply;
+    return data.reply + (opts.silent ? "" : hrRouteBlock(data.routing, text));
   } catch (e) {
     return `⚠️ Không gọi được mô hình (DeepSeek V4 Flash): ${e.message}\n\nKiểm tra OPENROUTER_API_KEY trong server/.env và Backend Proxy (project/aios/server) có đang chạy trên ${HERMES_PROXY_BASE} không.`;
   }
@@ -1913,16 +1980,20 @@ $("#chatForm").addEventListener("submit", (e) => {
   const input = $("#chatInput");
   const text = input.value.trim();
   if (!text || !currentAgent) return;
-  const a = currentAgent;
-
   const hrReqSelect = $("#hrChatReqSelect");
-  const hrReqId = a.id === "hr-1" && hrReqSelect ? hrReqSelect.value : "";
+  const hrReqId = currentAgent.id === "hr-1" && hrReqSelect ? hrReqSelect.value : "";
+  input.value = "";
+  input.style.height = "auto";
+  sendHrMessage(currentAgent, hrReqId, text);
+});
+
+// Gửi một tin nhắn vào đúng luồng của Agent. Tách riêng khỏi handler submit để nút "chuyển
+// khu vực chat" (hrRouteTo) dùng lại được nguyên logic, thay vì bắt user gõ lại câu hỏi.
+function sendHrMessage(a, hrReqId, text) {
   const key = hrKey(a.id, hrReqId);
 
   if (!chatHistory[key]) renderChatSeed(a, key);
   chatHistory[key].push({ from: "user", text });
-  input.value = "";
-  input.style.height = "auto";
   renderChat(a, key);
 
   const box = $("#chatMessages");
@@ -1949,6 +2020,13 @@ $("#chatForm").addEventListener("submit", (e) => {
     renderChat(a, key);
     addFeed(`<b>${a.name}</b> phản hồi tin nhắn của bạn trong khung chat.`, "");
   });
+}
+
+// Nút "chuyển khu vực chat" do backend đề xuất (hr.js → routing)
+$("#chatMessages")?.addEventListener("click", (e) => {
+  const btn = e.target.closest("[data-hr-route]");
+  if (!btn) return;
+  hrRouteTo(btn.dataset.hrRoute, decodeURIComponent(btn.dataset.hrMsg || ""));
 });
 
 // Enter gửi tin nhắn, Shift+Enter xuống hàng (mặc định textarea) — và tự giãn chiều cao theo nội dung.
@@ -1998,6 +2076,21 @@ function isClusterCommand(cmd) {
   return CLUSTER_TRIGGERS.some(k => t.includes(k));
 }
 
+// Lệnh thu thập Lead từ một đường link → mở phiếu và chạy pipeline sales-2 trong
+// mặt phẳng điều hành công việc (js/work.js), kết quả đổ vào màn hình Lead.
+const LEAD_TRIGGERS = [
+  "thu thập lead", "thu thap lead", "lấy lead", "quét lead", "gom lead", "tìm lead",
+  "quét bình luận", "quét comment", "crawl comment", "crawl bình luận", "cào bình luận",
+  "lấy số điện thoại", "thu thập số điện thoại", "danh sách khách tiềm năng",
+  "partner tiềm năng", "đối tác tiềm năng",
+];
+function isLeadCommand(cmd) {
+  const t = cmd.toLowerCase();
+  if (LEAD_TRIGGERS.some(k => t.includes(k))) return true;
+  // Dán trơn một link Facebook kèm chữ "lead" hoặc "comment" cũng tính là lệnh thu thập
+  return /https?:\/\/\S*facebook\.com/i.test(t) && /(lead|comment|bình luận|sđt|số điện thoại|khách)/i.test(t);
+}
+
 function runOrches(cmd) {
   const flow = $("#routingFlow");
   const steps = ["rs1", "rs2", "rs3", "rs4"].map(id => $("#" + id));
@@ -2016,6 +2109,22 @@ function runOrches(cmd) {
     setTimeout(() => {
       showSection("work", "control");
       window.AIOS_WORK.startContentCluster(cmd, urlMatch ? urlMatch[0] : "");
+    }, 1200);
+    return;
+  }
+
+  // Nhánh riêng: thu thập Lead từ mạng xã hội
+  if (isLeadCommand(cmd) && window.AIOS_WORK && window.AIOS_WORK.startLeadHarvest) {
+    const urlMatch = cmd.match(/https?:\/\/\S+/);
+    $("#rs1txt").textContent = `"${cmd.length > 60 ? cmd.slice(0, 60) + "…" : cmd}"`;
+    $("#rs2txt").textContent = "Nghiệp vụ: thu thập Lead từ mạng xã hội";
+    $("#rs3txt").textContent = "→ Mở phiếu yêu cầu, giao Lead Hunter Agent (sales-2)";
+    $("#rs4txt").textContent = "Bóc tách xong ghi thẳng vào màn hình Lead";
+    steps.forEach((s, i) => setTimeout(() => s.classList.add("on"), 100 + i * 400));
+    addFeed(`<b>Orches Agent</b> nhận lệnh thu thập Lead: "${cmd}"`, "f-orches");
+    setTimeout(() => {
+      showSection("work", "leads");
+      window.AIOS_WORK.startLeadHarvest(urlMatch ? urlMatch[0] : "", "");
     }, 1200);
     return;
   }

@@ -17,3 +17,7 @@ node_modules/
 Thumbs.db
 ~$*.doc*
 ~$*.xls*
+
+# Kho Lead — chứa PII của người ngoài công ty (Nghị định 13/2023)
+sales/data/leads/*.json
+!sales/data/leads/.gitkeep

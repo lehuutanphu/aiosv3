@@ -768,6 +768,81 @@ function rulesBlock(opts) {
   );
 }
 
+/* ---------- ĐỊNH TUYẾN GIỮA CÁC KHUNG CHAT ----------
+   Mỗi requisition có một chat-log.json riêng và bộ tool riêng. Xử lý việc của đợt tuyển A
+   trong khung chat của đợt tuyển B sẽ ghi dữ liệu vào đúng hồ sơ sai — nên thay vì "cố trả lời
+   cho xong", Agent phát một marker ở cuối câu trả lời, server cắt marker ra và trả về một đích
+   chuyển; frontend dựng thành nút bấm. Người dùng bấm là sang đúng khung chat rồi hỏi lại ở đó,
+   nơi câu trả lời và mọi thay đổi được lưu vào đúng hồ sơ. */
+
+const ROUTE_MARK = /\[\[\s*CHUYEN\s*:\s*([A-Za-z0-9_\-]+)\s*\]\]/;
+const GENERAL_KEY = "__general__";
+const INTAKE_KEY = "__intake__";
+
+// Việc user đang muốn LÀM (không phải chỉ hỏi thông tin) — dùng cho lưới an toàn tất định
+// khi model quên phát marker.
+const ACTION_KW = /(viết|soạn|chấm|cập nhật|đổi bước|chuyển bước|mời|gửi|tạo|sửa|duyệt|chốt|lưu|shortlist|offer|đăng tin|phỏng vấn|sàng lọc)/i;
+const NEW_DRIVE_KW = /(mở đợt|đợt tuyển mới|tuyển mới|tuyển thêm|requisition mới|mở tuyển|tuyển vị trí|tuyển một|tuyển 1|cần tuyển|muốn tuyển|tuyển giúp|tuyển cho)/i;
+const THIS_DRIVE_KW = /(đợt này|req này|requisition này|vị trí này|đợt hiện tại)/i;
+
+function routeLabel(req) {
+  return `${req.requisition_id} — ${req.vi_tri?.ten || "?"} (B${req.buoc_hien_tai})`;
+}
+
+// Cắt marker khỏi câu trả lời và dịch thành đích chuyển. Mã REQ do model bịa ra (không có
+// trong danh sách thật) bị bỏ qua — thà không có nút còn hơn nút dẫn tới hồ sơ không tồn tại.
+function extractRouting(reply, fromKey) {
+  const m = String(reply).match(ROUTE_MARK);
+  if (!m) return { reply, routing: null };
+  const cleaned = String(reply).replace(ROUTE_MARK, "").trim();
+  const raw = m[1].toUpperCase();
+  if (raw === "HOI_CHUNG") {
+    return { reply: cleaned, routing: fromKey === GENERAL_KEY ? null : { to: GENERAL_KEY, label: "Hỏi chung" } };
+  }
+  if (raw === "MO_DOT_MOI") {
+    return { reply: cleaned, routing: { to: INTAKE_KEY, label: "form Nhu cầu tuyển dụng (B1)" } };
+  }
+  const req = listRequisitions().find((r) => String(r.requisition_id).toUpperCase() === raw);
+  if (!req || req.requisition_id === fromKey) return { reply: cleaned, routing: null };
+  return { reply: cleaned, routing: { to: req.requisition_id, label: routeLabel(req) } };
+}
+
+// Lưới an toàn: model quên marker thì suy ra từ chính câu của user.
+function fallbackRouting(message, fromKey) {
+  const text = String(message || "");
+  if (fromKey === GENERAL_KEY) {
+    if (!ACTION_KW.test(text)) return null;
+    const hit = listRequisitions().find((r) => text.toUpperCase().includes(String(r.requisition_id).toUpperCase()));
+    return hit ? { to: hit.requisition_id, label: routeLabel(hit) } : null;
+  }
+  // Đang trong một requisition mà user đòi mở đợt tuyển khác
+  if (NEW_DRIVE_KW.test(text) && !THIS_DRIVE_KW.test(text) && !text.toUpperCase().includes(String(fromKey).toUpperCase())) {
+    return { to: INTAKE_KEY, label: "form Nhu cầu tuyển dụng (B1)" };
+  }
+  return null;
+}
+
+const ROUTING_RULE_REQ = (reqId) =>
+  `ĐỊNH TUYẾN — bắt buộc: phiên chat này gắn cứng với ${reqId}, mọi thứ bạn làm ở đây được ghi vào hồ sơ ` +
+  `của ${reqId}. Vì vậy việc thuộc requisition KHÁC, hoặc yêu cầu MỞ ĐỢT TUYỂN MỚI, bạn KHÔNG được xử lý ` +
+  `ở đây: không hỏi thông tin đợt mới, không đề nghị tạm dừng ${reqId} để làm đợt khác, không tạo ` +
+  `requisition. Trả lời NGẮN (2–4 câu): nói rõ bạn đang gắn với ${reqId} ở bước nào, và việc kia phải làm ` +
+  `ở khu vực chat khác. Sau đó kết thúc câu trả lời bằng đúng MỘT dòng marker cuối cùng:\n` +
+  `  [[CHUYEN: MO_DOT_MOI]]      → user muốn tuyển vị trí mới / mở đợt tuyển mới\n` +
+  `  [[CHUYEN: REQ-YYYY-NNN]]    → việc thuộc một requisition KHÁC đang có trong danh sách dưới đây\n` +
+  `  [[CHUYEN: HOI_CHUNG]]       → câu hỏi chung về tuyển dụng, không gắn requisition nào\n` +
+  `Chỉ phát marker khi thật sự lệch phạm vi; việc của chính ${reqId} thì cứ làm bình thường, không marker. ` +
+  `Hệ thống cắt marker này ra và dựng thành nút chuyển khu vực chat cho user — đừng nhắc tới nó trong lời văn.\n\n`;
+
+const ROUTING_RULE_GENERAL =
+  `ĐỊNH TUYẾN — bắt buộc: ở đây bạn KHÔNG có tool, không sửa được hồ sơ nào. Nếu user muốn THAO TÁC THẬT ` +
+  `trên một requisition đang có (viết JD, đăng tin, chấm CV, đổi bước, cập nhật ứng viên, tạo offer...), ` +
+  `trả lời ngắn gọn rồi kết thúc bằng đúng một dòng marker cuối cùng:\n` +
+  `  [[CHUYEN: REQ-YYYY-NNN]]    → đúng mã requisition trong danh sách thật bên dưới\n` +
+  `  [[CHUYEN: MO_DOT_MOI]]      → user muốn mở đợt tuyển hoàn toàn mới (chưa có requisition)\n` +
+  `Lý do: câu trả lời và mọi thay đổi chỉ được lưu vào hồ sơ thật khi hỏi trong đúng khung chat của ` +
+  `requisition đó. Hệ thống cắt marker ra và dựng thành nút chuyển cho user — đừng nhắc tới nó trong lời văn.\n\n`;
+
 // opts.silent = true cho các lượt hệ thống tự kích hoạt (kickoff mở bước) — không lưu message
 // này như một câu hỏi thật của user vào chat-log.json, chỉ lưu câu trả lời của Sonnet.
 async function chatOnRequisition(reqId, message, opts = {}) {
@@ -786,6 +861,7 @@ async function chatOnRequisition(reqId, message, opts = {}) {
     `kỹ thuật, CSKH...), từ chối RÕ RÀNG và định hướng sang đúng Agent phụ trách — KHÔNG tự ý trả lời ` +
     `một phần hay "hỗ trợ thêm" ngoài phạm vi dù chỉ 1 câu, kể cả khi bạn biết câu trả lời. Ngoại lệ duy ` +
     `nhất: câu hỏi chung về cách dùng AI OS / cách chat với bạn.\n\n` +
+    ROUTING_RULE_REQ(reqId) +
     rulesBlock(opts) +
     `Tuân thủ NGUYÊN VĂN hai SKILL.md dưới đây, đặc biệt các CỔNG NGƯỜI (🔴): không tự điền số lương, ` +
     `không tự ý coi như đã gửi email (bạn không có Gmail/Calendar/Drive/Sheets thật — hãy soạn nội dung ` +
@@ -806,7 +882,16 @@ async function chatOnRequisition(reqId, message, opts = {}) {
     `ghi chú cảnh báo trong diem_can_hoi nếu điểm chưa chắc chắn do thiếu tiêu chí.\n\n` +
     `=== hr/skills/tuyen-dung/SKILL.md (điều phối) ===\n${dispatcherMd}\n\n` +
     `=== hr/skills/${buoc.skill}/SKILL.md (bước hiện tại B${initial.buoc_hien_tai}) ===\n${stepMd}\n\n` +
-    `=== Trạng thái requisition hiện tại (JSON thật) ===\n${JSON.stringify(initial, null, 2)}` +
+    `=== Trạng thái requisition hiện tại (JSON thật) ===\n${JSON.stringify(initial, null, 2)}\n\n` +
+    // Cần danh sách các đợt khác để phát đúng mã REQ trong marker định tuyến — nhưng chỉ tóm tắt,
+    // không đưa JSON đầy đủ, tránh Agent lấy nhầm dữ liệu đợt khác vào việc của đợt này.
+    `=== Các requisition KHÁC đang có (chỉ để định tuyến — KHÔNG thao tác lên chúng ở đây) ===\n` +
+    JSON.stringify(
+      listRequisitions()
+        .filter((r) => r.requisition_id !== reqId)
+        .map((r) => ({ requisition_id: r.requisition_id, vi_tri: r.vi_tri?.ten, buoc_hien_tai: r.buoc_hien_tai })),
+      null, 2
+    ) +
     jdCuDinhKemBlock(initial) +
     cvFolderBlock(reqId, initial);
 
@@ -826,6 +911,8 @@ async function chatOnRequisition(reqId, message, opts = {}) {
   // đọc PDF gốc). Không có CV đính kèm → giữ nguyên DEFAULT_MODEL (DeepSeek V4 Flash) cho mọi bước khác.
   const model = attachments.length ? CV_READ_MODEL : undefined;
 
+  // Marker định tuyến bị cắt TRƯỚC khi lưu — chat-log là thứ người đọc lại sau này,
+  // không nên dính ký hiệu nội bộ.
   const persist = (reply) => {
     const entries = [];
     if (!opts.silent) {
@@ -836,16 +923,25 @@ async function chatOnRequisition(reqId, message, opts = {}) {
     saveChatLog(reqId, [...persistedLog, ...entries]);
   };
 
+  const finish = (rawReply, toolLog) => {
+    const { reply, routing } = extractRouting(rawReply, reqId);
+    persist(reply);
+    return {
+      reply,
+      requisition: getRequisition(reqId),
+      toolLog,
+      // Lượt silent là hệ thống tự hỏi (kickoff mở bước), không có câu hỏi nào của user để
+      // đem sang khung chat khác — gắn nút chuyển ở đây chỉ gây rối.
+      routing: opts.silent ? null : routing || fallbackRouting(message, reqId),
+    };
+  };
+
   const toolLog = [];
   for (let turn = 0; turn < 5; turn++) {
     const msg = await callChatModel({ system, messages, tools: TOOLS, model });
     const toolCalls = msg.tool_calls || [];
 
-    if (!toolCalls.length) {
-      const reply = msg.content || "(Sonnet không trả lời gì)";
-      persist(reply);
-      return { reply, requisition: getRequisition(reqId), toolLog };
-    }
+    if (!toolCalls.length) return finish(msg.content || "(Sonnet không trả lời gì)", toolLog);
 
     messages.push({ role: "assistant", content: msg.content || null, tool_calls: toolCalls });
     for (const tc of toolCalls) {
@@ -858,9 +954,7 @@ async function chatOnRequisition(reqId, message, opts = {}) {
       });
     }
   }
-  const reply = "⚠️ Đã đạt giới hạn 5 lượt tool-call trong 1 tin nhắn — dừng lại để tránh vòng lặp. Hãy nhắn cụ thể hơn.";
-  persist(reply);
-  return { reply, requisition: getRequisition(reqId), toolLog };
+  return finish("⚠️ Đã đạt giới hạn 5 lượt tool-call trong 1 tin nhắn — dừng lại để tránh vòng lặp. Hãy nhắn cụ thể hơn.", toolLog);
 }
 
 // ---------- Chat CHUNG — không gắn với 1 requisition cụ thể ----------
@@ -903,6 +997,7 @@ async function chatGeneral(message, opts = {}) {
     `PHẠM VI — bắt buộc tuân thủ: bạn CHỈ trả lời trong phạm vi tuyển dụng & hồ sơ nhân sự. Nếu user ` +
     `hỏi việc thuộc phòng ban khác (marketing, kế toán, pháp lý, kỹ thuật, CSKH...), từ chối RÕ RÀNG và ` +
     `định hướng sang đúng Agent phụ trách — KHÔNG tự ý trả lời một phần hay "hỗ trợ thêm" ngoài phạm vi.\n\n` +
+    ROUTING_RULE_GENERAL +
     rulesBlock(opts) +
     `=== hr/skills/tuyen-dung/SKILL.md (điều phối, tham khảo) ===\n${dispatcherMd}\n\n` +
     `=== Danh sách requisition hiện có (thật) ===\n${JSON.stringify(listRequisitions(), null, 2)}`;
@@ -913,14 +1008,14 @@ async function chatGeneral(message, opts = {}) {
   ];
 
   const msg = await callChatModel({ system, messages });
-  const reply = msg.content || "(không trả lời gì)";
+  const { reply, routing } = extractRouting(msg.content || "(không trả lời gì)", GENERAL_KEY);
 
   const entries = [];
   if (!opts.silent) entries.push({ role: "user", text: message, at: nowISO() });
   entries.push({ role: "agent", text: reply, at: nowISO() });
   saveGeneralChatLog([...persistedLog, ...entries]);
 
-  return { reply };
+  return { reply, routing: opts.silent ? null : routing || fallbackRouting(message, GENERAL_KEY) };
 }
 
 // HTTP-facing: ghi form đánh giá phỏng vấn (deterministic) rồi đồng bộ Excel luôn, trả về đủ để
@@ -955,4 +1050,8 @@ module.exports = {
   getGeneralChatLog,
   submitInterviewEvaluation,
   resolveDownloadFile,
+  // Hai hàm thuần của lớp định tuyến — export để kiểm thử được mà không phải gọi mô hình thật
+  // (gọi thật sẽ ghi vào chat-log.json của requisition đang có).
+  extractRouting,
+  fallbackRouting,
 };

@@ -3,6 +3,7 @@
   "mem0UserId": "aios-company",
   "agents": {
     "sales-1": { "name": "Sales Agent", "port": 8643 },
+    "sales-2": { "name": "Lead Hunter Agent", "port": 8655 },
     "mkt-1": { "name": "Content Agent", "port": 8644 },
     "mkt-2": { "name": "Social Agent", "port": 8645 },
     "mkt-3": { "name": "Research Agent", "port": 8652 },

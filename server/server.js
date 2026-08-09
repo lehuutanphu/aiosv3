@@ -6,6 +6,7 @@ const http = require("http");
 const fs = require("fs");
 const path = require("path");
 const hr = require("./hr");
+const sales = require("./sales");
 
 const ROOT = __dirname;
 
@@ -286,6 +287,25 @@ const server = http.createServer(async (req, res) => {
     if (parts[0] === "api" && parts[1] === "hr" && parts[2] === "skills" && parts[3] && req.method === "GET") {
       const result = hr.getSkillMarkdown(decodeURIComponent(parts[3]));
       return sendJson(res, 200, result);
+    }
+
+    // ---------- Sales: thu thập Lead thật (tải nguồn + bóc tách + sao lưu) ----------
+    if (parts[0] === "api" && parts[1] === "sales") {
+      if (parts[2] === "fetch" && req.method === "POST") {
+        const payload = await readJsonBody(req);
+        return sendJson(res, 200, await sales.fetchSource(payload));
+      }
+      if (parts[2] === "extract" && req.method === "POST") {
+        const payload = await readJsonBody(req);
+        return sendJson(res, 200, await sales.extractLeads(payload));
+      }
+      if (parts[2] === "leads" && req.method === "POST") {
+        const payload = await readJsonBody(req);
+        return sendJson(res, 200, sales.saveLeads(payload));
+      }
+      if (parts[2] === "leads" && req.method === "GET") {
+        return sendJson(res, 200, sales.loadLeads());
+      }
     }
 
     if (parts[0] === "api" && parts[1] === "agents" && parts[3] && req.method === "POST") {

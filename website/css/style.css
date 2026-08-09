@@ -714,6 +714,14 @@ section.block { padding: 4.5rem 0; }
   padding: .5rem .8rem; white-space: pre-line;
 }
 
+/* Gợi ý chuyển khu vực chat (hr-1) — việc thuộc requisition khác / đợt tuyển mới */
+.hr-route {
+  margin-top: .7rem; padding: .6rem .7rem; border-radius: 10px;
+  background: rgba(34,211,238,.06); border: 1px dashed rgba(34,211,238,.4);
+}
+.hr-route .hr-route-note { display: block; font-size: .75rem; color: var(--muted); line-height: 1.55; margin-bottom: .45rem; }
+.hr-route .hr-route-note b { color: var(--brand-2); }
+
 /* HR intake form (B1 — Xác định nhu cầu tuyển dụng, thật) */
 .hr-intake-form h4 { font-size: .78rem; text-transform: uppercase; letter-spacing: .1em; color: var(--brand-2); margin: 1.1rem 0 .6rem; }
 .hr-intake-form h4:first-child { margin-top: 0; }

@@ -60,6 +60,27 @@ Agent **dừng lại và chờ xác nhận rõ ràng bằng chữ**, không suy 
 
 Ngoài ra: **email từ chối ứng viên** cũng chỉ tạo draft (kế thừa rule sẵn có của `hr-1`).
 
+## 4b. Định tuyến giữa các khung chat
+
+Mỗi requisition có **chat-log riêng và bộ tool riêng**. Hỏi việc của đợt tuyển này trong khung chat
+của đợt tuyển kia sẽ ghi dữ liệu vào đúng hồ sơ sai — nên Agent **không được "cố trả lời cho xong"**:
+
+| Đang ở | User hỏi | Agent làm |
+|---|---|---|
+| Khung chat `REQ-A` | Mở đợt tuyển vị trí mới | Trả lời ngắn là ngoài phạm vi `REQ-A`, **không** hỏi thông tin đợt mới, **không** đề nghị tạm dừng `REQ-A` → hiện nút **📋 Mở form đợt tuyển mới** |
+| Khung chat `REQ-A` | Việc của `REQ-B` đang có | → hiện nút **➡️ Hỏi lại trong REQ-B** |
+| Khung chat `REQ-A` | Câu hỏi chung, không gắn đợt nào | → hiện nút **💬 Chuyển sang Hỏi chung** |
+| **Hỏi chung** | Thao tác thật lên `REQ-B` (viết JD, chấm CV, đổi bước…) | Nói rõ ở đây không có tool → hiện nút **➡️ Hỏi lại trong REQ-B** |
+
+Bấm nút = chuyển đúng khung chat **rồi tự hỏi lại chính câu đó**, để câu trả lời và mọi thay đổi
+được ghi vào đúng `chat-log.json` / hồ sơ. Người dùng không phải gõ lại.
+
+Cơ chế: Agent phát một marker `[[CHUYEN: <đích>]]` ở cuối câu trả lời; `server/hr.js` cắt marker ra
+(chat-log không dính ký hiệu nội bộ) và trả `routing` cho frontend dựng nút. Hai lưới an toàn:
+mã REQ do model bịa (không có trong danh sách thật) bị bỏ qua, và khi model quên phát marker thì
+`fallbackRouting()` suy ra từ chính câu của user. Lượt kickoff (hệ thống tự mở bước) không bao giờ
+sinh nút chuyển.
+
 ## 5. Bảo mật hồ sơ ứng viên
 
 - `data/ho-so/` và `data/requisitions/` chứa PII → đã đưa vào `.gitignore`, **không commit**.
