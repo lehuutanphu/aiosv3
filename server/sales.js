@@ -391,13 +391,17 @@ async function extractLeads(payload) {
 
 /* ================= 3. SAO LƯU DANH SÁCH LEAD ================= */
 
-function saveLeads(payload) {
+async function saveLeads(payload) {
   const leads = Array.isArray(payload.leads) ? payload.leads : null;
   if (!leads) throw err(400, "Thiếu mảng 'leads'");
   ensureDir(LEADS_DIR);
   const snapshot = { luu_luc: new Date().toISOString(), so_luong: leads.length, leads };
   fs.writeFileSync(LEADS_FILE, JSON.stringify(snapshot, null, 2), "utf8");
-  return { saved: true, file: path.relative(path.join(__dirname, ".."), LEADS_FILE), count: leads.length };
+
+  // Đĩa local vẫn là nơi ghi chính. Đẩy lên Firestore chỉ khi SYNC_PII=true, vì kho lead
+  // chứa SĐT/email của người ngoài công ty (Nghị định 13/2023) — mặc định KHÔNG đẩy.
+  const dongBo = await require("./db").syncLeads(leads);
+  return { saved: true, file: path.relative(path.join(__dirname, ".."), LEADS_FILE), count: leads.length, firestore: dongBo };
 }
 
 function loadLeads() {

@@ -435,6 +435,14 @@ function tryReadJdFile(jdFile) {
 
 function writeRequisitionFile(reqId, data) {
   fs.writeFileSync(path.join(REQ_DIR, `${reqId}.json`), JSON.stringify(data, null, 2), "utf8");
+
+  // Đồng bộ Firestore theo kiểu "bắn rồi quên": hàm này được gọi từ giữa các luồng tool
+  // đồng bộ (B2-B10), chờ mạng ở đây sẽ chặn cả phiên chat. Đĩa local đã ghi xong ở trên
+  // nên hỏng cloud không mất gì. Mặc định SYNC_PII=false thì đây là lệnh rỗng — hồ sơ
+  // ứng viên là dữ liệu cá nhân, phải bật tay mới đưa lên hạ tầng ngoài nước.
+  require("./db").syncRequisition(reqId, data).catch((e) => {
+    console.warn(`[hr] Không đồng bộ được ${reqId} lên Firestore:`, e.message);
+  });
 }
 
 function execUpdateRequisitionFields(reqId, input) {

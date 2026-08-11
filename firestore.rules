@@ -1,0 +1,23 @@
+rules_version = '2';
+
+// AI OS — KHOÁ TOÀN BỘ TRUY CẬP TỪ CLIENT.
+//
+// Đây là chủ ý, không phải quên cấu hình. Toàn bộ dữ liệu đi qua Backend Proxy
+// (server/db.js) bằng Firebase Admin SDK, mà Admin SDK ĐI VÒNG QUA rules — nên khoá
+// chặt ở đây không ảnh hưởng gì tới ứng dụng, chỉ chặn mọi đường vào trực tiếp.
+//
+// Vì sao phải khoá: dashboard AI OS không có màn đăng nhập. Nếu mở rules cho client
+// thì bất kỳ ai biết projectId cũng đọc được hồ sơ ứng viên (CV, mức lương) và kho
+// lead — dữ liệu cá nhân thuộc phạm vi Nghị định 13/2023.
+//
+// KHI NÀO SỬA FILE NÀY: chỉ khi thêm Firebase Auth và cho trình duyệt gọi thẳng
+// Firestore. Lúc đó thay `if false` bằng điều kiện dựa trên request.auth, KHÔNG BAO
+// GIỜ dùng `if true`.
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

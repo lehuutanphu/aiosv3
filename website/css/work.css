@@ -87,6 +87,19 @@
 .wk-pill.pause  { border-color: var(--line);           color: var(--muted); background: rgba(148,163,216,.06); }
 .wk-pill.late   { border-color: rgba(248,113,113,.5);  color: var(--danger);background: rgba(248,113,113,.08); }
 
+/* ---------- Huy hiệu đồng bộ kho dữ liệu ----------
+   Người dùng phải biết dữ liệu đang nằm ở đâu MÀ KHÔNG cần hỏi: mất proxy thì công việc
+   chỉ còn trong trình duyệt, và đó đúng là tình huống đã làm mất 11 bài viết trước đây. */
+.wk-sync {
+  display: inline-flex; align-items: center; gap: .35rem; white-space: nowrap;
+  font-size: .72rem; font-weight: 700; border-radius: 999px; padding: .25rem .7rem;
+  border: 1px solid var(--line); color: var(--muted); cursor: default;
+}
+.wk-sync-cho   { border-color: var(--line);            color: var(--muted); background: rgba(148,163,216,.06); }
+.wk-sync-ok    { border-color: rgba(52,211,153,.45);   color: var(--ok);    background: rgba(52,211,153,.07); }
+.wk-sync-local { border-color: rgba(91,124,250,.45);   color: #93aefb;      background: rgba(91,124,250,.08); }
+.wk-sync-off   { border-color: rgba(248,113,113,.5);   color: var(--danger);background: rgba(248,113,113,.08); }
+
 .wk-prio { font-size: .72rem; font-weight: 700; white-space: nowrap; }
 .wk-prio.hi { color: var(--danger); } .wk-prio.md { color: var(--warn); } .wk-prio.lo { color: var(--muted); }
 .wk-late { color: var(--danger); font-weight: 700; }

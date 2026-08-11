@@ -8,6 +8,12 @@
       "port": 5173
     },
     {
+      "name": "aios-website-64667",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["-m", "http.server", "64667", "--directory", "website"],
+      "port": 64667
+    },
+    {
       "name": "aios-proxy",
       "runtimeExecutable": "node",
       "runtimeArgs": ["server/server.js"],

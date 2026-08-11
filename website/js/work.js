@@ -147,28 +147,158 @@
     ];
   }
 
-  // ---------- Lưu trữ ----------
+  /* ---------- Lưu trữ ----------
+     Ba tầng, theo thứ tự ưu tiên khi ĐỌC: Firestore (qua proxy) → localStorage → dữ liệu mẫu.
+     Khi GHI thì ngược lại: localStorage ghi ngay và luôn ghi, rồi mới đẩy lên proxy có
+     hoãn nhịp. Giao diện không bao giờ phải chờ mạng, và mất proxy cũng không mất việc.
+
+     Vì sao vẫn giữ localStorage khi đã có Firestore: proxy chạy trên máy người vận hành
+     nên có lúc chưa bật. Trước đây localStorage là nơi DUY NHẤT — xoá cache là mất trắng,
+     đã xảy ra một lần với 11 bài viết của vòng cluster đầu tiên. Giờ nó chỉ còn là đệm. */
   let S = null;
+  let LOAD_SOURCE = "seed"; // "seed" | "local" | "server"
+
+  const SYNC = { trang_thai: "cho", nhan: "Đang kiểm tra kho dữ liệu…", chi_tiet: "" };
 
   function load() {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
       if (raw) {
         const data = JSON.parse(raw);
-        if (data && data.version === SCHEMA_VERSION && Array.isArray(data.tasks)) return data;
+        if (data && data.version === SCHEMA_VERSION && Array.isArray(data.tasks)) {
+          LOAD_SOURCE = "local";
+          return data;
+        }
       }
     } catch (e) {
       console.warn("[work] Không đọc được dữ liệu đã lưu, dùng lại dữ liệu mẫu:", e);
     }
+    LOAD_SOURCE = "seed";
     return seed();
   }
 
-  function save() {
+  function saveLocal() {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(S));
     } catch (e) {
-      console.warn("[work] Không lưu được dữ liệu:", e);
+      console.warn("[work] Không lưu được vào localStorage:", e);
     }
+  }
+
+  function save() {
+    S.cap_nhat_luc = new Date().toISOString(); // mốc để so ai mới hơn khi đồng bộ
+    saveLocal();
+    schedulePush();
+  }
+
+  /* Đẩy lên proxy có hoãn nhịp: một thao tác kéo-thả có thể gọi save() nhiều lần liên
+     tiếp, mà mỗi lần đẩy là một lượt ghi Firestore tính vào hạn mức. */
+  let pushTimer = null;
+  let pushing = false;
+  let pushLai = false;
+
+  function schedulePush() {
+    clearTimeout(pushTimer);
+    pushTimer = setTimeout(pushToServer, 1500);
+  }
+
+  /* Proxy TẮT thì fetch báo lỗi ngay. Proxy TREO thì fetch chờ vô hạn — và đó mới là
+     tình huống nguy hiểm: cờ `pushing` kẹt lại, mọi lần lưu sau chỉ đặt `pushLai` rồi
+     thoát, huy hiệu đóng băng ở "đã lưu" trong khi thực tế không có gì được lưu.
+     Người dùng yên tâm nhầm là cách chắc nhất để mất dữ liệu lần nữa. */
+  const PUSH_TIMEOUT_MS = 15000;
+
+  function fetchCoHan(url, opts, ms) {
+    const ac = new AbortController();
+    const timer = setTimeout(() => ac.abort(), ms);
+    return fetch(url, { ...opts, signal: ac.signal }).finally(() => clearTimeout(timer));
+  }
+
+  async function pushToServer() {
+    if (pushing) { pushLai = true; return; } // tránh hai lượt ghi đè chéo nhau
+    pushing = true;
+    try {
+      const res = await fetchCoHan(`${WORK_PROXY_BASE}/api/db/work`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ state: S }),
+      }, PUSH_TIMEOUT_MS);
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(d.error || `Proxy trả lỗi ${res.status}`);
+      if (d.firestore && d.firestore.ok) {
+        setSync("firestore", "Đã đồng bộ Firebase", `Ghi ${d.ghi} · xoá ${d.xoa} bản ghi`);
+      } else {
+        setSync("local", "Đã lưu vào đĩa máy này", (d.firestore && d.firestore.lyDo) || "");
+      }
+    } catch (e) {
+      const treo = e && e.name === "AbortError";
+      setSync("offline", "Chỉ lưu trong trình duyệt", treo
+        ? `Proxy tại ${WORK_PROXY_BASE} không phản hồi sau ${PUSH_TIMEOUT_MS / 1000}s — có thể đang treo. Dữ liệu chỉ nằm ở trình duyệt này.`
+        : `Không gọi được proxy tại ${WORK_PROXY_BASE} — ${e.message}`);
+    } finally {
+      pushing = false;
+      if (pushLai) { pushLai = false; schedulePush(); }
+    }
+  }
+
+  /* Nạp từ máy chủ sau khi giao diện đã hiện. Chỉ thay dữ liệu đang xem khi máy chủ
+     THỰC SỰ mới hơn — không bao giờ âm thầm đè việc người dùng đang làm bằng bản cũ. */
+  async function hydrateFromServer() {
+    let d;
+    try {
+      const res = await fetchCoHan(`${WORK_PROXY_BASE}/api/db/work`, { cache: "no-store" }, PUSH_TIMEOUT_MS);
+      if (!res.ok) throw new Error(`Proxy trả lỗi ${res.status}`);
+      d = await res.json();
+    } catch (e) {
+      setSync("offline", "Chỉ lưu trong trình duyệt", `Chưa chạy proxy tại ${WORK_PROXY_BASE}. Dữ liệu chỉ nằm ở máy này và mất khi xoá cache.`);
+      return;
+    }
+
+    const remote = d && d.state;
+    if (!remote || !Array.isArray(remote.tasks)) {
+      // Kho trên máy chủ còn trống — đẩy ngay những gì đang có để có bản sao
+      await pushToServer();
+      return;
+    }
+
+    const tMay = Date.parse(remote.cap_nhat_luc || "") || 0;
+    const tTrinhDuyet = Date.parse(S.cap_nhat_luc || "") || 0;
+
+    if (LOAD_SOURCE === "seed" || tMay > tTrinhDuyet) {
+      S = remote;
+      ensureAgentOwners();
+      ensureLeads();
+      ensureLeadTaskTags();
+      saveLocal();
+      render();
+      refreshCounters();
+      setSync(d.nguon === "firestore" ? "firestore" : "local",
+        d.nguon === "firestore" ? "Đã nạp từ Firebase" : "Đã nạp từ đĩa máy này",
+        `${remote.tasks.length} công việc · ${(remote.projects || []).length} dự án`);
+    } else {
+      // Trình duyệt đang giữ bản mới hơn -> đẩy lên thay vì lấy về
+      await pushToServer();
+    }
+  }
+
+  const SYNC_META = {
+    cho:       { icon: "◌", cls: "wk-sync-cho" },
+    firestore: { icon: "☁", cls: "wk-sync-ok" },
+    local:     { icon: "💾", cls: "wk-sync-local" },
+    offline:   { icon: "⚠", cls: "wk-sync-off" },
+  };
+
+  function setSync(trang_thai, nhan, chi_tiet) {
+    SYNC.trang_thai = trang_thai;
+    SYNC.nhan = nhan;
+    SYNC.chi_tiet = chi_tiet || "";
+    const el = document.getElementById("wkSyncBadge");
+    if (el) el.outerHTML = syncBadgeHtml();
+  }
+
+  function syncBadgeHtml() {
+    const m = SYNC_META[SYNC.trang_thai] || SYNC_META.cho;
+    return `<span id="wkSyncBadge" class="wk-sync ${m.cls}" title="${esc(SYNC.chi_tiet || SYNC.nhan)}">${m.icon} ${esc(SYNC.nhan)}</span>`;
   }
 
   function reset() {
@@ -1553,6 +1683,7 @@
           <p>${esc(meta.desc)}</p>
         </div>
         <div class="wk-head-actions">
+          ${syncBadgeHtml()}
           <button class="btn btn-primary btn-sm" data-act="new-cluster" title="Tạo phiếu và chạy vòng lặp 4 Agent sản xuất Topic Cluster">🔁 Chạy Content Cluster</button>
           <button class="btn btn-primary btn-sm" data-act="lead-harvest" title="Giao Lead Hunter Agent quét bình luận từ một link và ghi vào kho Lead">🧲 Thu thập Lead</button>
           <button class="btn btn-ghost btn-sm" data-act="reset" title="Xóa dữ liệu đã lưu trên trình duyệt và nạp lại dữ liệu mẫu">↺ Nạp lại dữ liệu mẫu</button>
@@ -2459,10 +2590,48 @@
       </div>`);
   }
 
+  /* ---------- Đưa bài viết ra kho thật ----------
+     Engine chạy trong trình duyệt nên KHÔNG ghi được đĩa. Trước đây bài viết chỉ nằm
+     trong task.run.output ở localStorage — xoá cache là mất sạch, đã mất 11 bài một lần.
+     Giờ mỗi bài xong là đẩy ngay qua proxy để có file .md trên đĩa + bản Firestore. */
+  async function nextClusterId() {
+    const nam = new Date().getFullYear();
+    try {
+      const res = await fetch(`${WORK_PROXY_BASE}/api/db/clusters`);
+      if (res.ok) {
+        const d = await res.json();
+        const re = new RegExp(`^CLS-${nam}-(\\d+)$`);
+        const max = (d.clusters || [])
+          .map((c) => (String(c.cluster).match(re) || [])[1])
+          .filter(Boolean).map(Number)
+          .reduce((m, n) => Math.max(m, n), 0);
+        return `CLS-${nam}-${String(max + 1).padStart(3, "0")}`;
+      }
+    } catch (e) { /* proxy chưa chạy — rơi xuống mã theo thời điểm bên dưới */ }
+    return `CLS-${nam}-T${String(Date.now()).slice(-6)}`;
+  }
+
+  async function saveArticleToStore(payload) {
+    try {
+      // Có hạn giờ: proxy treo ở đây sẽ đứng cả vòng lặp 11 bài mà không báo gì
+      const res = await fetchCoHan(`${WORK_PROXY_BASE}/api/db/articles`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      }, 30000);
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(d.error || `Proxy trả lỗi ${res.status}`);
+      return d;
+    } catch (e) {
+      return { saved: false, error: e.name === "AbortError" ? "proxy không phản hồi sau 30s" : e.message };
+    }
+  }
+
   async function startContentCluster(topic, sourceUrl) {
     if (!topic || !topic.trim()) return say("Cần một chủ đề hoặc link nguồn");
     PIPE_LOG.length = 0;
 
+    const clusterId = await nextClusterId();
     const p = ensureClusterProject();
     const maxCode = S.tickets.reduce((m, t) => Math.max(m, t.code || 0), 49000);
     const ticket = {
@@ -2471,7 +2640,8 @@
       project: p.id, type: "Yêu cầu phát triển phần mềm",
       status: "Đang thực hiện", prio: "Cao", deadline: dOff(7),
       assignees: [...new Set(Object.values(CLUSTER_AGENTS).map((a) => S.agentOwners[a]).filter(Boolean))],
-      desc: `Sản xuất trọn bộ Topic Cluster (1 Pillar + N Cluster) từ nguồn: ${sourceUrl || topic}.\nToàn bộ do đội AI Agent marketing thực hiện, người chịu trách nhiệm duyệt từng mục.`,
+      cluster: clusterId,
+      desc: `Sản xuất trọn bộ Topic Cluster (1 Pillar + N Cluster) từ nguồn: ${sourceUrl || topic}.\nMã cluster: ${clusterId} — bài viết lưu tại marketing/data/bai-viet/${clusterId}/.\nToàn bộ do đội AI Agent marketing thực hiện, người chịu trách nhiệm duyệt từng mục.`,
     };
     S.tickets.push(ticket);
     save();
@@ -2489,7 +2659,7 @@
         </div>
       </div>`);
 
-    pipeLog("📋", `Đã tạo phiếu #${ticket.code} trong dự án "${p.name}"`);
+    pipeLog("📋", `Đã tạo phiếu #${ticket.code} trong dự án "${p.name}" — mã cluster ${clusterId}`);
 
     // ---- S1: nghiên cứu & bóc tách ----
     const k1 = addAgentTask(ticket.id, "S1 · Nghiên cứu nguồn & bóc tách chủ đề con", CLUSTER_AGENTS.research);
@@ -2564,6 +2734,22 @@
       ].join("\n")));
       pipeLog(outW ? "✅" : "⚠️", `${b.ma_bai} ${outW ? "viết xong" : "lỗi"} — đã ghi báo cáo`);
 
+      /* Lưu NGAY từng bài, không đợi hết vòng: vòng lặp 11 bài chạy ~25 phút, đứt giữa
+         chừng mà chưa lưu thì mất hết phần đã viết. */
+      const hoSo = { cluster: clusterId, ma_bai: b.ma_bai, tieu_de: b.tieu_de,
+        loai: b.ma_bai === "P-00" ? "pillar" : "cluster", tu_khoa_chinh: b.tu_khoa,
+        nguon: sourceUrl || "", chu_de: topic, task_id: kw.id };
+      if (outW) {
+        const luu = await saveArticleToStore({ ...hoSo, noi_dung: outW });
+        if (luu.saved) {
+          kw.artifact = { cluster: clusterId, ma_bai: b.ma_bai, file: luu.file };
+          pipeLog("💾", `${b.ma_bai} đã lưu → ${luu.file}${luu.firestore && luu.firestore.ok ? " + Firebase" : ""}`);
+        } else {
+          pipeLog("⛔", `${b.ma_bai} KHÔNG lưu được ra kho (${luu.error}) — bài chỉ còn trong báo cáo công việc, sẽ mất nếu xoá cache trình duyệt.`);
+        }
+        save();
+      }
+
       const kp = addAgentTask(ticket.id, `S4 · Prompt ảnh ${b.ma_bai}`, CLUSTER_AGENTS.visual, "Trung bình");
       save(); render();
       pipeLog("🖼️", `${b.ma_bai} — đang dựng prompt ảnh…`);
@@ -2573,15 +2759,29 @@
         ``, `BÀI VIẾT:`, (outW || "(chưa có nội dung bài)").slice(0, 8000),
       ].join("\n")));
       pipeLog(outP ? "✅" : "⚠️", `${b.ma_bai} prompt ảnh ${outP ? "xong" : "lỗi"} — đã ghi báo cáo`);
+
+      // Ghi đè bài vừa lưu để đính kèm prompt ảnh — bài đã an toàn từ bước trên rồi
+      if (outW && outP) {
+        const luu2 = await saveArticleToStore({ ...hoSo, noi_dung: outW, prompt_anh: [outP] });
+        if (luu2.saved) { kp.artifact = { cluster: clusterId, ma_bai: b.ma_bai, file: luu2.file }; save(); }
+        pipeLog(luu2.saved ? "💾" : "⚠️", luu2.saved
+          ? `${b.ma_bai} đã đính prompt ảnh vào bài đã lưu`
+          : `${b.ma_bai} không đính được prompt ảnh vào kho (${luu2.error}) — prompt vẫn còn trong báo cáo S4`);
+      }
     }
 
     // ---- Đóng phiếu ----
     const ks = ticketTasks(ticket.id);
     const loi = ks.filter((k) => k.run && k.run.status === "failed").length;
     ticket.status = loi ? "Tạm dừng" : "Hoàn tất";
+    const daLuu = ks.filter((k) => k.artifact).length;
     ticket.desc += `\n\n— Vòng lặp kết thúc ${fmtD(today())}: ${ks.length} công việc, ${ks.length - loi} thành công, ${loi} lỗi.`
-      + (loi ? " Phiếu để Tạm dừng do có mục chạy lỗi." : " Mọi mục đã có báo cáo, chờ người chịu trách nhiệm duyệt để đóng từng công việc.");
+      + (loi ? " Phiếu để Tạm dừng do có mục chạy lỗi." : " Mọi mục đã có báo cáo, chờ người chịu trách nhiệm duyệt để đóng từng công việc.")
+      + `\n— Bài viết: ${daLuu ? `đã lưu vào marketing/data/bai-viet/${clusterId}/` : "KHÔNG lưu được ra kho, chỉ còn trong báo cáo công việc"}.`;
     save(); render();
+    pipeLog(daLuu ? "📦" : "⛔", daLuu
+      ? `Bài viết nằm tại marketing/data/bai-viet/${clusterId}/ — mở được bằng editor, không mất khi xoá cache`
+      : "Không lưu được bài nào ra kho — kiểm tra Backend Proxy rồi chạy lại");
     pipeLog(loi ? "⚠️" : "🏁", loi
       ? `Xong vòng lặp nhưng có ${loi} mục lỗi — phiếu #${ticket.code} để Tạm dừng`
       : `Hoàn tất phiếu #${ticket.code} — ${ks.length} công việc đều có báo cáo`);
@@ -2784,13 +2984,16 @@
   }
 
   // ---------- Khởi động ----------
+  // Nạp đồng bộ từ localStorage trước để giao diện hiện ngay, rồi mới hỏi máy chủ ở
+  // nền — proxy chậm hay chưa bật đều không làm người dùng phải nhìn màn hình trắng.
   S = load();
   ensureAgentOwners();
   ensureLeads();
   ensureLeadTaskTags();
-  save();
+  saveLocal();
   refreshCounters();
   bindHost();
+  hydrateFromServer();
 
   window.AIOS_WORK = {
     show,

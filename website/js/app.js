@@ -429,20 +429,58 @@ function saveState() {
   Object.keys(SKILLS).forEach(k => { if (SKILLS[k].custom) customSkills[k] = SKILLS[k]; });
   const customWorkflows = {};
   Object.keys(WFLOWS).forEach(k => { if (WFLOWS[k].custom) customWorkflows[k] = WFLOWS[k]; });
-  try { localStorage.setItem(STORAGE_KEY, JSON.stringify({ agents, customSkills, customWorkflows, globalRules: GLOBAL_RULES })); } catch (e) { /* private mode */ }
+  const payload = { agents, customSkills, customWorkflows, globalRules: GLOBAL_RULES };
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(payload)); } catch (e) { /* private mode */ }
+  pushAgentsToServer(payload);
 }
 
-function loadState() {
-  let saved;
-  try { saved = JSON.parse(localStorage.getItem(STORAGE_KEY)); } catch (e) { return; }
-  if (!saved) return;
+/* Tri thức KWSR (Knowledge/Workflow/Skill/Rule) là thứ doanh nghiệp tích lũy lâu nhất —
+   để nó chỉ nằm trong localStorage là mất khi đổi máy hoặc xoá cache. Đẩy lên proxy có
+   hoãn nhịp; hỏng mạng thì bỏ qua im lặng vì localStorage đã ghi xong ở trên. */
+let agentPushTimer = null;
+function pushAgentsToServer(payload) {
+  clearTimeout(agentPushTimer);
+  agentPushTimer = setTimeout(() => {
+    fetch(`${HERMES_PROXY_BASE}/api/db/agents`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    }).catch(() => { /* proxy chưa chạy — localStorage vẫn giữ nguyên dữ liệu */ });
+  }, 1500);
+}
+
+function applyState(saved) {
+  if (!saved) return false;
   Object.assign(SKILLS, saved.customSkills || {});
   Object.assign(WFLOWS, saved.customWorkflows || {});
-  if (Array.isArray(saved.globalRules)) GLOBAL_RULES = saved.globalRules;
+  if (Array.isArray(saved.globalRules) && saved.globalRules.length) GLOBAL_RULES = saved.globalRules;
   AGENTS.forEach(a => {
     const s = saved.agents && saved.agents[a.id];
     if (s) Object.assign(a, s);
   });
+  return true;
+}
+
+function loadState() {
+  let saved;
+  try { saved = JSON.parse(localStorage.getItem(STORAGE_KEY)); } catch (e) { saved = null; }
+  const coLocal = applyState(saved);
+
+  // Máy mới / vừa xoá cache: kéo tri thức về từ kho thay vì bắt đầu lại từ con số không.
+  if (!coLocal) {
+    fetch(`${HERMES_PROXY_BASE}/api/db/agents`)
+      .then(r => (r.ok ? r.json() : null))
+      .then(d => {
+        if (!d || !d.agents || !Object.keys(d.agents).length) return;
+        applyState(d);
+        try { localStorage.setItem(STORAGE_KEY, JSON.stringify(d)); } catch (e) { /* private mode */ }
+        // Vẽ lại các phần phụ thuộc KWSR — dữ liệu về sau khi màn hình đã dựng xong
+        renderStats();
+        renderGlobalRules();
+        renderDepartments();
+      })
+      .catch(() => { /* proxy chưa chạy — dùng cấu hình mặc định trong mã nguồn */ });
+  }
 }
 
 // Meta cho 4 tầng KWSR trong drawer

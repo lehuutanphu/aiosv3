@@ -12,6 +12,7 @@
   "dependencies": {
     "docxtemplater": "^3.69.3",
     "exceljs": "^4.4.0",
+    "firebase-admin": "^14.2.0",
     "pizzip": "^3.2.0"
   }
 }

@@ -5,6 +5,7 @@
 const http = require("http");
 const fs = require("fs");
 const path = require("path");
+const db = require("./db");
 const hr = require("./hr");
 const marketing = require("./marketing");
 const { callChatModel } = require("./openrouter");
@@ -61,14 +62,16 @@ function sendJson(res, status, obj) {
   res.end(body);
 }
 
-function readJsonBody(req) {
+// maxBytes nới riêng cho từng route: 2MB đủ cho chat/requisition, nhưng KHÔNG đủ cho
+// ảnh gửi dạng base64 (/api/db/media) hay cả khối công việc sau vài chục vòng cluster.
+function readJsonBody(req, maxBytes = 2 * 1024 * 1024) {
   return new Promise((resolve, reject) => {
     let data = "";
     let size = 0;
     req.on("data", (chunk) => {
       size += chunk.length;
-      if (size > 2 * 1024 * 1024) {
-        reject(new Error("Request body quá lớn (>2MB)"));
+      if (size > maxBytes) {
+        reject(Object.assign(new Error(`Request body quá lớn (>${Math.round(maxBytes / 1024 / 1024)}MB)`), { status: 413 }));
         req.destroy();
         return;
       }
@@ -241,6 +244,51 @@ const server = http.createServer(async (req, res) => {
       });
     }
 
+    /* ---------- Kho dữ liệu: Firestore + bản sao đĩa ----------
+       Gom ba nơi lưu trữ rời rạc về một mối. Quan trọng nhất là /api/db/articles:
+       trước đây bài viết Content Cluster chỉ nằm trong localStorage của trình duyệt
+       nên xoá cache là mất trắng. */
+    if (parts[0] === "api" && parts[1] === "db") {
+      if (parts[2] === "status" && req.method === "GET") {
+        return sendJson(res, 200, db.status());
+      }
+
+      if (parts[2] === "work" && parts.length === 3) {
+        if (req.method === "GET") return sendJson(res, 200, await db.loadWork());
+        if (req.method === "POST") {
+          // Khối công việc phình theo số vòng cluster (mỗi vòng thêm ~24 công việc kèm báo cáo)
+          const payload = await readJsonBody(req, 12 * 1024 * 1024);
+          return sendJson(res, 200, await db.saveWork(payload.state || payload));
+        }
+      }
+
+      if (parts[2] === "articles" && parts.length === 3 && req.method === "POST") {
+        const payload = await readJsonBody(req, 8 * 1024 * 1024);
+        return sendJson(res, 201, await db.saveArticle(payload));
+      }
+
+      if (parts[2] === "clusters" && req.method === "GET") {
+        if (parts.length === 3) return sendJson(res, 200, { clusters: db.listClusters() });
+        if (parts.length === 5 && parts[4] === "articles") {
+          return sendJson(res, 200, await db.listArticles(decodeURIComponent(parts[3])));
+        }
+      }
+
+      if (parts[2] === "media" && parts.length === 3 && req.method === "POST") {
+        // base64 phình ~33% so với nhị phân — nới trần tương ứng MEDIA_MAX_MB
+        const payload = await readJsonBody(req, 25 * 1024 * 1024);
+        return sendJson(res, 201, await db.saveMedia(payload));
+      }
+
+      if (parts[2] === "agents" && parts.length === 3) {
+        if (req.method === "GET") return sendJson(res, 200, await db.loadAgents());
+        if (req.method === "POST") {
+          const payload = await readJsonBody(req, 8 * 1024 * 1024);
+          return sendJson(res, 200, await db.saveAgents(payload));
+        }
+      }
+    }
+
     // ---------- HR: Tuyển dụng thật (B1 deterministic) + SKILL.md thật ----------
     if (parts[0] === "api" && parts[1] === "hr" && parts[2] === "requisitions") {
       if (parts.length === 3 && req.method === "GET") {
@@ -347,7 +395,7 @@ const server = http.createServer(async (req, res) => {
       }
       if (parts[2] === "leads" && req.method === "POST") {
         const payload = await readJsonBody(req);
-        return sendJson(res, 200, sales.saveLeads(payload));
+        return sendJson(res, 200, await sales.saveLeads(payload));
       }
       if (parts[2] === "leads" && req.method === "GET") {
         return sendJson(res, 200, sales.loadLeads());

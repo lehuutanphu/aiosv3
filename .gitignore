@@ -1,6 +1,21 @@
 # Bí mật — không bao giờ commit
 server/.env
 
+# Service account key Firebase — ai có file này là toàn quyền đọc/ghi/xoá cả project,
+# và rules KHÔNG chặn được vì Admin SDK đi vòng qua rules. Lộ lên GitHub là phải thu hồi key ngay.
+server/serviceAccount*.json
+serviceAccount*.json
+*-firebase-adminsdk-*.json
+
+# Bản sao trạng thái làm việc — ghi lại sau mỗi thao tác, thay đổi liên tục nên
+# không đưa vào git. Bản chính thức nằm ở Firestore.
+data/work.json
+data/agents.json
+
+# CỐ Ý KHÔNG bỏ qua marketing/data/bai-viet/ — bài viết là sản phẩm bàn giao, để trong
+# git thì có lịch sử sửa đổi và grep được. Nếu về sau chúng phình quá to thì tách repo
+# riêng, đừng gitignore âm thầm.
+
 # Dữ liệu ứng viên & requisition — chứa PII (Nghị định 13/2023)
 hr/data/requisitions/*.json
 !hr/data/requisitions/.gitkeep

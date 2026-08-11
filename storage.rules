@@ -1,0 +1,15 @@
+rules_version = '2';
+
+// AI OS — Cloud Storage khoá toàn bộ truy cập từ client, cùng lý do với firestore.rules.
+//
+// Ảnh minh hoạ bài viết, CV ứng viên và offer letter đều nằm ở đây. Proxy đọc/ghi bằng
+// Admin SDK (đi vòng qua rules); khi cần chia sẻ một file ra ngoài thì db.js tạo signed
+// URL cho riêng file đó, thay vì mở công khai cả bucket.
+
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}
