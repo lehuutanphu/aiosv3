@@ -23,7 +23,10 @@ async function callChatModel({ system, messages, tools, plugins, model, maxToken
   const ac = new AbortController();
   const timer = setTimeout(() => ac.abort(), timeoutMs);
 
-  let resp;
+  // Đồng hồ phải bao trọn CẢ phần đọc body: OpenRouter trả header gần như tức thì rồi mới
+  // stream dần nội dung, nên nếu tắt đồng hồ ngay sau khi fetch resolve thì một lượt sinh
+  // chậm/đứng ở giữa body vẫn treo vô hạn — đúng chỗ hay hỏng nhất ở tier free.
+  let resp, data;
   try {
     resp = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
@@ -42,11 +45,11 @@ async function callChatModel({ system, messages, tools, plugins, model, maxToken
         ...(plugins ? { plugins } : {}),
       }),
     });
+    data = await resp.json().catch(() => ({}));
   } catch (e) {
-    clearTimeout(timer);
     if (e && e.name === "AbortError") {
       throw Object.assign(
-        new Error(`Model "${model || DEFAULT_MODEL}" không phản hồi sau ${Math.round(timeoutMs / 1000)}s — nhiều khả năng đang xếp hàng ở tier free. Đổi sang model trả phí hoặc nâng OPENROUTER_TIMEOUT_MS.`),
+        new Error(`Model "${model || DEFAULT_MODEL}" không phản hồi xong sau ${Math.round(timeoutMs / 1000)}s — nhiều khả năng đang xếp hàng ở tier free. Đổi sang model trả phí hoặc nâng OPENROUTER_TIMEOUT_MS.`),
         { status: 504 }
       );
     }
@@ -55,7 +58,6 @@ async function callChatModel({ system, messages, tools, plugins, model, maxToken
     clearTimeout(timer);
   }
 
-  const data = await resp.json().catch(() => ({}));
   if (!resp.ok) {
     const msg = data?.error?.message || `OpenRouter API lỗi ${resp.status}`;
     throw Object.assign(new Error(msg), { status: 502 });
