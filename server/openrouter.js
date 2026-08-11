@@ -45,7 +45,15 @@ async function callChatModel({ system, messages, tools, plugins, model, maxToken
         ...(plugins ? { plugins } : {}),
       }),
     });
-    data = await resp.json().catch(() => ({}));
+    // KHÔNG dùng .catch(() => ({})) ở đây: nó nuốt luôn AbortError khi timeout bắn giữa lúc
+    // đọc body, khiến lỗi hiện ra thành "sai định dạng Chat Completions" — sai bản chất và
+    // rất khó lần ra. Chỉ nuốt lỗi phân tích JSON thật sự.
+    const rawBody = await resp.text();
+    try {
+      data = rawBody ? JSON.parse(rawBody) : {};
+    } catch (e) {
+      data = { __parseError: rawBody.slice(0, 300) };
+    }
   } catch (e) {
     if (e && e.name === "AbortError") {
       throw Object.assign(
@@ -64,7 +72,8 @@ async function callChatModel({ system, messages, tools, plugins, model, maxToken
   }
   const choice = data?.choices?.[0];
   if (!choice?.message) {
-    throw Object.assign(new Error("Phản hồi OpenRouter không đúng định dạng Chat Completions"), { status: 502 });
+    const chiTiet = data?.__parseError ? ` Thân phản hồi: ${data.__parseError}` : "";
+    throw Object.assign(new Error(`Phản hồi OpenRouter không đúng định dạng Chat Completions.${chiTiet}`), { status: 502 });
   }
   return choice.message; // { role, content, tool_calls? }
 }

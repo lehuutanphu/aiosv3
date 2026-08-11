@@ -2343,12 +2343,16 @@
       return data.reply;
     } catch (e) {
       k.run = { status: "failed", agentId: k.executor.id, error: e.message, endedAt: new Date().toISOString() };
+      // Để "Đang thực hiện" thì việc hỏng trông y hệt việc đang chạy và sẽ trôi mất trong
+      // bảng. Đặt Tạm dừng để nó nổi lên rõ, người soát bấm "Chạy lại" đúng mục này.
+      k.status = "Tạm dừng";
       k.reports.push({
         at: today(), progress: k.progress,
         note: `⚠️ Không chạy được ${a.name}: ${e.message}`,
         by: k.owner, byType: "agent", agentId: k.executor.id,
       });
       save();
+      if (typeof addFeed === "function") addFeed(`<b>${esc(a.name)}</b> lỗi ở "${esc(k.title)}" — cần soát tay.`, "f-rule");
       return null;
     }
   }

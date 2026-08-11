@@ -14,7 +14,7 @@
       "name": "Content Agent",
       "port": 8644,
       "backend": "openrouter",
-      "model": "nvidia/nemotron-3-ultra-550b-a55b:free",
+      "model": "deepseek/deepseek-v4-flash",
       "maxTokens": 16000
     },
     "mkt-2": {
@@ -25,21 +25,21 @@
       "name": "Research Agent",
       "port": 8652,
       "backend": "openrouter",
-      "model": "nvidia/nemotron-3-ultra-550b-a55b:free",
+      "model": "deepseek/deepseek-v4-flash",
       "maxTokens": 16000
     },
     "mkt-4": {
       "name": "SEO Architect Agent",
       "port": 8653,
       "backend": "openrouter",
-      "model": "nvidia/nemotron-3-ultra-550b-a55b:free",
+      "model": "deepseek/deepseek-v4-flash",
       "maxTokens": 16000
     },
     "mkt-5": {
       "name": "Visual Prompt Agent",
       "port": 8654,
       "backend": "openrouter",
-      "model": "nvidia/nemotron-3-ultra-550b-a55b:free",
+      "model": "deepseek/deepseek-v4-flash",
       "maxTokens": 16000
     },
     "hr-1": {
