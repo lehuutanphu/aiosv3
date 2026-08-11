@@ -41,6 +41,27 @@ function getSkillMarkdown(id) {
   return { id, markdown: stripFrontmatter(raw).trim(), bytes: Buffer.byteLength(raw, "utf8") };
 }
 
+/* SKILL.md thường trỏ sang file template ("viết theo templates/bai-viet.template.md").
+   Agent chạy qua OpenRouter không đọc được file, nên nếu chỉ gửi SKILL.md thì nó không
+   biết khung bài viết gồm những gì — thực tế đã thiếu hẳn frontmatter SEO. Phục vụ luôn
+   template để hai bên khớp nhau. */
+const TEMPLATE_IDS = new Set([
+  "bai-viet.template.md",
+  "image-prompt-schema.md",
+  "seo-blueprint-schema.md",
+  "cluster.template.json",
+]);
+
+function getTemplate(id) {
+  if (!TEMPLATE_IDS.has(id)) {
+    throw err(404, `Không có template marketing "${id}". Hợp lệ: ${[...TEMPLATE_IDS].join(", ")}`);
+  }
+  const filePath = path.join(MKT_ROOT, "templates", id);
+  if (!fs.existsSync(filePath)) throw err(404, `Thiếu file marketing/templates/${id}`);
+  const raw = fs.readFileSync(filePath, "utf8");
+  return { id, content: raw, bytes: Buffer.byteLength(raw, "utf8") };
+}
+
 function listSkills() {
   return [...SKILL_IDS].map((id) => {
     const p = path.join(MKT_ROOT, "skills", id, "SKILL.md");
@@ -121,4 +142,4 @@ async function fetchSource(rawUrl) {
   };
 }
 
-module.exports = { getSkillMarkdown, listSkills, fetchSource, SKILL_IDS };
+module.exports = { getSkillMarkdown, getTemplate, listSkills, fetchSource, SKILL_IDS, TEMPLATE_IDS };

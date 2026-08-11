@@ -2217,7 +2217,31 @@
     writer: "viet-bai-chuan-seo",
     visual: "prompt-anh-ai",
   };
+  // SKILL.md trỏ sang template nào thì phải gửi kèm template đó, nếu không agent
+  // không biết khung đầu ra (đã từng thiếu hẳn frontmatter SEO của bài viết).
+  const STAGE_TEMPLATE = {
+    seo: "seo-blueprint-schema.md",
+    writer: "bai-viet.template.md",
+    visual: "image-prompt-schema.md",
+  };
   const SKILL_CACHE = {};
+  const TPL_CACHE = {};
+
+  async function loadTemplate(tplId) {
+    if (!tplId) return null;
+    if (TPL_CACHE[tplId] !== undefined) return TPL_CACHE[tplId];
+    try {
+      const res = await fetch(`${WORK_PROXY_BASE}/api/marketing/templates/${encodeURIComponent(tplId)}`);
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok || !d.content) throw new Error(d.error || `Proxy trả lỗi ${res.status}`);
+      TPL_CACHE[tplId] = d.content;
+      return d.content;
+    } catch (e) {
+      TPL_CACHE[tplId] = null;
+      console.warn(`[work] Không đọc được template "${tplId}":`, e.message);
+      return null;
+    }
+  }
 
   async function loadSkill(skillId) {
     if (SKILL_CACHE[skillId] !== undefined) return SKILL_CACHE[skillId];
@@ -2256,12 +2280,15 @@
     if (!md) {
       return `${EXEC_CONTEXT}\n\n⚠️ Không đọc được marketing/skills/${skillId}/SKILL.md.\n\n${nhiemVu}`;
     }
+    const tplId = STAGE_TEMPLATE[stageKey];
+    const tpl = await loadTemplate(tplId);
     return [
       EXEC_CONTEXT, ``,
       `Bạn đang thực thi skill \`${skillId}\` của AI OS. Toàn văn skill:`,
       ``, `--- BẮT ĐẦU SKILL.md ---`, md, `--- HẾT SKILL.md ---`, ``,
+      tpl ? `Skill có nhắc tới file \`${tplId}\`. Toàn văn file đó:\n\n--- BẮT ĐẦU ${tplId} ---\n${tpl}\n--- HẾT ${tplId} ---\n` : "",
       `Làm đúng theo skill trên (trong giới hạn điều kiện thực thi) cho nhiệm vụ sau:`, ``, nhiemVu,
-    ].join("\n");
+    ].filter(Boolean).join("\n");
   }
 
   // Proxy đọc hộ trang nguồn — trả về { text, ngay_truy_cap, truncated } hoặc null
@@ -2530,6 +2557,10 @@
         `Từ khóa chính: ${b.tu_khoa}`,
         `Độ dài mục tiêu: ${b.ma_bai === "P-00" ? "2.000–2.500" : "1.200–1.800"} từ.`,
         `Các bài khác trong cluster (đừng giẫm góc nhìn): ${bai.map((x) => x.tieu_de).join(" · ")}`,
+        ``,
+        `CHỈ trả về nội dung bài viết: bắt đầu bằng frontmatter YAML theo đúng template,`,
+        `rồi tới thân bài. Không in dòng trạng thái kiểu "▶ Đang viết…", không lời dẫn,`,
+        `không giải thích quy trình — những thứ đó thuộc về hệ thống, không thuộc về file bài.`,
       ].join("\n")));
       pipeLog(outW ? "✅" : "⚠️", `${b.ma_bai} ${outW ? "viết xong" : "lỗi"} — đã ghi báo cáo`);
 

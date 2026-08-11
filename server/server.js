@@ -318,6 +318,10 @@ const server = http.createServer(async (req, res) => {
       if (parts.length === 4) return sendJson(res, 200, marketing.getSkillMarkdown(decodeURIComponent(parts[3])));
     }
 
+    if (parts[0] === "api" && parts[1] === "marketing" && parts[2] === "templates" && parts[3] && req.method === "GET") {
+      return sendJson(res, 200, marketing.getTemplate(decodeURIComponent(parts[3])));
+    }
+
     // Đọc hộ trang nguồn cho agent (LLM qua OpenRouter không có tool duyệt web)
     if (parts[0] === "api" && parts[1] === "marketing" && parts[2] === "fetch" && req.method === "GET") {
       const target = url.searchParams.get("url");
