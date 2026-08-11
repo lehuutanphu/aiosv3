@@ -27,6 +27,10 @@ hr/templates/Tuyen-dung-2026-Pipeline.xlsx
 # Dependencies (nếu sau này thêm gói ngoài)
 node_modules/
 
+# Kết quả sinh ra từ skill graphify (đồ thị tri thức + cache) — dựng lại được bằng
+# cách chạy lại /graphify, không phải mã nguồn nên không đưa vào git
+graphify-out/
+
 # OS / editor cruft
 .DS_Store
 Thumbs.db
