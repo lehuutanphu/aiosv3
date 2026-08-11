@@ -6,6 +6,8 @@ const http = require("http");
 const fs = require("fs");
 const path = require("path");
 const hr = require("./hr");
+const marketing = require("./marketing");
+const { callChatModel } = require("./openrouter");
 const sales = require("./sales");
 
 const ROOT = __dirname;
@@ -89,6 +91,32 @@ async function handleChat(agentId, agentCfg, payload) {
   const { message, history } = payload;
   if (!message || typeof message !== "string") {
     throw Object.assign(new Error("Thiếu 'message'"), { status: 400 });
+  }
+
+  // Agent khai báo backend "openrouter" trong agents.config.json chạy THẬT qua OpenRouter,
+  // KHÔNG đi qua Hermes và KHÔNG bị MOCK_MODE chặn — MOCK_MODE chỉ dành cho nhánh Hermes.
+  // Đây là đường của đội marketing (Content Cluster) để không phải dựng 4 Hermes Profile.
+  if (agentCfg.backend === "openrouter") {
+    const model = agentCfg.model || process.env.OPENROUTER_MODEL;
+    const msg = await callChatModel({
+      system: `Bạn là ${agentCfg.name} trong hệ thống AI OS của doanh nghiệp. Trả lời bằng tiếng Việt, đi thẳng vào kết quả bàn giao được, không hỏi lại.`,
+      messages: [
+        ...(Array.isArray(history) ? history : []).map((h) => ({
+          role: h.role === "agent" ? "assistant" : "user",
+          content: String(h.text || h.content || ""),
+        })),
+        { role: "user", content: message },
+      ],
+      model,
+      maxTokens: agentCfg.maxTokens,
+    });
+    const reply = typeof msg.content === "string"
+      ? msg.content
+      : Array.isArray(msg.content) ? msg.content.map((c) => c.text || "").join("") : "";
+    if (!reply.trim()) {
+      throw Object.assign(new Error(`Model "${model}" trả về nội dung rỗng`), { status: 502 });
+    }
+    return { reply, mock: false, backend: "openrouter", model };
   }
 
   if (MOCK_MODE) {
@@ -282,6 +310,20 @@ const server = http.createServer(async (req, res) => {
         "Access-Control-Allow-Origin": res.__corsOrigin,
       });
       return fs.createReadStream(absPath).pipe(res);
+    }
+
+    // ---------- Marketing: phục vụ SKILL.md thật cho engine Content Cluster ----------
+    if (parts[0] === "api" && parts[1] === "marketing" && parts[2] === "skills" && req.method === "GET") {
+      if (parts.length === 3) return sendJson(res, 200, { skills: marketing.listSkills() });
+      if (parts.length === 4) return sendJson(res, 200, marketing.getSkillMarkdown(decodeURIComponent(parts[3])));
+    }
+
+    // Đọc hộ trang nguồn cho agent (LLM qua OpenRouter không có tool duyệt web)
+    if (parts[0] === "api" && parts[1] === "marketing" && parts[2] === "fetch" && req.method === "GET") {
+      const target = url.searchParams.get("url");
+      if (!target) return sendJson(res, 400, { error: "Thiếu tham số ?url=" });
+      const result = await marketing.fetchSource(target);
+      return sendJson(res, 200, result);
     }
 
     if (parts[0] === "api" && parts[1] === "hr" && parts[2] === "skills" && parts[3] && req.method === "GET") {

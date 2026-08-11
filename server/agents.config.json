@@ -2,18 +2,69 @@
   "hermesHost": "127.0.0.1",
   "mem0UserId": "aios-company",
   "agents": {
-    "sales-1": { "name": "Sales Agent", "port": 8643 },
-    "sales-2": { "name": "Lead Hunter Agent", "port": 8655 },
-    "mkt-1": { "name": "Content Agent", "port": 8644 },
-    "mkt-2": { "name": "Social Agent", "port": 8645 },
-    "mkt-3": { "name": "Research Agent", "port": 8652 },
-    "mkt-4": { "name": "SEO Architect Agent", "port": 8653 },
-    "mkt-5": { "name": "Visual Prompt Agent", "port": 8654 },
-    "hr-1": { "name": "HR Agent", "port": 8646 },
-    "fin-1": { "name": "Finance Agent", "port": 8647 },
-    "fin-2": { "name": "Audit Agent", "port": 8648 },
-    "legal-1": { "name": "Legal Agent", "port": 8649 },
-    "cskh-1": { "name": "Support Agent", "port": 8650 },
-    "cskh-2": { "name": "Care Agent", "port": 8651 }
+    "sales-1": {
+      "name": "Sales Agent",
+      "port": 8643
+    },
+    "sales-2": {
+      "name": "Lead Hunter Agent",
+      "port": 8655
+    },
+    "mkt-1": {
+      "name": "Content Agent",
+      "port": 8644,
+      "backend": "openrouter",
+      "model": "nvidia/nemotron-3-ultra-550b-a55b:free",
+      "maxTokens": 16000
+    },
+    "mkt-2": {
+      "name": "Social Agent",
+      "port": 8645
+    },
+    "mkt-3": {
+      "name": "Research Agent",
+      "port": 8652,
+      "backend": "openrouter",
+      "model": "nvidia/nemotron-3-ultra-550b-a55b:free",
+      "maxTokens": 16000
+    },
+    "mkt-4": {
+      "name": "SEO Architect Agent",
+      "port": 8653,
+      "backend": "openrouter",
+      "model": "nvidia/nemotron-3-ultra-550b-a55b:free",
+      "maxTokens": 16000
+    },
+    "mkt-5": {
+      "name": "Visual Prompt Agent",
+      "port": 8654,
+      "backend": "openrouter",
+      "model": "nvidia/nemotron-3-ultra-550b-a55b:free",
+      "maxTokens": 16000
+    },
+    "hr-1": {
+      "name": "HR Agent",
+      "port": 8646
+    },
+    "fin-1": {
+      "name": "Finance Agent",
+      "port": 8647
+    },
+    "fin-2": {
+      "name": "Audit Agent",
+      "port": 8648
+    },
+    "legal-1": {
+      "name": "Legal Agent",
+      "port": 8649
+    },
+    "cskh-1": {
+      "name": "Support Agent",
+      "port": 8650
+    },
+    "cskh-2": {
+      "name": "Care Agent",
+      "port": 8651
+    }
   }
 }

@@ -281,9 +281,13 @@
   function runBtn(k) {
     if (isAgentTask(k)) {
       const chat = `<button class="wk-minibtn" data-act="task-chat" data-id="${k.id}" title="Trao đổi trực tiếp với Agent về công việc này">💬</button>`;
-      if (isDone(k.status)) return chat;
       const ran = k.run && k.run.status === "done";
-      return `<button class="wk-minibtn go" data-act="run-agent" data-id="${k.id}" title="Cho Agent thực thi trọn công việc này">▶ ${ran ? "Chạy lại" : "Chạy Agent"}</button>${chat}`;
+      // Việc đã hoàn tất vẫn cho chạy lại: đây là đường soát tay khi người thấy kết quả chưa đạt.
+      // Lượt chạy lại KHÔNG tự duyệt — kết quả dừng ở "Chờ duyệt" để người xem rồi mới đóng.
+      const title = isDone(k.status)
+        ? "Kết quả chưa đạt? Chạy lại — lượt này sẽ dừng ở Chờ duyệt để bạn soát tay"
+        : "Cho Agent thực thi trọn công việc này";
+      return `<button class="wk-minibtn go" data-act="run-agent" data-id="${k.id}" title="${title}">▶ ${ran ? "Chạy lại" : "Chạy Agent"}</button>${chat}`;
     }
     if (isDone(k.status)) return "";
     return `<button class="wk-minibtn" data-act="assign-agent" data-id="${k.id}" title="Giao công việc này cho AI Agent">🤖 Giao Agent</button>`;
@@ -2134,10 +2138,18 @@
         `Proxy sống nhưng là <b>tiến trình cũ</b> — nó nạp <code>agents.config.json</code> một lần lúc khởi động, mà <code>${esc(k.executor.id)}</code> được thêm sau đó. Hãy <b>tắt và chạy lại</b> <code>node server/server.js</code>. Agent proxy đang biết: <code>${esc((health.agents || []).join(", "))}</code>.`);
     }
 
-    // 2. Ngữ cảnh
+    // 2. Ngữ cảnh — việc thuộc phiếu Content Cluster thì dùng đúng SKILL.md của chặng đó,
+    //    để lượt chạy lại không lệch so với lượt chạy tự động ban đầu.
     setStep("context", "doing");
-    const prompt = buildPrompt(k, a);
-    setStep("context", "ok", `${prompt.length} ký tự ngữ cảnh · ${(a.rules || []).length} rule của Agent`);
+    const stageKey = Object.keys(CLUSTER_AGENTS).find((s) => CLUSTER_AGENTS[s] === k.executor.id);
+    const tk = ticketById(k.ticket);
+    const laCluster = !!(stageKey && tk && /^Content Cluster:/.test(tk.title));
+    const prompt = laCluster
+      ? await stagePrompt(stageKey, `Chạy lại công việc: ${k.title}\n\nBối cảnh phiếu #${tk.code}: ${tk.desc}`)
+      : buildPrompt(k, a);
+    setStep("context", "ok", laCluster
+      ? `${prompt.length} ký tự · theo skill ${STAGE_SKILL[stageKey]}/SKILL.md`
+      : `${prompt.length} ký tự ngữ cảnh · ${(a.rules || []).length} rule của Agent`);
 
     // 3. Gọi Agent
     setStep("call", "doing", `Đang chờ ${a.name} (${a.model})…`);
@@ -2197,6 +2209,75 @@
   const CLUSTER_AGENTS = { research: "mkt-3", seo: "mkt-4", writer: "mkt-1", visual: "mkt-5" };
   const CLUSTER_PROJECT_NAME = "Marketing — Content Cluster";
 
+  // Mỗi chặng chạy theo đúng file SKILL.md trong marketing/skills/ — không nhúng lại
+  // hướng dẫn trong code, để sửa skill là engine đổi theo ngay, hai bên không lệch nhau.
+  const STAGE_SKILL = {
+    research: "nghien-cuu-chu-de",
+    seo: "kien-truc-seo-cluster",
+    writer: "viet-bai-chuan-seo",
+    visual: "prompt-anh-ai",
+  };
+  const SKILL_CACHE = {};
+
+  async function loadSkill(skillId) {
+    if (SKILL_CACHE[skillId] !== undefined) return SKILL_CACHE[skillId];
+    try {
+      const res = await fetch(`${WORK_PROXY_BASE}/api/marketing/skills/${encodeURIComponent(skillId)}`);
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok || !d.markdown) throw new Error(d.error || `Proxy trả lỗi ${res.status}`);
+      SKILL_CACHE[skillId] = d.markdown;
+      return d.markdown;
+    } catch (e) {
+      SKILL_CACHE[skillId] = null; // nhớ là hỏng, không gọi lại liên tục
+      console.warn(`[work] Không đọc được SKILL.md "${skillId}":`, e.message);
+      return null;
+    }
+  }
+
+  /* SKILL.md viết cho runtime CÓ tool (đọc web, ghi file, hỏi lại người dùng). Đường chạy
+     này là LLM trần qua OpenRouter — không tool, không file, không hỏi lại được. Không nói rõ
+     điều đó thì model sẽ phát ra lệnh gọi WebFetch rồi dừng, hoặc hỏi ngược lại và không ra
+     sản phẩm nào. Nên mọi prompt đều mở đầu bằng khung điều kiện thực thi này. */
+  const EXEC_CONTEXT = [
+    `## ĐIỀU KIỆN THỰC THI (ưu tiên cao hơn mọi hướng dẫn trong SKILL.md bên dưới)`,
+    `- Bạn đang chạy KHÔNG CÓ TOOL: không WebFetch, không WebSearch, không đọc/ghi file.`,
+    `  Tuyệt đối không phát ra lệnh gọi tool dưới bất kỳ dạng nào — chúng sẽ không được thực thi.`,
+    `- Không hỏi lại người dùng. Không có ai trả lời. Thiếu thông tin thì nêu rõ là thiếu rồi làm tiếp`,
+    `  phần làm được, hoặc ghi "chưa kiểm chứng" thay vì bịa.`,
+    `- Mọi bước trong skill yêu cầu tạo/ghi file: BỎ QUA phần ghi file, thay bằng in nội dung ra trả lời.`,
+    `- Chỉ dùng dữ kiện có trong phần NGUỒN được cung cấp bên dưới (nếu có). Không có nguồn thì`,
+    `  không được khẳng định số liệu cụ thể (giá, giờ mở cửa, khoảng cách) — ghi rõ là cần kiểm chứng.`,
+  ].join("\n");
+
+  // Prompt = điều kiện thực thi + toàn văn SKILL.md thật + nhiệm vụ của lượt chạy này
+  async function stagePrompt(stageKey, nhiemVu) {
+    const skillId = STAGE_SKILL[stageKey];
+    const md = await loadSkill(skillId);
+    if (!md) {
+      return `${EXEC_CONTEXT}\n\n⚠️ Không đọc được marketing/skills/${skillId}/SKILL.md.\n\n${nhiemVu}`;
+    }
+    return [
+      EXEC_CONTEXT, ``,
+      `Bạn đang thực thi skill \`${skillId}\` của AI OS. Toàn văn skill:`,
+      ``, `--- BẮT ĐẦU SKILL.md ---`, md, `--- HẾT SKILL.md ---`, ``,
+      `Làm đúng theo skill trên (trong giới hạn điều kiện thực thi) cho nhiệm vụ sau:`, ``, nhiemVu,
+    ].join("\n");
+  }
+
+  // Proxy đọc hộ trang nguồn — trả về { text, ngay_truy_cap, truncated } hoặc null
+  async function fetchSourceText(url) {
+    if (!url || !/^https?:\/\//i.test(url)) return null;
+    try {
+      const res = await fetch(`${WORK_PROXY_BASE}/api/marketing/fetch?url=${encodeURIComponent(url)}`);
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok || !d.text) throw new Error(d.error || `Proxy trả lỗi ${res.status}`);
+      return d;
+    } catch (e) {
+      console.warn("[work] Không đọc được trang nguồn:", e.message);
+      return null;
+    }
+  }
+
   // Dự án chứa mọi phiếu content cluster; tạo một lần rồi dùng lại
   function ensureClusterProject() {
     let p = S.projects.find((x) => x.name === CLUSTER_PROJECT_NAME);
@@ -2227,8 +2308,11 @@
     return k;
   }
 
-  // Chạy một Agent trên một công việc, ghi kết quả thành báo cáo. Trả về text hoặc null.
-  async function runTaskViaProxy(k, promptOverride) {
+  /* Chạy một Agent trên một công việc, ghi kết quả thành báo cáo. Trả về text hoặc null.
+     autoApprove = true  → công việc đóng luôn ở "Hoàn tất" (chế độ chạy tự động cả cluster).
+     autoApprove = false → dừng ở "Chờ duyệt" để người soát tay (dùng khi bấm Chạy lại). */
+  async function runTaskViaProxy(k, promptOverride, opts) {
+    const autoApprove = !opts || opts.autoApprove !== false;
     const a = agentById(k.executor.id);
     if (!a) return null;
     const started = Date.now();
@@ -2243,15 +2327,19 @@
       if (!res.ok) throw new Error(data.error || `Proxy trả lỗi ${res.status}`);
       if (!data.reply) throw new Error("Agent không trả về nội dung");
       const minutes = Math.max(1, Math.round((Date.now() - started) / 60000));
-      k.run = { status: "done", agentId: k.executor.id, mock: !!data.mock, output: data.reply, endedAt: new Date().toISOString() };
-      k.progress = 100; k.status = "Chờ duyệt";
+      k.run = { status: "done", agentId: k.executor.id, mock: !!data.mock, model: data.model || null, output: data.reply, endedAt: new Date().toISOString() };
+      k.progress = 100;
+      k.status = autoApprove ? DONE : "Chờ duyệt";
       k.reports.push({
         at: today(), progress: 100,
-        note: (data.mock ? "🧪 [MOCK_MODE — chưa nối Hermes thật] " : "") + data.reply,
+        note: (data.mock ? "🧪 [MOCK_MODE] " : "")
+          + (autoApprove ? "[Tự động duyệt theo rule chạy liền mạch] " : "[Chạy lại — chờ soát tay] ")
+          + data.reply,
         by: k.owner, byType: "agent", agentId: k.executor.id, minutes,
       });
       save();
-      if (typeof addFeed === "function") addFeed(`<b>${esc(a.name)}</b> hoàn thành "${esc(k.title)}" — chờ ${esc(staffName(k.owner))} duyệt.`, "f-done");
+      if (typeof addFeed === "function") addFeed(
+        `<b>${esc(a.name)}</b> hoàn thành "${esc(k.title)}"${autoApprove ? " — tự động duyệt" : ` — chờ ${esc(staffName(k.owner))} soát`}.`, "f-done");
       return data.reply;
     } catch (e) {
       k.run = { status: "failed", agentId: k.executor.id, error: e.message, endedAt: new Date().toISOString() };
@@ -2269,16 +2357,44 @@
   // KHÔNG bịa ra danh sách bài, vì như vậy sẽ sinh công việc cho những bài không có thật.
   function parseBlueprint(text) {
     if (!text) return [];
-    const m = text.match(/```json\s*([\s\S]*?)```/i);
-    if (!m) return [];
-    try {
-      const d = JSON.parse(m[1]);
+
+    // Lấy phần JSON: ưu tiên khối có rào đóng; nếu phản hồi bị cắt giữa chừng thì
+    // lấy từ rào mở tới hết chuỗi. Không có rào thì tìm object thô chứa "pillar".
+    let raw = null;
+    const closed = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
+    if (closed) raw = closed[1];
+    else {
+      const open = text.match(/```(?:json)?\s*([\s\S]*)$/i);
+      if (open) raw = open[1];
+      else {
+        const i = text.indexOf('{"pillar"') >= 0 ? text.indexOf('{"pillar"') : text.search(/\{\s*"pillar"/);
+        if (i >= 0) raw = text.slice(i);
+      }
+    }
+    if (!raw) return [];
+
+    const build = (d) => {
       const list = [];
       if (d.pillar && d.pillar.tieu_de) list.push({ ma_bai: "P-00", tieu_de: d.pillar.tieu_de, tu_khoa: d.pillar.tu_khoa_chinh || "" });
-      (d.cluster || []).forEach((c, i) =>
-        list.push({ ma_bai: c.ma_bai || `C-${String(i + 1).padStart(2, "0")}`, tieu_de: c.tieu_de || `Bài ${i + 1}`, tu_khoa: c.tu_khoa_chinh || "" }));
+      (d.cluster || []).forEach((c, i) => {
+        if (!c || !c.tieu_de) return;
+        list.push({ ma_bai: c.ma_bai || `C-${String(i + 1).padStart(2, "0")}`, tieu_de: c.tieu_de, tu_khoa: c.tu_khoa_chinh || "" });
+      });
       return list;
-    } catch (e) { return []; }
+    };
+
+    try { return build(JSON.parse(raw)); } catch (e) { /* rơi xuống nhánh cứu JSON cụt */ }
+
+    /* Phản hồi bị cắt → JSON không đóng ngoặc. Vớt lại các phần tử ĐÃ hoàn chỉnh
+       thay vì bỏ cả blueprint: chỉ nhận object nào có đủ tieu_de, không đoán phần dở dang. */
+    const salvage = [];
+    const pill = raw.match(/"pillar"\s*:\s*\{[\s\S]*?"tieu_de"\s*:\s*"([^"]+)"[\s\S]*?"tu_khoa_chinh"\s*:\s*"([^"]*)"/);
+    if (pill) salvage.push({ ma_bai: "P-00", tieu_de: pill[1], tu_khoa: pill[2] });
+    const re = /"ma_bai"\s*:\s*"([^"]+)"\s*,\s*"tieu_de"\s*:\s*"([^"]+)"\s*,\s*"tu_khoa_chinh"\s*:\s*"([^"]*)"/g;
+    let m;
+    while ((m = re.exec(raw)) !== null) salvage.push({ ma_bai: m[1], tieu_de: m[2], tu_khoa: m[3] });
+    if (salvage.length) console.warn(`[work] Blueprint S2 bị cắt — vớt được ${salvage.length} bài hoàn chỉnh.`);
+    return salvage;
   }
 
   const PIPE_LOG = [];
@@ -2348,30 +2464,38 @@
     const k1 = addAgentTask(ticket.id, "S1 · Nghiên cứu nguồn & bóc tách chủ đề con", CLUSTER_AGENTS.research);
     save(); render();
     pipeLog("🔎", `Công việc S1 giao ${agentById(CLUSTER_AGENTS.research).name} — đang chạy…`);
-    const out1 = await runTaskViaProxy(k1, [
-      `Bạn là Research Agent. Đọc nguồn sau và bóc tách danh sách chủ đề con để làm Topic Cluster.`,
-      `NGUỒN: ${sourceUrl || topic}`,
+    // Đọc trang nguồn TRƯỚC khi gọi agent — agent không tự duyệt web được
+    const src = await fetchSourceText(sourceUrl);
+    pipeLog(src ? "🌐" : "⚠️", src
+      ? `Đã đọc trang nguồn: ${src.chars.toLocaleString("vi-VN")} ký tự${src.truncated ? " (cắt bớt)" : ""}`
+      : sourceUrl ? "Không đọc được trang nguồn — S1 sẽ chỉ làm được phần không cần nguồn" : "Không có link nguồn — chạy theo chủ đề tự do");
+
+    const out1 = await runTaskViaProxy(k1, await stagePrompt("research", [
+      `Chủ đề gốc: ${topic}`,
+      `Nguồn: ${sourceUrl || "(không có link, chủ đề tự do)"}`,
+      src ? `Ngày truy cập nguồn: ${src.ngay_truy_cap}` : "",
       ``,
-      `Trả về: (1) tóm tắt nguồn, (2) danh sách thực thể/chủ đề con kèm lý do chọn hoặc loại.`,
-      `Chỉ liệt kê thực thể có trong nguồn. Không thêm địa danh/hạng mục vì "thường thấy".`,
-    ].join("\n"));
+      src ? `--- NỘI DUNG TRANG NGUỒN (đã đọc hộ, dùng đúng dữ kiện trong đây) ---\n${src.text}\n--- HẾT NGUỒN ---\n` : "",
+      `Trả về: (1) tóm tắt nguồn, (2) danh sách thực thể/chủ đề con kèm lý do chọn hoặc loại`,
+      `theo đúng 3 câu hỏi sàng lọc trong skill.`,
+    ].filter(Boolean).join("\n")));
     pipeLog(out1 ? "✅" : "⚠️", out1 ? "S1 xong — đã ghi báo cáo, chờ duyệt" : "S1 lỗi — xem báo cáo trong công việc");
 
     // ---- S2: kiến trúc SEO ----
     const k2 = addAgentTask(ticket.id, "S2 · Kiến trúc SEO & ma trận liên kết", CLUSTER_AGENTS.seo);
     save(); render();
     pipeLog("🗺️", `Công việc S2 giao ${agentById(CLUSTER_AGENTS.seo).name} — đang chạy…`);
-    const out2 = await runTaskViaProxy(k2, [
-      `Bạn là SEO Architect Agent. Dựa trên kết quả nghiên cứu dưới đây, dựng blueprint Topic Cluster.`,
+    const out2 = await runTaskViaProxy(k2, await stagePrompt("seo", [
+      `Chủ đề gốc: ${topic}`,
       ``,
-      `KẾT QUẢ NGHIÊN CỨU:`, (out1 || "(S1 chưa có kết quả)").slice(0, 4000),
+      `KẾT QUẢ NGHIÊN CỨU TỪ S1:`, (out1 || "(S1 chưa có kết quả)").slice(0, 6000),
       ``,
-      `Phân tầng từ khóa: pillar dùng head term, cluster dùng long-tail gắn thực thể cụ thể.`,
-      `Không để hai bài trùng từ khóa chính. Không bịa số volume.`,
-      ``,
-      `Cuối câu trả lời, in ra một khối \`\`\`json đúng định dạng:`,
+      `BẮT BUỘC: kết thúc câu trả lời bằng đúng một khối \`\`\`json, và khối đó phải TỐI GIẢN —`,
+      `mỗi bài chỉ 3 trường ma_bai, tieu_de, tu_khoa_chinh theo đúng thứ tự này, không thêm`,
+      `tu_khoa_phu/tu_khoa_lsi/meta vào khối JSON (viết chúng ở phần văn xuôi phía trên).`,
+      `Khối JSON dài dòng sẽ bị cắt và cả blueprint mất tác dụng.`,
       `{"pillar":{"tieu_de":"...","tu_khoa_chinh":"..."},"cluster":[{"ma_bai":"C-01","tieu_de":"...","tu_khoa_chinh":"..."}]}`,
-    ].join("\n"));
+    ].join("\n")));
     pipeLog(out2 ? "✅" : "⚠️", out2 ? "S2 xong — đã ghi báo cáo, chờ duyệt" : "S2 lỗi — xem báo cáo trong công việc");
 
     // ---- S3 + S4: vòng lặp từng bài ----
@@ -2396,24 +2520,23 @@
       const kw = addAgentTask(ticket.id, `S3 · Viết bài ${b.ma_bai} — ${b.tieu_de}`.slice(0, 120), CLUSTER_AGENTS.writer);
       save(); render();
       pipeLog("✍️", `${b.ma_bai} — đang viết…`);
-      const outW = await runTaskViaProxy(kw, [
-        `Bạn là Content Agent. Viết trọn bài ${b.ma_bai === "P-00" ? "TRỤ CỘT" : "vệ tinh"} sau, chuẩn SEO.`,
-        `Tiêu đề: ${b.tieu_de}`, `Từ khóa chính: ${b.tu_khoa}`,
-        `Độ dài: ${b.ma_bai === "P-00" ? "2.000–2.500" : "1.200–1.800"} từ.`,
-        `Chèn liên kết nội bộ và các thẻ [IMAGE_PLACEHOLDER_X: bối cảnh].`,
-        `Số liệu có hạn sử dụng phải kèm nguồn; không bịa con số.`,
-      ].join("\n"));
+      const outW = await runTaskViaProxy(kw, await stagePrompt("writer", [
+        `Viết trọn bài ${b.ma_bai} — loại: ${b.ma_bai === "P-00" ? "PILLAR (trụ cột)" : "CLUSTER (vệ tinh)"}.`,
+        `Tiêu đề: ${b.tieu_de}`,
+        `Từ khóa chính: ${b.tu_khoa}`,
+        `Độ dài mục tiêu: ${b.ma_bai === "P-00" ? "2.000–2.500" : "1.200–1.800"} từ.`,
+        `Các bài khác trong cluster (đừng giẫm góc nhìn): ${bai.map((x) => x.tieu_de).join(" · ")}`,
+      ].join("\n")));
       pipeLog(outW ? "✅" : "⚠️", `${b.ma_bai} ${outW ? "viết xong" : "lỗi"} — đã ghi báo cáo`);
 
       const kp = addAgentTask(ticket.id, `S4 · Prompt ảnh ${b.ma_bai}`, CLUSTER_AGENTS.visual, "Trung bình");
       save(); render();
       pipeLog("🖼️", `${b.ma_bai} — đang dựng prompt ảnh…`);
-      const outP = await runTaskViaProxy(kp, [
-        `Bạn là Visual Prompt Agent. Sinh AI Image Prompt tiếng Anh cho mọi [IMAGE_PLACEHOLDER_X] trong bài dưới đây.`,
-        `Mỗi prompt đủ 5 thành phần: Subject · Scene · Lighting · Camera angle · Aspect ratio (--ar 16:9).`,
-        `Kèm alt_text_vi bằng tiếng Việt. Không đưa tên thương hiệu đã đăng ký, không yêu cầu chữ trong ảnh.`,
-        ``, `BÀI VIẾT:`, (outW || "(chưa có nội dung bài)").slice(0, 4000),
-      ].join("\n"));
+      const outP = await runTaskViaProxy(kp, await stagePrompt("visual", [
+        `Sinh AI Image Prompt cho mọi [IMAGE_PLACEHOLDER_X] trong bài ${b.ma_bai} dưới đây.`,
+        `Chỉ tạo prompt, KHÔNG gọi công cụ sinh ảnh (bước đó cần duyệt credit riêng).`,
+        ``, `BÀI VIẾT:`, (outW || "(chưa có nội dung bài)").slice(0, 8000),
+      ].join("\n")));
       pipeLog(outP ? "✅" : "⚠️", `${b.ma_bai} prompt ảnh ${outP ? "xong" : "lỗi"} — đã ghi báo cáo`);
     }
 
