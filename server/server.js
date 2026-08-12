@@ -10,7 +10,7 @@ const genful = require("./genful");
 const hr = require("./hr");
 const tripx = require("./tripx");
 const marketing = require("./marketing");
-const { callChatModel, createImage } = require("./openrouter");
+const { callChatModel } = require("./openrouter");
 const sales = require("./sales");
 
 const ROOT = __dirname;
@@ -98,22 +98,42 @@ async function handleChat(agentId, agentCfg, payload) {
     throw Object.assign(new Error("Thiếu 'message'"), { status: 400 });
   }
 
-  /* Agent Image (mkt-7) — backend "openrouter-image", KHÁC hẳn nhánh "openrouter" text
-     ở dưới: gọi POST /api/v1/images (đã xác nhận bằng lượt gọi API thật, không suy đoán
-     từ tài liệu), không phải Chat Completions. Ảnh trả về được lưu qua db.saveMedia —
-     dùng lại đúng đường ghi đĩa + Firestore + Storage đã kiểm chứng ở luồng Content
-     Cluster, để ảnh sinh từ chat cũng có dấu vết như ảnh sinh tự động. */
-  if (agentCfg.backend === "openrouter-image") {
-    const model = agentCfg.model;
-    const img = await createImage({ prompt: message, model, size: agentCfg.imageSize });
+  /* Agent Image (mkt-7) — backend "genful-image": tái dùng đúng client JSON-RPC
+     (server/genful.js) đã kiểm chứng thật ở vòng lặp Content Cluster S4, thay vì gọi
+     OpenRouter/Qwen. Đổi lại theo yêu cầu: Qwen Image 3 Pro qua OpenRouter đo được
+     $0.04/ảnh, nhưng quy đổi ra credit-tương-đương ở Genful thì đắt gấp ~4 lần mức
+     400 credit/ảnh (Nano Banana 2, 1k, vip2) team marketing đang dùng — nên quay lại
+     Genful cho rẻ hơn, đồng thời dùng chung một nhà cung cấp ảnh cho cả hai luồng.
+
+     genful.sinhAnh() tự ghi file ra outPath rồi trả { file, credit, ... }; ở đây dùng
+     một đường dẫn tạm (os.tmpdir), đọc lại thành base64 để giao cho db.saveMedia ghi
+     bản CHÍNH THỨC (đĩa + Firestore + Storage) — tránh việc có hai bản file trùng nhau
+     nằm cạnh nhau trong marketing/data/. */
+  if (agentCfg.backend === "genful-image") {
+    const os = require("os");
+    if (!genful.sanSang()) {
+      throw Object.assign(new Error("Chưa cấu hình Genful — không thấy genful.config.json"), { status: 503 });
+    }
+    const tmpOut = path.join(os.tmpdir(), `aios-agent-image-${Date.now()}.png`);
+    let g;
+    try {
+      g = await genful.sinhAnh({ prompt: message, outPath: tmpOut });
+    } catch (e) {
+      throw Object.assign(new Error(`Genful không tạo được ảnh: ${e.message}`), { status: e.status || 502 });
+    }
+    const buf = fs.readFileSync(g.file);
+    const b64 = buf.toString("base64");
+    const ext = path.extname(g.file).toLowerCase();
+    const contentType = ext === ".png" ? "image/png" : "image/jpeg";
     const luu = await db.saveMedia({
       cluster: "chat-anh", ma_bai: agentId, ten: `${agentId}-${Date.now()}`,
-      contentType: img.mediaType, dataBase64: img.b64, prompt: message,
+      contentType, dataBase64: b64, prompt: message,
     });
+    try { fs.unlinkSync(g.file); } catch (e) { /* file tạm, dọn không được cũng không sao */ }
     return {
-      reply: `Đã tạo ảnh${img.cost != null ? ` — chi phí thật ${img.cost} USD` : ""}.`,
-      mock: false, backend: "openrouter-image", model,
-      image: { dataUrl: `data:${img.mediaType};base64,${img.b64}`, file: luu.file, cost: img.cost },
+      reply: `Đã tạo ảnh — chi phí ${g.credit} credit Genful.`,
+      mock: false, backend: "genful-image", model: agentCfg.model,
+      image: { dataUrl: `data:${contentType};base64,${b64}`, file: luu.file, credit: g.credit },
     };
   }
 

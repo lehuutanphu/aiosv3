@@ -156,13 +156,13 @@ const AGENTS = [
   {
     id: "mkt-7", dept: "mkt", icon: "🖌️", name: "Agent Image",
     role: "Sinh ảnh thật từ prompt — nhận từ Visual Prompt Agent hoặc gõ tay trong chat",
-    model: "Qwen Image 3 Pro", mode: "Fast",
-    modelWhy: "Model tạo ảnh của Qwen trên OpenRouter, giá xác nhận qua lượt gọi API thật: $0.04/ảnh ở 1024×576 (khớp mức \"1k\" 16:9 team đang dùng). genful.ai không có model Qwen tương đương để so — model gần nhất cùng hãng bên đó là Z-Image (Alibaba), khác dòng.",
+    model: "Nano Banana 2 (Genful)", mode: "Fast",
+    modelWhy: "Sinh ảnh qua Genful (Gommo), cùng model Nano Banana 2 · 1k · 16:9 mà vòng lặp Content Cluster đang dùng — 400 credit/ảnh. Từng thử Qwen Image 3 Pro qua OpenRouter ($0.04/ảnh xác nhận thật) nhưng quy đổi ra credit-tương-đương thì đắt gấp ~4 lần mức 400 credit này, nên quay lại Genful.",
     maturity: 40, stage: "Học việc",
     status: "idle",
     task: "Chờ prompt ảnh — bấm nút Tạo ảnh riêng để chạy, không chạy khi Enter",
     keywords: ["tạo ảnh", "sinh ảnh", "vẽ ảnh", "generate image", "qwen", "image agent"],
-    knowledge: ["Mỗi ảnh tốn tiền thật ($0.04 qua OpenRouter) — không sinh hàng loạt nếu chưa được duyệt phạm vi"],
+    knowledge: ["Mỗi ảnh tốn 400 credit Genful thật — không sinh hàng loạt nếu chưa được duyệt phạm vi"],
     workflows: ["Nhận prompt từ Visual Prompt Agent (nút chuyển tiếp trong chat) hoặc gõ trực tiếp"],
     skills: [],
     rules: [
@@ -1190,7 +1190,7 @@ function openDrawer(agentId, tab = "info") {
   switchTab(tab);
   renderChat(a);
   // Nút sinh ảnh riêng chỉ hiện với Agent Image — tách khỏi nút Gửi để không ai lỡ tay
-  // bấm Enter mà tốn tiền thật ($0.04/ảnh qua OpenRouter).
+  // bấm Enter mà tốn tiền thật (400 credit/ảnh qua Genful).
   const imgBtn = $("#chatImgBtn");
   if (imgBtn) imgBtn.style.display = a.id === "mkt-7" ? "" : "none";
   $("#agentDrawer").classList.add("open");
@@ -1795,7 +1795,7 @@ function renderChat(a, key = a.id) {
 /* ---------- Agent Image (mkt-7) — sinh ảnh thật, kích hoạt bằng nút riêng ----------
    Tách hẳn khỏi luồng chat văn bản: nút "🎨 Tạo ảnh" độc lập với nút "Gửi", và Enter
    trong khung nhập bị chặn khi đang chat với Agent Image (xem $("#chatForm") submit bên
-   dưới) — để không ai vô tình tốn tiền thật ($0.04/ảnh qua OpenRouter) chỉ vì gõ Enter. */
+   dưới) — để không ai vô tình tốn tiền thật (400 credit/ảnh qua Genful) chỉ vì gõ Enter. */
 async function requestAgentImage() {
   if (!currentAgent || currentAgent.id !== "mkt-7") return;
   const input = $("#chatInput");
@@ -1809,7 +1809,7 @@ async function requestAgentImage() {
   renderChat(currentAgent, key);
 
   const box = $("#chatMessages");
-  const typing = el(`<div class="msg agent typing">${currentAgent.icon} ${currentAgent.name} đang vẽ… (~$0.04, có thể mất 20-30s)</div>`);
+  const typing = el(`<div class="msg agent typing">${currentAgent.icon} ${currentAgent.name} đang vẽ… (~400 credit, có thể mất 20-40s)</div>`);
   box.appendChild(typing);
   box.scrollTop = box.scrollHeight;
   btn.disabled = true; btn.textContent = "Đang tạo…";
@@ -1825,13 +1825,13 @@ async function requestAgentImage() {
     if (!res.ok) throw new Error(data.error || `Proxy trả lỗi ${res.status}`);
     chatHistory[key].push({ from: "agent", text: data.reply, image: data.image && data.image.dataUrl });
     renderChat(currentAgent, key);
-    addFeed(`<b>${currentAgent.name}</b> vừa tạo 1 ảnh${data.image && data.image.cost != null ? ` — chi phí thật ${data.image.cost} USD` : ""}.`, "f-done");
+    addFeed(`<b>${currentAgent.name}</b> vừa tạo 1 ảnh${data.image && data.image.credit != null ? ` — ${data.image.credit} credit Genful` : ""}.`, "f-done");
   } catch (e) {
     typing.remove();
     chatHistory[key].push({ from: "agent", text: `⚠️ Không tạo được ảnh: ${e.message}` });
     renderChat(currentAgent, key);
   } finally {
-    btn.disabled = false; btn.textContent = "🎨 Tạo ảnh (~$0.04)";
+    btn.disabled = false; btn.textContent = "🎨 Tạo ảnh (~400 credit)";
   }
 }
 

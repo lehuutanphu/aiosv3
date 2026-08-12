@@ -73,9 +73,9 @@
     "mkt-7": {
       "name": "Agent Image",
       "port": 8657,
-      "backend": "openrouter-image",
-      "model": "qwen/qwen-image-3-pro",
-      "imageSize": "1024x576"
+      "backend": "genful-image",
+      "model": "google_image_gen_banana_2",
+      "modelName": "Nano Banana 2 (Gemini Flash Image)"
     },
     "orches": {
       "name": "Orches Agent",
