@@ -10,7 +10,7 @@ const genful = require("./genful");
 const hr = require("./hr");
 const tripx = require("./tripx");
 const marketing = require("./marketing");
-const { callChatModel } = require("./openrouter");
+const { callChatModel, createImage } = require("./openrouter");
 const sales = require("./sales");
 
 const ROOT = __dirname;
@@ -96,6 +96,25 @@ async function handleChat(agentId, agentCfg, payload) {
   const { message, history } = payload;
   if (!message || typeof message !== "string") {
     throw Object.assign(new Error("Thiếu 'message'"), { status: 400 });
+  }
+
+  /* Agent Image (mkt-7) — backend "openrouter-image", KHÁC hẳn nhánh "openrouter" text
+     ở dưới: gọi POST /api/v1/images (đã xác nhận bằng lượt gọi API thật, không suy đoán
+     từ tài liệu), không phải Chat Completions. Ảnh trả về được lưu qua db.saveMedia —
+     dùng lại đúng đường ghi đĩa + Firestore + Storage đã kiểm chứng ở luồng Content
+     Cluster, để ảnh sinh từ chat cũng có dấu vết như ảnh sinh tự động. */
+  if (agentCfg.backend === "openrouter-image") {
+    const model = agentCfg.model;
+    const img = await createImage({ prompt: message, model, size: agentCfg.imageSize });
+    const luu = await db.saveMedia({
+      cluster: "chat-anh", ma_bai: agentId, ten: `${agentId}-${Date.now()}`,
+      contentType: img.mediaType, dataBase64: img.b64, prompt: message,
+    });
+    return {
+      reply: `Đã tạo ảnh${img.cost != null ? ` — chi phí thật ${img.cost} USD` : ""}.`,
+      mock: false, backend: "openrouter-image", model,
+      image: { dataUrl: `data:${img.mediaType};base64,${img.b64}`, file: luu.file, cost: img.cost },
+    };
   }
 
   // Agent khai báo backend "openrouter" trong agents.config.json chạy THẬT qua OpenRouter,

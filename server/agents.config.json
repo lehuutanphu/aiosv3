@@ -69,6 +69,20 @@
     "mkt-6": {
       "name": "Publisher Agent",
       "port": 8655
+    },
+    "mkt-7": {
+      "name": "Agent Image",
+      "port": 8657,
+      "backend": "openrouter-image",
+      "model": "qwen/qwen-image-3-pro",
+      "imageSize": "1024x576"
+    },
+    "orches": {
+      "name": "Orches Agent",
+      "port": 8656,
+      "backend": "openrouter",
+      "model": "deepseek/deepseek-v4-flash",
+      "maxTokens": 800
     }
   }
 }

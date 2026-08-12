@@ -590,6 +590,17 @@ section.block { padding: 4.5rem 0; }
 }
 .chat-input-row textarea:focus { border-color: var(--brand); }
 
+/* ---------- Ảnh trong chat (Agent Image) ---------- */
+.chat-img { display: block; max-width: 100%; margin-top: .6rem; border-radius: 10px; border: 1px solid var(--line); }
+/* Nút "Tạo ảnh" tốn tiền thật — tô màu cảnh báo nhẹ để khác hẳn nút Gửi thường,
+   nhắc người dùng đây không phải thao tác miễn phí. */
+.chat-img-btn {
+  border-color: rgba(251,191,36,.5) !important; color: #fbbf24 !important;
+  background: rgba(251,191,36,.08) !important; white-space: nowrap;
+}
+.chat-img-btn:disabled { opacity: .6; cursor: wait; }
+.chat-handoff { display: block; margin-top: .6rem; }
+
 /* ---------- Skill modal ---------- */
 .modal-backdrop {
   position: fixed; inset: 0; background: rgba(3,7,24,.65); backdrop-filter: blur(4px);

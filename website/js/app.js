@@ -154,6 +154,23 @@ const AGENTS = [
     ],
   },
   {
+    id: "mkt-7", dept: "mkt", icon: "🖌️", name: "Agent Image",
+    role: "Sinh ảnh thật từ prompt — nhận từ Visual Prompt Agent hoặc gõ tay trong chat",
+    model: "Qwen Image 3 Pro", mode: "Fast",
+    modelWhy: "Model tạo ảnh của Qwen trên OpenRouter, giá xác nhận qua lượt gọi API thật: $0.04/ảnh ở 1024×576 (khớp mức \"1k\" 16:9 team đang dùng). genful.ai không có model Qwen tương đương để so — model gần nhất cùng hãng bên đó là Z-Image (Alibaba), khác dòng.",
+    maturity: 40, stage: "Học việc",
+    status: "idle",
+    task: "Chờ prompt ảnh — bấm nút Tạo ảnh riêng để chạy, không chạy khi Enter",
+    keywords: ["tạo ảnh", "sinh ảnh", "vẽ ảnh", "generate image", "qwen", "image agent"],
+    knowledge: ["Mỗi ảnh tốn tiền thật ($0.04 qua OpenRouter) — không sinh hàng loạt nếu chưa được duyệt phạm vi"],
+    workflows: ["Nhận prompt từ Visual Prompt Agent (nút chuyển tiếp trong chat) hoặc gõ trực tiếp"],
+    skills: [],
+    rules: [
+      "Chỉ sinh ảnh khi bấm nút \"Tạo ảnh\" riêng — gửi tin nhắn thường (Enter) không kích hoạt sinh ảnh",
+      "Luôn hiện rõ chi phí thật của lượt vừa chạy, không giấu",
+    ],
+  },
+  {
     id: "hr-1", dept: "hr", icon: "🧑‍💼", name: "HR Agent",
     role: "Chuyên viên tuyển dụng & hồ sơ nhân sự",
     hrIntake: true, // có pipeline tuyển dụng THẬT (project/aios/hr) — xem hr/README.md
@@ -1172,6 +1189,10 @@ function openDrawer(agentId, tab = "info") {
 
   switchTab(tab);
   renderChat(a);
+  // Nút sinh ảnh riêng chỉ hiện với Agent Image — tách khỏi nút Gửi để không ai lỡ tay
+  // bấm Enter mà tốn tiền thật ($0.04/ảnh qua OpenRouter).
+  const imgBtn = $("#chatImgBtn");
+  if (imgBtn) imgBtn.style.display = a.id === "mkt-7" ? "" : "none";
   $("#agentDrawer").classList.add("open");
   $("#drawerBackdrop").classList.add("open");
 }
@@ -1753,15 +1774,65 @@ function renderChat(a, key = a.id) {
     chatHistory[key] = [{
       from: "agent",
       text: `Chào anh/chị! Em là ${a.name} (${a.model}).\nEm đang phụ trách: "${a.task}".\nAnh/chị cần em hỗ trợ gì ạ?`,
+      seed: true, // đánh dấu lời chào mở đầu — không phải nội dung thật, không gắn nút chuyển tiếp prompt
     }];
   }
   const box = $("#chatMessages");
-  box.innerHTML = chatHistory[key].map(m =>
-    m.from === "user" ? `<div class="msg user">${m.text}</div>`
-    : m.from === "tool" ? `<div class="msg tool-log">🛠️ ${m.text}</div>`
-    : `<div class="msg agent"><div class="m-from">${a.icon} ${a.name}</div>${m.text}</div>`
-  ).join("");
+  box.innerHTML = chatHistory[key].map((m) => {
+    if (m.from === "user") return `<div class="msg user">${m.text}</div>`;
+    if (m.from === "tool") return `<div class="msg tool-log">🛠️ ${m.text}</div>`;
+    const anh = m.image ? `<img class="chat-img" src="${m.image}" alt="Ảnh do ${a.name} tạo">` : "";
+    // Chuyển tiếp prompt ảnh sang Agent Image — chỉ hiện dưới câu trả lời của chính Visual
+    // Prompt Agent (mkt-5, không phải mọi agent), và chỉ khi Agent Image đã có trong roster.
+    const chuyenTiep = (a.id === "mkt-5" && !m.image && !m.seed && AGENTS.some((x) => x.id === "mkt-7"))
+      ? `<button class="btn btn-ghost btn-sm chat-handoff" type="button" data-handoff-msg="${encodeURIComponent(m.text)}">➡ Gửi sang Agent Image</button>`
+      : "";
+    return `<div class="msg agent"><div class="m-from">${a.icon} ${a.name}</div>${m.text}${anh}${chuyenTiep}</div>`;
+  }).join("");
   box.scrollTop = box.scrollHeight;
+}
+
+/* ---------- Agent Image (mkt-7) — sinh ảnh thật, kích hoạt bằng nút riêng ----------
+   Tách hẳn khỏi luồng chat văn bản: nút "🎨 Tạo ảnh" độc lập với nút "Gửi", và Enter
+   trong khung nhập bị chặn khi đang chat với Agent Image (xem $("#chatForm") submit bên
+   dưới) — để không ai vô tình tốn tiền thật ($0.04/ảnh qua OpenRouter) chỉ vì gõ Enter. */
+async function requestAgentImage() {
+  if (!currentAgent || currentAgent.id !== "mkt-7") return;
+  const input = $("#chatInput");
+  const text = input.value.trim();
+  if (!text) return toast("Nhập mô tả ảnh cần tạo trước đã.");
+  const btn = $("#chatImgBtn");
+  const key = currentAgent.id;
+  input.value = ""; input.style.height = "auto";
+  if (!chatHistory[key]) renderChatSeed(currentAgent, key);
+  chatHistory[key].push({ from: "user", text });
+  renderChat(currentAgent, key);
+
+  const box = $("#chatMessages");
+  const typing = el(`<div class="msg agent typing">${currentAgent.icon} ${currentAgent.name} đang vẽ… (~$0.04, có thể mất 20-30s)</div>`);
+  box.appendChild(typing);
+  box.scrollTop = box.scrollHeight;
+  btn.disabled = true; btn.textContent = "Đang tạo…";
+
+  try {
+    const res = await fetch(`${HERMES_PROXY_BASE}/api/agents/mkt-7/chat`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ message: text }),
+    });
+    const data = await res.json().catch(() => ({}));
+    typing.remove();
+    if (!res.ok) throw new Error(data.error || `Proxy trả lỗi ${res.status}`);
+    chatHistory[key].push({ from: "agent", text: data.reply, image: data.image && data.image.dataUrl });
+    renderChat(currentAgent, key);
+    addFeed(`<b>${currentAgent.name}</b> vừa tạo 1 ảnh${data.image && data.image.cost != null ? ` — chi phí thật ${data.image.cost} USD` : ""}.`, "f-done");
+  } catch (e) {
+    typing.remove();
+    chatHistory[key].push({ from: "agent", text: `⚠️ Không tạo được ảnh: ${e.message}` });
+    renderChat(currentAgent, key);
+  } finally {
+    btn.disabled = false; btn.textContent = "🎨 Tạo ảnh (~$0.04)";
+  }
 }
 
 // ---------- HR CHAT (DeepSeek thật cho B2-B10, bỏ qua Hermes) ----------
@@ -2031,11 +2102,18 @@ async function syncKnowledgeToHermes(a, text) {
   }
 }
 
+$("#chatImgBtn").addEventListener("click", requestAgentImage);
+
 $("#chatForm").addEventListener("submit", (e) => {
   e.preventDefault();
   const input = $("#chatInput");
   const text = input.value.trim();
   if (!text || !currentAgent) return;
+  if (currentAgent.id === "mkt-7") {
+    // Chặn hẳn ở đây — Agent Image chỉ được kích hoạt qua nút "🎨 Tạo ảnh" riêng.
+    toast('🎨 Agent Image chỉ tạo ảnh khi bấm nút "Tạo ảnh" riêng — tránh tốn tiền thật vì lỡ tay Enter.');
+    return;
+  }
   const hrReqSelect = $("#hrChatReqSelect");
   const hrReqId = currentAgent.id === "hr-1" && hrReqSelect ? hrReqSelect.value : "";
   input.value = "";
@@ -2083,6 +2161,21 @@ $("#chatMessages")?.addEventListener("click", (e) => {
   const btn = e.target.closest("[data-hr-route]");
   if (!btn) return;
   hrRouteTo(btn.dataset.hrRoute, decodeURIComponent(btn.dataset.hrMsg || ""));
+});
+
+// Chuyển tiếp prompt ảnh từ Visual Prompt Agent (mkt-5) sang Agent Image (mkt-7) — chỉ
+// đưa nội dung vào khung nhập, KHÔNG tự sinh ảnh, người vẫn phải bấm "🎨 Tạo ảnh" để chạy.
+$("#chatMessages")?.addEventListener("click", (e) => {
+  const btn = e.target.closest("[data-handoff-msg]");
+  if (!btn) return;
+  const text = decodeURIComponent(btn.dataset.handoffMsg || "");
+  openDrawer("mkt-7");
+  const input = $("#chatInput");
+  input.value = text.slice(0, 2000);
+  input.style.height = "auto";
+  input.style.height = `${input.scrollHeight}px`;
+  input.focus();
+  toast('📥 Đã đưa nội dung sang Agent Image — chỉnh lại prompt nếu cần rồi bấm "🎨 Tạo ảnh".');
 });
 
 // Enter gửi tin nhắn, Shift+Enter xuống hàng (mặc định textarea) — và tự giãn chiều cao theo nội dung.
@@ -2147,7 +2240,53 @@ function isLeadCommand(cmd) {
   return /https?:\/\/\S*facebook\.com/i.test(t) && /(lead|comment|bình luận|sđt|số điện thoại|khách)/i.test(t);
 }
 
-function runOrches(cmd) {
+// Bóc khối JSON đầu tiên khỏi text — model đôi khi kèm vài chữ giải thích dù đã dặn
+// "chỉ trả JSON", nên tìm { … } đầu tiên thay vì JSON.parse thẳng cả chuỗi.
+function extractFirstJson(text) {
+  const m = String(text || "").match(/\{[\s\S]*\}/);
+  if (!m) return null;
+  try { return JSON.parse(m[0]); } catch (e) { return null; }
+}
+
+/* Orches phân loại yêu cầu bằng model thật (deepseek-v4-flash qua OpenRouter) thay vì chỉ
+   cộng điểm từ khóa cục bộ. Model hiểu ngữ cảnh tốt hơn — "khách phàn nàn điều khoản hợp
+   đồng" vừa khớp từ khóa CSKH vừa khớp Legal, model chọn được cái hợp lý hơn là cứ cộng
+   điểm ai nhiều từ khóa trúng hơn.
+
+   Luôn có phương án lùi: proxy chết, model trả rác, hoặc bịa ra một agentId không tồn tại
+   đều rơi về routeCommand (từ khóa cục bộ) — không bao giờ để Orches đứng im vì lỗi mạng. */
+async function classifyByOrches(cmd) {
+  const brief = AGENTS.map((a) => {
+    const dept = DEPARTMENTS.find((d) => d.id === a.dept);
+    return `${a.id} — ${a.name} (${dept ? dept.name : a.dept}): ${a.role}`;
+  }).join("\n");
+  const prompt = [
+    `Yêu cầu cần điều phối: "${cmd}"`,
+    ``,
+    `Danh sách Agent trong công ty:`, brief,
+    ``,
+    `Chọn ĐÚNG MỘT agentId phù hợp nhất từ danh sách trên — phải khớp CHÍNH XÁC một id có sẵn, không bịa id mới.`,
+    `Trả về ĐÚNG một khối JSON, không thêm chữ nào khác: {"agentId":"...","lyDo":"một câu ngắn giải thích vì sao"}`,
+  ].join("\n");
+
+  try {
+    const res = await fetch(`${HERMES_PROXY_BASE}/api/agents/orches/chat`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ message: prompt }),
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    const kq = extractFirstJson(data.reply);
+    if (!kq || !kq.agentId) return null;
+    const agent = AGENTS.find((a) => a.id === kq.agentId);
+    if (!agent) return null; // model bịa id lạ -> không dùng, rơi về routeCommand
+    return { agent, lyDo: kq.lyDo || "" };
+  } catch (e) {
+    return null;
+  }
+}
+
+async function runOrches(cmd) {
   const flow = $("#routingFlow");
   const steps = ["rs1", "rs2", "rs3", "rs4"].map(id => $("#" + id));
   steps.forEach(s => s.classList.remove("on"));
@@ -2185,18 +2324,26 @@ function runOrches(cmd) {
     return;
   }
 
-  const { agent, matched } = routeCommand(cmd);
-
   $("#rs1txt").textContent = `"${cmd.length > 60 ? cmd.slice(0, 60) + "…" : cmd}"`;
   addFeed(`<b>Orches Agent</b> nhận lệnh mới: "${cmd}"`, "f-orches");
-
   setTimeout(() => steps[0].classList.add("on"), 100);
+
+  // Gọi model thật để phân loại — có độ trễ mạng thật (thường vài giây), nên hiện bước 1
+  // NGAY trước khi chờ, để người dùng thấy phản hồi tức thì thay vì màn hình đứng im.
+  const kqModel = await classifyByOrches(cmd);
+  let agent, matched, lyDoThat;
+  if (kqModel) {
+    agent = kqModel.agent; matched = true; lyDoThat = kqModel.lyDo;
+  } else {
+    const r = routeCommand(cmd);
+    agent = r.agent; matched = r.matched;
+  }
 
   setTimeout(() => {
     steps[1].classList.add("on");
     if (matched) {
       const dept = DEPARTMENTS.find(d => d.id === agent.dept);
-      $("#rs2txt").textContent = `Nghiệp vụ thuộc ${dept.name}`;
+      $("#rs2txt").textContent = lyDoThat ? lyDoThat : `Nghiệp vụ thuộc ${dept.name}`;
     } else {
       $("#rs2txt").textContent = "Chưa nhận diện được nghiệp vụ — cần làm rõ";
     }
@@ -2206,7 +2353,7 @@ function runOrches(cmd) {
     steps[2].classList.add("on");
     if (matched) {
       $("#rs3txt").textContent = `→ ${agent.name} (${agent.model})`;
-      addFeed(`<b>Orches</b> phân tích ý định → giao cho <b>${agent.name}</b>${agent.skills.length ? ` · kích hoạt skill <b>${agent.skills[0]}</b>` : ""}.`, "f-orches");
+      addFeed(`<b>Orches</b> ${lyDoThat ? "phân tích bằng model thật" : "khớp từ khóa cục bộ"} → giao cho <b>${agent.name}</b>${agent.skills.length ? ` · kích hoạt skill <b>${agent.skills[0]}</b>` : ""}.`, "f-orches");
     } else {
       $("#rs3txt").textContent = "Orches hỏi lại để làm rõ yêu cầu";
       addFeed(`<b>Orches</b> chưa xác định được Agent phụ trách — đã gửi câu hỏi làm rõ vào khung chat.`, "f-rule");
@@ -2266,6 +2413,7 @@ function renderChatSeed(a, key = a.id) {
   chatHistory[key] = [{
     from: "agent",
     text: `Chào anh/chị! Em là ${a.name} (${a.model}).\nEm đang phụ trách: "${a.task}".\nAnh/chị cần em hỗ trợ gì ạ?`,
+    seed: true,
   }];
 }
 

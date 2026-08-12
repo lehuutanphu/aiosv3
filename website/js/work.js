@@ -1768,9 +1768,10 @@
   function nutXuLyVuong(k) {
     return `<div class="wk-cellflex">
       <button class="wk-minibtn" data-act="vuong-xem" data-id="${k.id}" title="Xem đầu bài, lý do dừng và lịch sử xử lý">🔍 Xem lỗi</button>
-      ${isAgentTask(k) ? `<button class="wk-minibtn go" data-act="run-agent" data-id="${k.id}" title="Chạy lại đúng công việc này, giữ nguyên đầu bài">▶ Chạy lại</button>` : ""}
+      <button class="wk-minibtn go" data-act="orches-xuly" data-id="${k.id}" title="Nhờ Orches phân tích và TỰ ÁP DỤNG quyết định — chạy lại / đổi Agent / chuyển người, không hỏi lại">🧭 Orches xử lý</button>
+      ${isAgentTask(k) ? `<button class="wk-minibtn" data-act="run-agent" data-id="${k.id}" title="Chạy lại đúng công việc này, giữ nguyên đầu bài">▶ Chạy lại</button>` : ""}
       <button class="wk-minibtn" data-act="task-edit" data-id="${k.id}" title="Sửa đầu bài rồi chạy lại — dùng khi lỗi do yêu cầu chưa rõ">✎ Sửa</button>
-      <button class="wk-minibtn" data-act="vuong-dieuphoi" data-id="${k.id}" title="Giao cho Agent khác hoặc chuyển người thật xử lý">🧭 Đổi người</button>
+      <button class="wk-minibtn" data-act="vuong-dieuphoi" data-id="${k.id}" title="Giao cho Agent khác hoặc chuyển người thật xử lý">↔ Đổi người</button>
       <button class="wk-minibtn" data-act="vuong-dong" data-id="${k.id}" title="Không làm được — đóng lại kèm lý do (chỉ người mới được đóng)">🙋 Đóng có lý do</button>
     </div>`;
   }
@@ -1803,7 +1804,9 @@
     <div class="wk-note warn"><b>Quy tắc:</b> việc của Agent bị lỗi hay bế tắc đều quay về đây để Orches điều phối lại.
       Agent <b>không tự đóng</b> việc của chính nó — chỉ người chịu trách nhiệm mới được đóng, và bắt buộc nêu lý do.</div>
     <div class="wk-panel">
-      <div class="wk-panel-head"><h3>Đang chờ điều phối (${ds.length})</h3></div>
+      <div class="wk-panel-head"><h3>Đang chờ điều phối (${ds.length})</h3>
+        <button class="btn btn-primary btn-sm" data-act="orches-xuly-tatca" title="Nhờ Orches lần lượt xem xét và tự áp dụng quyết định cho từng việc trong hàng đợi">🧭 Nhờ Orches xử lý tất cả</button>
+      </div>
       <table class="wk-table">
         <thead><tr><th>Công việc</th><th>Người thực hiện</th><th>Lý do dừng</th><th>Từ lúc</th><th>Xử lý</th></tr></thead>
         <tbody>${rows}</tbody>
@@ -2329,6 +2332,117 @@
     save(); closeModal(); render(); say(`Đã chuyển sang ${moi} ✓`);
   }
 
+  /* ---------- Orches tự xử lý việc vướng ----------
+     Gọi model thật (deepseek-v4-flash qua agent "orches") để QUYẾT ĐỊNH và ÁP DỤNG NGAY —
+     không dừng lại chờ người xác nhận, theo đúng lựa chọn khi dựng tính năng này. Nhưng có
+     một ranh giới cứng không đổi: Orches KHÔNG BAO GIỜ tự đóng việc, dù quyết định là gì.
+     Đóng việc luôn là hành động của con người kèm lý do (dongViecCoLyDo) — đúng quy tắc QT3
+     đã chốt: "không vì lỗi không thực hiện được mà Agent tự đóng nó lại". */
+  async function chatOrches(message) {
+    try {
+      const res = await fetchCoHan(`${WORK_PROXY_BASE}/api/agents/orches/chat`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message }),
+      }, 45000);
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(d.error || `Proxy lỗi ${res.status}`);
+      return d.reply || "";
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function trichJson(text) {
+    const m = String(text || "").match(/\{[\s\S]*\}/);
+    if (!m) return null;
+    try { return JSON.parse(m[0]); } catch (e) { return null; }
+  }
+
+  async function orchesXuLyVuongMac(taskId) {
+    const k = taskById(taskId);
+    if (!k || !dangVuong(k)) return;
+
+    const t = ticketById(k.ticket);
+    const dsAgent = agentList().map((a) =>
+      `${a.id} — ${a.name}: ${a.role}. Từ khóa: ${(a.keywords || []).slice(0, 6).join(", ")}`).join("\n");
+    const hienTai = isAgentTask(k) ? (agentById(k.executor.id) || {}).name || k.executor.id : staffName(k.executor.id);
+
+    const prompt = [
+      `Công việc "${k.title}" đang vướng, cần Orches xem xét điều phối lại.`,
+      `Lý do dừng: ${k.vuong.lyDo}`,
+      t ? `Thuộc phiếu: ${t.title}\nMô tả phiếu: ${String(t.desc || "").slice(0, 400)}` : "",
+      `Người/Agent thực hiện hiện tại: ${hienTai}`,
+      ``,
+      `Danh sách Agent có thể giao việc:`, dsAgent,
+      ``,
+      `Quyết định ĐÚNG MỘT trong ba hướng sau, trả về ĐÚNG một khối JSON, không thêm chữ khác:`,
+      `{"hanhDong":"chay-lai","lyDo":"..."} — giữ nguyên người thực hiện, thử lại. Dùng khi lỗi có vẻ tạm thời (timeout, quá tải, mạng chập chờn).`,
+      `{"hanhDong":"doi-agent","agentId":"...","lyDo":"..."} — đổi sang Agent khác phù hợp hơn. agentId PHẢI khớp chính xác một id trong danh sách trên.`,
+      `{"hanhDong":"can-nguoi","lyDo":"..."} — việc vượt khả năng AI hiện tại, cần người chịu trách nhiệm trực tiếp xử lý.`,
+    ].filter(Boolean).join("\n");
+
+    say(`Đang nhờ Orches xem xét "${k.title.slice(0, 40)}"…`);
+    const reply = await chatOrches(prompt);
+    const qd = reply && trichJson(reply);
+
+    if (!qd || !qd.hanhDong) {
+      // Model không trả về được quyết định hợp lệ — KHÔNG đoán bừa, giữ nguyên trong hàng
+      // đợi vướng mắc để người xử lý tay hoặc thử lại sau.
+      if (k.vuong) k.vuong.lichSu = [...(k.vuong.lichSu || []), { at: new Date().toISOString(), hanhDong: "Orches không quyết định được", ghiChu: reply ? "phản hồi không đọc được JSON" : "không gọi được model" }];
+      save(); render();
+      say("Orches chưa đưa ra quyết định được — thử lại sau hoặc xử lý tay");
+      return;
+    }
+
+    if (qd.hanhDong === "doi-agent") {
+      const agentMoi = agentById(qd.agentId);
+      if (!agentMoi) {
+        // Model bịa một agentId không tồn tại — KHÔNG áp dụng, tránh giao việc cho "ma".
+        k.vuong.lichSu = [...(k.vuong.lichSu || []), { at: new Date().toISOString(), hanhDong: "Orches đề xuất Agent không hợp lệ", ghiChu: `agentId "${qd.agentId}" không có thật` }];
+        save(); render();
+        say(`Orches đề xuất Agent không tồn tại ("${qd.agentId}") — bỏ qua, cần xử lý tay`);
+        return;
+      }
+      dieuPhoiLai(k.id, `agent:${agentMoi.id}`, `Orches tự điều phối: ${qd.lyDo || "không nêu lý do"}`);
+      say(`Orches đã chuyển sang ${agentMoi.name} ✓`);
+      return;
+    }
+
+    if (qd.hanhDong === "can-nguoi") {
+      // "Cần người" KHÔNG phải đóng việc — chuyển hẳn về người chịu trách nhiệm để họ tự
+      // làm hoặc tự quyết đóng (đóng vẫn luôn cần lý do, qua dongViecCoLyDo).
+      dieuPhoiLai(k.id, `human:${k.owner}`, `Orches: ${qd.lyDo || "việc vượt khả năng AI hiện tại"}`);
+      say(`Orches chuyển việc này về ${staffName(k.owner)} xử lý ✓`);
+      return;
+    }
+
+    // Mặc định / "chay-lai": người thực hiện là Agent thì gọi lại đúng Agent đó; là người
+    // thì không có gì để "Orches chạy lại", chuyển thẳng về can-nguoi cho người xử lý.
+    if (!isAgentTask(k)) {
+      dieuPhoiLai(k.id, `human:${k.owner}`, `Orches: việc của người thực hiện, không tự chạy lại được — chuyển về ${staffName(k.owner)}.`);
+      return;
+    }
+    k.vuong.lichSu = [...(k.vuong.lichSu || []), { at: new Date().toISOString(), hanhDong: "Orches quyết định: chạy lại", ghiChu: qd.lyDo || "" }];
+    save();
+    await startRun(k.id); // headless — an toàn khi không có modal mở, đã kiểm chứng trong startRun
+    say(`Orches đã chạy lại "${k.title.slice(0, 40)}" ✓`);
+  }
+
+  /* Quét hết hàng đợi vướng mắc — chạy TUẦN TỰ (không song song) để không dội hàng loạt
+     lượt gọi model cùng lúc, và để mỗi lượt thấy đúng trạng thái mới nhất sau lượt trước. */
+  async function orchesXuLyTatCa() {
+    const ds = viecDangVuong();
+    if (!ds.length) return say("Không có việc nào đang vướng");
+    say(`Orches đang xử lý ${ds.length} việc vướng — có thể mất vài phút…`);
+    let xong = 0;
+    for (const k of ds.map((x) => x.id)) {
+      await orchesXuLyVuongMac(k);
+      xong++;
+    }
+    render();
+    say(`Orches đã xử lý xong ${xong} việc — kiểm tra lại kết quả trong bảng`);
+  }
+
   function approveTask(taskId) {
     const k = taskById(taskId);
     if (!k) return;
@@ -2666,7 +2780,12 @@
     const fail = (stepId, msg, hint) => {
       setStep(stepId, "fail", msg);
       k.run = { status: "failed", agentId: k.executor.id, error: msg, endedAt: new Date().toISOString() };
-      k.reports.push({ at: today(), progress: k.progress, note: `⚠️ Không chạy được ${a ? a.name : k.executor.id}: ${msg}`, by: k.owner, byType: "agent", agentId: k.executor.id });
+      // QT2/QT3: mọi lần chạy thất bại — dù bấm tay hay Orches tự chạy lại — đều phải đẩy
+      // về hàng đợi vướng mắc kèm lý do MỚI, không chỉ ghi báo cáo rồi im lặng đứng yên.
+      // Trước bản vá này startRun() không gọi chuyenVeOrches, nên "Chạy lại" thất bại lần 2
+      // chỉ để lại đúng report mà không cập nhật gì — vô hình với màn Điều phối.
+      chuyenVeOrches(k, `${a ? a.name : k.executor.id} chạy lại vẫn lỗi: ${msg}`);
+      capNhatTrangThaiPhieu(ticketById(k.ticket));
       save();
       // hint là HTML do chính file này dựng (các giá trị động bên trong đã được esc)
       if (out) out.innerHTML = `<div class="wk-note warn"><b>Chạy thất bại.</b> ${hint || ""}</div>`;
@@ -2730,11 +2849,19 @@
     k.run = { status: "done", agentId: k.executor.id, mock, output: data.reply, endedAt: new Date().toISOString() };
     k.progress = 100;
     k.status = "Chờ duyệt";
+    // Chạy lại thành công thì việc KHÔNG còn vướng nữa — nếu không xoá cờ này, task vẫn
+    // hiện trong màn Điều phối dù đã có kết quả tốt chờ người duyệt, sai hoàn toàn với thực tế.
+    if (k.vuong) {
+      const luc = new Date().toISOString();
+      k.vuong = { ...k.vuong, trangThai: "da-dieu-phoi",
+        lichSu: [...(k.vuong.lichSu || []), { at: luc, hanhDong: "Chạy lại thành công", ghiChu: "" }] };
+    }
     k.reports.push({
       at: today(), progress: 100,
       note: (mock ? "🧪 [MOCK_MODE — chưa nối Hermes thật] " : "") + data.reply,
       by: k.owner, byType: "agent", agentId: k.executor.id, minutes,
     });
+    capNhatTrangThaiPhieu(ticketById(k.ticket));
     save();
     setStep("report", "ok", `Đã ghi báo cáo · chờ ${staffName(k.owner)} duyệt`);
 
@@ -3593,6 +3720,8 @@
       case "vuong-dieuphoi-save": dieuPhoiLai(d.id, val("wk_dp_exec"), val("wk_dp_note")); break;
       case "vuong-dong": mDongCoLyDo(d.id); break;
       case "vuong-dong-save": dongViecCoLyDo(d.id, val("wk_dong_ly")); break;
+      case "orches-xuly": orchesXuLyVuongMac(d.id); break;
+      case "orches-xuly-tatca": orchesXuLyTatCa(); break;
       case "dong-phieu": dongPhieu(d.id); break;
       case "task-chat": mTaskChat(d.id); break;
       case "chat-send": sendChat(d.id); break;
