@@ -177,11 +177,44 @@
     return seed();
   }
 
+  /* Ghi localStorage, và nếu vượt hạn mức thì ghi bản RÚT GỌN thay vì nuốt lỗi.
+
+     Vì sao quan trọng: một vòng Content Cluster tạo ~31 công việc, mỗi công việc mang
+     toàn văn bài viết trong run.output và trong báo cáo — dễ vượt trần ~5MB của
+     localStorage. Trước đây lỗi này bị nuốt im lặng, nên lần nạp sau load() rơi về dữ
+     liệu mẫu; rồi các hàm vá lúc khởi động đẩy dữ liệu mẫu đó lên máy chủ và cơ chế
+     diff xoá sạch phiếu thật. Đúng một phiếu 31 công việc đã mất theo đường này.
+
+     Toàn văn bài viết vẫn an toàn: chúng nằm ở collection riêng trên Firestore, ở file
+     .md trên đĩa và trên TripX — localStorage chỉ là đệm, cắt bớt ở đây không mất gì. */
+  let localDayDu = true;
+
+  function banRutGon(state) {
+    const cat = (s, n) => (typeof s === "string" && s.length > n ? s.slice(0, n) + `\n…[cắt bớt ${s.length - n} ký tự — bản đầy đủ ở Firestore/đĩa]` : s);
+    return {
+      ...state,
+      tasks: (state.tasks || []).map((k) => ({
+        ...k,
+        run: k.run ? { ...k.run, output: cat(k.run.output, 400) } : k.run,
+        chat: Array.isArray(k.chat) ? k.chat.slice(-6).map((c) => ({ ...c, text: cat(c.text, 400) })) : k.chat,
+        reports: (k.reports || []).map((r) => ({ ...r, note: cat(r.note, 600) })),
+      })),
+    };
+  }
+
   function saveLocal() {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(S));
+      localDayDu = true;
     } catch (e) {
-      console.warn("[work] Không lưu được vào localStorage:", e);
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(banRutGon(S)));
+        if (localDayDu) console.warn("[work] localStorage đầy — chuyển sang lưu bản rút gọn. Bản đầy đủ nằm ở Firestore và trên đĩa.");
+        localDayDu = false;
+      } catch (e2) {
+        localDayDu = false;
+        console.warn("[work] Không lưu được vào localStorage kể cả bản rút gọn:", e2);
+      }
     }
   }
 
@@ -197,7 +230,34 @@
   let pushing = false;
   let pushLai = false;
 
+  /* CHỐT CHẶN CHỐNG XOÁ NHẦM DỮ LIỆU.
+
+     Khi trang vừa mở, ta CHƯA BIẾT máy chủ đang có gì. Trong khoảng đó các hàm vá dữ
+     liệu lúc khởi động (ensureAgentOwners, ensureLeads, ensureVuong…) vẫn gọi save().
+     Nếu localStorage rỗng hoặc hỏng thì state đang giữ là DỮ LIỆU MẪU, và đẩy nó lên
+     sẽ khiến cơ chế diff xoá sạch dữ liệu thật trên Firestore.
+
+     Đó không phải giả thiết: một phiếu Content Cluster cùng 31 công việc đã mất đúng
+     theo đường này. Nên: cấm đẩy cho tới khi hydrate xong, và nếu hydrate thất bại
+     trong lúc ta chỉ có dữ liệu mẫu thì cấm đẩy luôn cả phiên. */
+  let choHydrate = true;
+  let noDayCho = false;
+
+  function moDuongDay(lyDo) {
+    choHydrate = false;
+    if (noDayCho) { noDayCho = false; schedulePush(); }
+    if (lyDo) console.info("[work] Mở đường đồng bộ:", lyDo);
+  }
+
+  function chanDuongDay(lyDo) {
+    choHydrate = true;
+    noDayCho = false;
+    setSync("offline", "Không đồng bộ (bảo vệ dữ liệu)", lyDo);
+    console.warn("[work] Chặn đồng bộ để không ghi đè dữ liệu thật:", lyDo);
+  }
+
   function schedulePush() {
+    if (choHydrate) { noDayCho = true; return; }
     clearTimeout(pushTimer);
     pushTimer = setTimeout(pushToServer, 1500);
   }
@@ -250,13 +310,21 @@
       if (!res.ok) throw new Error(`Proxy trả lỗi ${res.status}`);
       d = await res.json();
     } catch (e) {
-      setSync("offline", "Chỉ lưu trong trình duyệt", `Chưa chạy proxy tại ${WORK_PROXY_BASE}. Dữ liệu chỉ nằm ở máy này và mất khi xoá cache.`);
+      /* Không hỏi được máy chủ. Nếu thứ ta đang giữ chỉ là dữ liệu mẫu thì TUYỆT ĐỐI
+         không được đẩy lên sau này — máy chủ có thể đang giữ dữ liệu thật. */
+      if (LOAD_SOURCE === "seed") {
+        chanDuongDay(`Không gọi được proxy tại ${WORK_PROXY_BASE} và trình duyệt chỉ có dữ liệu mẫu. Đã khoá đồng bộ để không ghi đè dữ liệu thật trên Firebase. Bật proxy rồi tải lại trang.`);
+      } else {
+        moDuongDay("proxy không phản hồi nhưng trình duyệt đang giữ dữ liệu thật của người dùng");
+        setSync("offline", "Chỉ lưu trong trình duyệt", `Chưa chạy proxy tại ${WORK_PROXY_BASE}. Dữ liệu chỉ nằm ở máy này và mất khi xoá cache.`);
+      }
       return;
     }
 
     const remote = d && d.state;
     if (!remote || !Array.isArray(remote.tasks)) {
       // Kho trên máy chủ còn trống — đẩy ngay những gì đang có để có bản sao
+      moDuongDay("kho trên máy chủ còn trống");
       await pushToServer();
       return;
     }
@@ -266,9 +334,12 @@
 
     if (LOAD_SOURCE === "seed" || tMay > tTrinhDuyet) {
       S = remote;
+      // Mở đường đẩy TRƯỚC khi chạy các hàm vá, vì giờ state đã là dữ liệu thật của máy chủ
+      moDuongDay("đã nạp dữ liệu thật từ máy chủ");
       ensureAgentOwners();
       ensureLeads();
       ensureLeadTaskTags();
+      ensureVuong();
       saveLocal();
       render();
       refreshCounters();
@@ -277,6 +348,7 @@
         `${remote.tasks.length} công việc · ${(remote.projects || []).length} dự án`);
     } else {
       // Trình duyệt đang giữ bản mới hơn -> đẩy lên thay vì lấy về
+      moDuongDay("trình duyệt đang giữ bản mới hơn máy chủ");
       await pushToServer();
     }
   }
@@ -481,6 +553,7 @@
     projects: { icon: "📁", title: "Dự án", desc: "Mỗi dự án gắn 1 khách hàng, 1 PM và nhóm nhân sự. Tiến độ cuộn lên từ công việc → phiếu → dự án." },
     tickets: { icon: "🎫", title: "Phiếu yêu cầu", desc: "Yêu cầu từ khách hàng hoặc nội bộ, luôn thuộc về đúng một dự án." },
     tasks: { icon: "✅", title: "Công việc", desc: "Đơn vị nhỏ nhất để giao việc — cho nhân sự hoặc cho AI Agent." },
+    dieuphoi: { icon: "🧭", title: "Điều phối — việc đang vướng", desc: "Mọi công việc bị lỗi hoặc bế tắc đều dồn về đây kèm lý do cụ thể. Orches (hoặc bạn) quyết định chạy lại, sửa đầu bài, đổi người thực hiện — hoặc đóng lại kèm lý do. Không việc nào được nằm im không rõ vì sao." },
     staff: { icon: "👥", title: "Nhân sự & Agent", desc: "Khối lượng việc của từng người, kèm các AI Agent mà người đó chịu trách nhiệm." },
     reports: { icon: "📈", title: "Báo cáo", desc: "Nhật ký báo cáo tiến độ. Người tự nhập, Agent tự sinh — cùng một dòng thời gian." },
     leads: { icon: "🧲", title: "Lead — Khách & Partner tiềm năng", desc: "Kho liên hệ do Lead Hunter Agent thu thập từ mạng xã hội, phân loại theo khách/partner và nhóm dịch vụ để mời qua các kênh khác." },
@@ -661,6 +734,19 @@
     );
   }
 
+  /* Nút đóng phiếu: khi chưa đủ điều kiện thì vẫn hiện nhưng bị vô hiệu và NÓI RÕ còn
+     thiếu gì — nút biến mất hoặc bấm không phản ứng đều khiến người dùng tưởng hỏng. */
+  function nutDongPhieu(t) {
+    if (isDone(t.status)) return `<span class="wk-pill done">Phiếu đã đóng</span>`;
+    const lyDo = lyDoKhongDongDuocPhieu(t);
+    if (lyDo) {
+      return `<button class="btn btn-ghost btn-sm" disabled title="${esc(lyDo)}">🔒 Chưa đóng được phiếu</button>
+        <span class="wk-sub">${esc(lyDo)}</span>`;
+    }
+    return `<button class="btn btn-primary btn-sm" data-act="dong-phieu" data-id="${t.id}">✓ Đóng phiếu</button>
+      <span class="wk-sub">Mọi công việc đã hoàn tất</span>`;
+  }
+
   function vTicketDetail() {
     const t = ticketById(CTX);
     if (!t) return vTickets();
@@ -674,14 +760,14 @@
         <td>${whoBadge(k)}</td>
         <td>${fmtD(k.start)}</td>
         <td>${dlCell(k.deadline, k.status)}</td>
-        <td>${pill(k.status)}${needsReport(k) ? ' <span class="wk-pill late" title="Đang làm nhưng không có báo cáo mới">im lặng</span>' : ""}</td>
+        <td>${pill(k.status)}${vuongTag(k)}${needsReport(k) ? ' <span class="wk-pill late" title="Đang làm nhưng không có báo cáo mới">im lặng</span>' : ""}</td>
         <td>${bar(k.progress)}</td>
         <td class="wk-muted" style="max-width:220px">${last ? esc(last.note.slice(0, 70)) : "—"}</td>
-        <td><div class="wk-cellflex">
+        <td>${dangVuong(k) ? nutXuLyVuong(k) : `<div class="wk-cellflex">
           ${k.status === "Chờ duyệt" ? `<button class="wk-minibtn go" data-act="approve" data-id="${k.id}">Duyệt</button><button class="wk-minibtn" data-act="reject" data-id="${k.id}">Trả lại</button>` : ""}
           ${runBtn(k)}
           <button class="wk-minibtn" data-act="report" data-id="${k.id}">Báo cáo</button>
-        </div></td>
+        </div>`}</td>
       </tr>`;
     }).join("");
 
@@ -699,13 +785,32 @@
         <div class="cell full"><div class="lbl">Nội dung yêu cầu</div><div class="val normal">${esc(t.desc)}</div></div>
         <div class="cell full"><div class="lbl">Người xử lý</div><div class="val">${t.assignees.map((a) => `<span class="wk-chip">${esc(staffName(a))}</span>`).join("")}</div></div>
       </div>
+      <div class="wk-panel-foot">${nutDongPhieu(t)}</div>
     </div>`;
+
+    /* QT1/QT3 — bảng vướng mắc đặt NGAY trên danh sách công việc: đây là thứ người mở
+       phiếu cần thấy đầu tiên khi có việc hỏng, không phải lặn tìm trong bảng dài. */
+    const vuong = ks.filter(dangVuong);
+    const bangVuong = vuong.length ? `
+      <div class="wk-panel wk-panel-vuong">
+        <div class="wk-panel-head"><h3>⛔ Vướng mắc cần xử lý (${vuong.length})</h3>
+          <span class="wk-pill late">phiếu chưa đóng được</span></div>
+        <table class="wk-table">
+          <thead><tr><th>Công việc</th><th>Người thực hiện</th><th>Lý do dừng</th><th>Xử lý</th></tr></thead>
+          <tbody>${vuong.map((k) => `<tr>
+            <td><b>${esc(k.title)}</b>${ownerLine(k)}</td>
+            <td>${whoBadge(k)}</td>
+            <td class="wk-vuong-ly">${esc(k.vuong.lyDo)}<span class="wk-sub">${gioNgan(k.vuong.luc)}</span></td>
+            <td>${nutXuLyVuong(k)}</td>
+          </tr>`).join("")}</tbody>
+        </table>
+      </div>` : "";
 
     return crumb([
       { label: "Dự án", view: "projects" },
       ...(p ? [{ label: p.name, view: "projectDetail", id: p.id }] : []),
       { label: `Phiếu #${t.code}` },
-    ]) + head + panel(
+    ]) + head + bangVuong + panel(
       `✅ Công việc trong phiếu <span class="wk-pill new">${ks.length}</span>`,
       `<button class="btn btn-primary btn-sm" data-act="new-task" data-ticket="${t.id}">＋ Giao công việc</button>`,
       table(
@@ -1532,12 +1637,8 @@
           agentStepReport(k1, false, note, 40);
           pipeLog("⛔", "Nguồn bị chặn — dừng lại, không bịa dữ liệu");
           const kx = tagLead(addAgentTask(ticket.id, "⚠️ Cần người dán nội dung bình luận", LEAD_AGENT, "Cao"));
-          kx.status = "Chờ duyệt";
-          kx.reports.push({
-            at: today(), progress: 0, by: kx.owner, byType: "agent", agentId: LEAD_AGENT,
-            note: "Mở bài viết bằng tài khoản của bạn → bấm 'Xem thêm bình luận' cho hết → bôi đen toàn bộ phần bình luận → chạy lại '🧲 Thu thập từ link' và dán vào ô 'Nội dung dán tay'.",
-          });
-          ticket.status = "Tạm dừng";
+          chuyenVeOrches(kx, `Nguồn ${src} không tải được nên không có dữ liệu để bóc tách. Cách gỡ: mở bài bằng tài khoản của bạn, bấm "Xem thêm bình luận" cho hết, bôi đen toàn bộ phần bình luận rồi chạy lại và dán vào ô "Nội dung dán tay".`, "S1");
+          capNhatTrangThaiPhieu(ticket);
           ticket.desc += `\n\n— Dừng ở S1 ${fmtD(today())}: nguồn không tải được. ${data.note || ""}`;
           save(); render();
           say("Nguồn bị chặn — xem hướng dẫn trong phiếu");
@@ -1550,7 +1651,8 @@
       } catch (e) {
         agentStepReport(k1, false, `⚠️ Không gọi được Backend Proxy: ${e.message}. Chạy "node server/server.js" rồi thử lại, hoặc dán nội dung bình luận trực tiếp.`, 10);
         pipeLog("⛔", `Lỗi kết nối máy chủ: ${e.message}`);
-        ticket.status = "Tạm dừng";
+        chuyenVeOrches(k1, `Không gọi được Backend Proxy: ${e.message}. Bật proxy rồi chạy lại, hoặc dán tay nội dung bình luận.`, "S1");
+        capNhatTrangThaiPhieu(ticket);
         save(); render();
         say("Không gọi được Backend Proxy");
         return ticket;
@@ -1572,7 +1674,8 @@
     } catch (e) {
       agentStepReport(k2, false, `⚠️ Bóc tách lỗi: ${e.message}`, 20);
       pipeLog("⛔", `Bóc tách lỗi: ${e.message}`);
-      ticket.status = "Tạm dừng";
+      chuyenVeOrches(k2, `Bóc tách Lead thất bại: ${e.message}`, "S2");
+      capNhatTrangThaiPhieu(ticket);
       save(); render();
       return ticket;
     }
@@ -1594,7 +1697,8 @@
 
     // Trùng hết cũng là một lượt chạy thành công — nguồn này đã khai thác xong.
     // Chỉ khi nguồn không có nổi một cách liên hệ nào mới cần người xem lại.
-    ticket.status = (added || dup) ? "Hoàn tất" : "Tạm dừng";
+    if (!added && !dup) chuyenVeOrches(k2, `Nguồn ${src || "dán tay"} không chứa số điện thoại hay email nào — không có gì để ghi vào kho Lead.`, "S2");
+    capNhatTrangThaiPhieu(ticket);
     ticket.desc += `\n\n— Kết thúc ${fmtD(today())}: ${added} Lead mới, ${dup} trùng, ${canRa} cần rà lại.`
       + (added ? " Kết quả chờ người chịu trách nhiệm duyệt."
         : dup ? " Không có Lead mới — mọi liên hệ trong nguồn đều đã có sẵn trong kho."
@@ -1654,9 +1758,192 @@
       </div>`);
   }
 
+  /* ---------- Màn Điều phối: mọi việc đang vướng ---------- */
+  function gioNgan(iso) {
+    if (!iso) return "—";
+    const d = new Date(iso);
+    return isNaN(d) ? "—" : `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")} ${fmtD(iso.slice(0, 10))}`;
+  }
+
+  function nutXuLyVuong(k) {
+    return `<div class="wk-cellflex">
+      <button class="wk-minibtn" data-act="vuong-xem" data-id="${k.id}" title="Xem đầu bài, lý do dừng và lịch sử xử lý">🔍 Xem lỗi</button>
+      ${isAgentTask(k) ? `<button class="wk-minibtn go" data-act="run-agent" data-id="${k.id}" title="Chạy lại đúng công việc này, giữ nguyên đầu bài">▶ Chạy lại</button>` : ""}
+      <button class="wk-minibtn" data-act="task-edit" data-id="${k.id}" title="Sửa đầu bài rồi chạy lại — dùng khi lỗi do yêu cầu chưa rõ">✎ Sửa</button>
+      <button class="wk-minibtn" data-act="vuong-dieuphoi" data-id="${k.id}" title="Giao cho Agent khác hoặc chuyển người thật xử lý">🧭 Đổi người</button>
+      <button class="wk-minibtn" data-act="vuong-dong" data-id="${k.id}" title="Không làm được — đóng lại kèm lý do (chỉ người mới được đóng)">🙋 Đóng có lý do</button>
+    </div>`;
+  }
+
+  function vDieuPhoi() {
+    const ds = viecDangVuong();
+    if (!ds.length) {
+      return `<div class="wk-panel"><div class="wk-empty-state">
+        <h3>🧭 Không có việc nào đang vướng</h3>
+        <p>Mọi công việc đều đang chạy, chờ duyệt hoặc đã đóng. Khi một Agent gặp lỗi hoặc bế tắc,
+        việc đó sẽ tự động xuất hiện ở đây kèm lý do — không việc nào bị bỏ lại trong im lặng.</p>
+      </div></div>`;
+    }
+
+    const rows = ds.map((k) => {
+      const t = ticketById(k.ticket);
+      const p = t ? projectById(t.project) : null;
+      return `<tr>
+        <td><b>${esc(k.title)}</b>${ownerLine(k)}
+          <span class="wk-sub">${t ? `phiếu <span class="wk-link" data-act="go" data-view="ticketDetail" data-id="${t.id}">#${t.code}</span>` : "—"}${p ? ` · ${esc(p.name)}` : ""}</span></td>
+        <td>${whoBadge(k)}</td>
+        <td class="wk-vuong-ly">${esc(k.vuong.lyDo)}
+          ${k.vuong.chang ? `<span class="wk-sub">chặng ${esc(k.vuong.chang)}</span>` : ""}</td>
+        <td class="wk-muted">${gioNgan(k.vuong.luc)}</td>
+        <td>${nutXuLyVuong(k)}</td>
+      </tr>`;
+    }).join("");
+
+    return `
+    <div class="wk-note warn"><b>Quy tắc:</b> việc của Agent bị lỗi hay bế tắc đều quay về đây để Orches điều phối lại.
+      Agent <b>không tự đóng</b> việc của chính nó — chỉ người chịu trách nhiệm mới được đóng, và bắt buộc nêu lý do.</div>
+    <div class="wk-panel">
+      <div class="wk-panel-head"><h3>Đang chờ điều phối (${ds.length})</h3></div>
+      <table class="wk-table">
+        <thead><tr><th>Công việc</th><th>Người thực hiện</th><th>Lý do dừng</th><th>Từ lúc</th><th>Xử lý</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>`;
+  }
+
+  /* ---------- Modal: xem chi tiết vướng mắc ---------- */
+  function mVuongChiTiet(taskId) {
+    const k = taskById(taskId);
+    if (!k || !k.vuong) return;
+    const t = ticketById(k.ticket);
+    const ls = (k.vuong.lichSu || []).map((h) =>
+      `<li><b>${esc(h.hanhDong)}</b> — ${gioNgan(h.at)}${h.ghiChu ? `<br><span class="wk-muted">${esc(h.ghiChu)}</span>` : ""}</li>`).join("");
+    const bc = k.reports.slice(-3).reverse().map((r) =>
+      `<li>${fmtD(r.at)} — <span class="wk-muted">${esc(String(r.note).slice(0, 300))}</span></li>`).join("");
+
+    openModal(modalHead("🔍", "Chi tiết vướng mắc", esc(k.title)) + `
+      <div class="hr-intake-form">
+        <div class="wk-info">
+          <div class="cell"><div class="lbl">Phiếu</div><div class="val">${t ? `#${t.code} — ${esc(t.title.slice(0, 50))}` : "—"}</div></div>
+          <div class="cell"><div class="lbl">Người thực hiện</div><div class="val">${whoBadge(k)}</div></div>
+          <div class="cell"><div class="lbl">Chịu trách nhiệm</div><div class="val">${esc(staffName(k.owner))}</div></div>
+          <div class="cell"><div class="lbl">Dừng lúc</div><div class="val">${gioNgan(k.vuong.luc)}</div></div>
+          <div class="cell full"><div class="lbl">Lý do dừng</div><div class="val normal">${esc(k.vuong.lyDo)}</div></div>
+          ${k.run && k.run.error ? `<div class="cell full"><div class="lbl">Lỗi kỹ thuật</div><div class="val normal"><code>${esc(String(k.run.error).slice(0, 400))}</code></div></div>` : ""}
+        </div>
+        ${ls ? `<h4>Lịch sử xử lý</h4><ul class="wk-ls">${ls}</ul>` : ""}
+        ${bc ? `<h4>Báo cáo gần nhất</h4><ul class="wk-ls">${bc}</ul>` : ""}
+        <div class="bf-actions" style="margin-top:1.2rem">
+          <button class="btn btn-ghost btn-sm" type="button" data-act="modal-close">Đóng</button>
+          <button class="btn btn-ghost btn-sm" type="button" data-act="task-edit" data-id="${k.id}">✎ Sửa đầu bài</button>
+          <button class="btn btn-ghost btn-sm" type="button" data-act="vuong-dieuphoi" data-id="${k.id}">🧭 Đổi người</button>
+          ${isAgentTask(k) ? `<button class="btn btn-primary btn-sm" type="button" data-act="run-agent" data-id="${k.id}">▶ Chạy lại</button>` : ""}
+        </div>
+      </div>`);
+  }
+
+  /* ---------- Modal: sửa đầu bài rồi chạy lại ---------- */
+  function mEditTask(taskId) {
+    const k = taskById(taskId);
+    if (!k) return;
+    openModal(modalHead("✎", "Sửa công việc", "Sửa đầu bài khi lỗi đến từ yêu cầu chưa rõ, rồi chạy lại. Mọi thay đổi được ghi vào báo cáo để sau này còn truy được.") + `
+      <div class="hr-intake-form"><div class="hr-grid">
+        <label class="span2">Tên công việc <span class="req">*</span><input type="text" id="wk_e_title" value="${esc(k.title)}"></label>
+        <label>Người thực hiện<select id="wk_e_exec">${executorOpts(k.executor.type === "agent" ? `agent:${k.executor.id}` : `human:${k.executor.id}`)}</select></label>
+        <label>Người chịu trách nhiệm<select id="wk_e_owner">${staffOpts(k.owner)}</select></label>
+        <label>Độ ưu tiên<select id="wk_e_prio">${opts(PRIO_LIST, k.prio)}</select></label>
+        <label>Thời hạn<input type="date" id="wk_e_dl" value="${k.deadline || ""}"></label>
+        <label class="span2">Ghi chú cho lần chạy lại<textarea id="wk_e_note" rows="3" placeholder="VD: bỏ yêu cầu bảng giá vì nguồn không có số liệu — chỉ viết định tính"></textarea></label>
+      </div>
+      <div class="bf-actions" style="margin-top:1.2rem">
+        <button class="btn btn-ghost btn-sm" type="button" data-act="modal-close">Hủy</button>
+        <button class="btn btn-ghost btn-sm" type="button" data-act="task-edit-save" data-id="${k.id}">Lưu</button>
+        <button class="btn btn-primary btn-sm" type="button" data-act="task-edit-run" data-id="${k.id}">Lưu &amp; chạy lại</button>
+      </div></div>`);
+  }
+
+  function luuSuaTask(taskId, chayLai) {
+    const k = taskById(taskId);
+    if (!k) return;
+    const title = val("wk_e_title");
+    if (!title) return say("Tên công việc không được để trống");
+    const doi = [];
+    if (title !== k.title) { doi.push(`tên: "${k.title}" → "${title}"`); k.title = title; }
+    const execRaw = val("wk_e_exec");
+    const execMoi = parseExecutor(execRaw);
+    if (execMoi.type !== k.executor.type || execMoi.id !== k.executor.id) {
+      const cu = isAgentTask(k) ? (agentById(k.executor.id) || {}).name : staffName(k.executor.id);
+      k.executor = execMoi;
+      doi.push(`người thực hiện: ${cu} → ${execMoi.type === "agent" ? (agentById(execMoi.id) || {}).name : staffName(execMoi.id)}`);
+    }
+    const ownerMoi = val("wk_e_owner");
+    if (ownerMoi && ownerMoi !== k.owner) { doi.push(`chịu trách nhiệm: ${staffName(k.owner)} → ${staffName(ownerMoi)}`); k.owner = ownerMoi; }
+    const prioMoi = val("wk_e_prio");
+    if (prioMoi && prioMoi !== k.prio) { doi.push(`ưu tiên: ${k.prio} → ${prioMoi}`); k.prio = prioMoi; }
+    const dlMoi = val("wk_e_dl");
+    if (dlMoi && dlMoi !== k.deadline) { doi.push(`thời hạn: ${fmtD(k.deadline)} → ${fmtD(dlMoi)}`); k.deadline = dlMoi; }
+    const ghi = val("wk_e_note");
+
+    if (doi.length || ghi) {
+      const luc = new Date().toISOString();
+      k.reports.push({ at: today(), progress: k.progress || 0,
+        note: `✎ ${staffName(k.owner)} sửa đầu bài trước khi chạy lại.` +
+          (doi.length ? `\nThay đổi: ${doi.join(" · ")}` : "") + (ghi ? `\nGhi chú: ${ghi}` : ""),
+        by: k.owner, byType: "human" });
+      if (k.vuong) k.vuong.lichSu = [...(k.vuong.lichSu || []), { at: luc, hanhDong: "Sửa đầu bài", ghiChu: doi.join(" · ") || ghi }];
+    }
+    save(); closeModal(); render();
+    if (chayLai && isAgentTask(k)) { say("Đã lưu — mở lệnh chạy lại"); mRunAgent(k.id); }
+    else say("Đã lưu công việc ✓");
+  }
+
+  /* ---------- Modal: Orches điều phối lại ---------- */
+  function mDieuPhoi(taskId) {
+    const k = taskById(taskId);
+    if (!k) return;
+    // scoreAgents trả về { agent, score, titleHit } — không phải { id, matched }
+    const goiY = scoreAgents(k).filter((r) => r.score > 0).slice(0, 3);
+    const gy = goiY.map((g) =>
+      `<span class="wk-chip">${esc(g.agent.icon || "🤖")} ${esc(g.agent.name)}${g.titleHit ? " ✓" : ""}</span>`).join("");
+    openModal(modalHead("🧭", "Orches điều phối lại", esc(k.title)) + `
+      <div class="hr-intake-form">
+        <div class="wk-note">Việc này đang vướng: <b>${esc(k.vuong ? k.vuong.lyDo : "—")}</b></div>
+        ${gy ? `<h4>Agent phù hợp theo từ khóa nghiệp vụ</h4><div>${gy}</div>` : ""}
+        <div class="hr-grid" style="margin-top:.8rem">
+          <label class="span2">Chuyển cho <span class="req">*</span><select id="wk_dp_exec">${executorOpts(k.executor.type === "agent" ? `agent:${k.executor.id}` : `human:${k.executor.id}`)}</select></label>
+          <label class="span2">Lý do điều phối<textarea id="wk_dp_note" rows="2" placeholder="VD: Agent viết bài liên tục trả về nội dung cụt — chuyển cho người viết tay"></textarea></label>
+        </div>
+        <p class="bf-hint" style="margin:.7rem 0 0">Sau khi điều phối, việc quay về <b>Đang thực hiện</b> và biến khỏi hàng đợi vướng mắc.</p>
+        <div class="bf-actions" style="margin-top:1.2rem">
+          <button class="btn btn-ghost btn-sm" type="button" data-act="modal-close">Hủy</button>
+          <button class="btn btn-primary btn-sm" type="button" data-act="vuong-dieuphoi-save" data-id="${k.id}">Điều phối lại</button>
+        </div>
+      </div>`);
+  }
+
+  /* ---------- Modal: người đóng việc kèm lý do ---------- */
+  function mDongCoLyDo(taskId) {
+    const k = taskById(taskId);
+    if (!k) return;
+    openModal(modalHead("🙋", "Đóng công việc kèm lý do", esc(k.title)) + `
+      <div class="hr-intake-form">
+        <div class="wk-note warn">Đây là lối thoát cuối cùng: dùng khi việc <b>thực sự không làm được</b> và không đáng theo đuổi tiếp.
+          Chỉ người chịu trách nhiệm mới được đóng — Agent không tự đóng việc của mình.</div>
+        <div class="wk-info"><div class="cell full"><div class="lbl">Đang vướng vì</div><div class="val normal">${esc(k.vuong ? k.vuong.lyDo : "—")}</div></div></div>
+        <div class="hr-grid">
+          <label class="span2">Lý do đóng <span class="req">*</span><textarea id="wk_dong_ly" rows="3" placeholder="VD: nguồn VnExpress không còn bài này, chủ đề đã chuyển sang cluster khác — không cần viết nữa"></textarea></label>
+        </div>
+        <div class="bf-actions" style="margin-top:1.2rem">
+          <button class="btn btn-ghost btn-sm" type="button" data-act="modal-close">Hủy</button>
+          <button class="btn btn-primary btn-sm" type="button" data-act="vuong-dong-save" data-id="${k.id}">Đóng công việc</button>
+        </div>
+      </div>`);
+  }
+
   /* ================= RENDER ================= */
   const VIEW_RENDER = {
     control: vControl,
+    dieuphoi: vDieuPhoi,
     projects: vProjects,
     projectDetail: vProjectDetail,
     tickets: vTickets,
@@ -1708,6 +1995,7 @@
     set("tasks", m.tasksOpen);
     set("reports", m.silent);
     set("leads", (S.leads || []).filter((l) => l.trang_thai === "moi").length);
+    set("dieuphoi", viecDangVuong().length);
   }
 
   /* ================= MODAL ================= */
@@ -1909,11 +2197,146 @@
   }
 
   // ---- Duyệt / trả lại kết quả ----
+  /* ================= QUY TẮC VƯỚNG MẮC & ĐIỀU PHỐI =================
+
+     Ba quy tắc vận hành, áp cho MỌI Agent chứ không riêng vòng lặp nào:
+
+     QT1 — Không đóng phiếu khi chưa xong. Phiếu chỉ được chuyển "Hoàn tất" khi mọi
+           công việc trong nó đã đóng. Trước đây vòng lặp cluster tự đặt phiếu sang
+           "Hoàn tất"/"Tạm dừng" theo số lỗi, nên có lúc phiếu đóng mà việc còn dở.
+
+     QT2 — Không có việc nào dừng mà không rõ lý do. Mỗi lần một công việc của Agent
+           thất bại hoặc bế tắc, nó phải mang theo lý do cụ thể và một đường xử lý tiếp.
+           Trạng thái "Tạm dừng" trống trơn là thứ đã khiến 10 công việc của lần chạy
+           trước nằm im, không ai biết vì sao và phải làm gì.
+
+     QT3 — Việc vướng quay về Orches. Agent không tự bỏ cuộc trong im lặng: việc được
+           đẩy vào hàng đợi điều phối để Orches (hoặc người) quyết định chạy lại, sửa
+           đầu bài, đổi Agent, chuyển người thật, hay đóng lại có lý do.
+           CHỈ CON NGƯỜI mới được đóng một việc vì "không làm được" — Agent không tự
+           đóng việc của chính mình, kể cả khi nó thất bại.
+  ================================================================== */
+
+  const VUONG_TRANG_THAI = {
+    "cho-orches": "Chờ Orches điều phối",
+    "da-dieu-phoi": "Orches đã điều phối lại",
+    "human-dong": "Người đóng lại có lý do",
+  };
+
+  /* Đánh dấu một công việc là đang vướng và đẩy về Orches.
+     lyDo phải cụ thể — "lỗi" hay "thất bại" là vô nghĩa với người đọc sau này. */
+  function chuyenVeOrches(k, lyDo, chang) {
+    if (!k) return;
+    const luc = new Date().toISOString();
+    k.status = "Tạm dừng";
+    k.vuong = {
+      lyDo: String(lyDo || "không rõ nguyên nhân"),
+      luc,
+      chang: chang || (k.title.match(/^S\d/) || [""])[0] || "",
+      trangThai: "cho-orches",
+      lichSu: [...((k.vuong && k.vuong.lichSu) || []), { at: luc, hanhDong: "Đẩy về Orches", ghiChu: String(lyDo || "") }],
+    };
+    k.reports.push({
+      at: today(), progress: k.progress || 0,
+      note: `⛔ Dừng vì: ${lyDo}\n→ Đã chuyển về Orches để điều phối lại. Việc này KHÔNG tự đóng — cần chạy lại, sửa đầu bài, đổi người thực hiện, hoặc người chịu trách nhiệm đóng lại kèm lý do.`,
+      by: k.owner, byType: "agent", agentId: isAgentTask(k) ? k.executor.id : undefined,
+    });
+    const a = isAgentTask(k) ? agentById(k.executor.id) : null;
+    if (typeof addFeed === "function") {
+      addFeed(`<b>Orches</b> nhận lại "${esc(k.title.slice(0, 60))}" từ ${esc(a ? a.name : "người thực hiện")} — ${esc(String(lyDo).slice(0, 90))}`, "f-rule");
+    }
+    return k.vuong;
+  }
+
+  const dangVuong = (k) => !!(k.vuong && k.vuong.trangThai === "cho-orches");
+  const vuongTag = (k) => (dangVuong(k)
+    ? ` <span class="wk-pill late" title="${esc(k.vuong.lyDo)}">⛔ vướng</span>` : "");
+  const viecDangVuong = () => S.tasks.filter(dangVuong);
+
+  /* QT1 — trả về lý do KHÔNG đóng được phiếu, hoặc null nếu đóng được. */
+  function lyDoKhongDongDuocPhieu(t) {
+    const ks = ticketTasks(t.id);
+    if (!ks.length) return "phiếu chưa có công việc nào";
+    const chuaXong = ks.filter((k) => !isDone(k.status));
+    if (!chuaXong.length) return null;
+    const vuong = chuaXong.filter(dangVuong).length;
+    const cho = chuaXong.filter((k) => k.status === "Chờ duyệt").length;
+    const phan = [];
+    if (vuong) phan.push(`${vuong} việc đang vướng chờ điều phối`);
+    if (cho) phan.push(`${cho} việc chờ duyệt`);
+    const con = chuaXong.length - vuong - cho;
+    if (con > 0) phan.push(`${con} việc chưa xong`);
+    return `còn ${chuaXong.length}/${ks.length} công việc chưa đóng — ${phan.join(", ")}`;
+  }
+
+  /* Cập nhật trạng thái phiếu theo tình hình công việc bên trong.
+     Đây là ĐƯỜNG DUY NHẤT được phép đặt phiếu sang "Hoàn tất". */
+  function capNhatTrangThaiPhieu(t) {
+    if (!t) return;
+    const ks = ticketTasks(t.id);
+    if (!ks.length) return;
+    if (!lyDoKhongDongDuocPhieu(t)) { t.status = DONE; return; }
+    t.status = ks.some(dangVuong) ? "Tạm dừng" : "Đang thực hiện";
+  }
+
+  /* QT1 — nút "Đóng phiếu" của người dùng. Không đóng được thì nói rõ vì sao và
+     còn thiếu gì, thay vì im lặng không phản ứng. */
+  function dongPhieu(ticketId) {
+    const t = ticketById(ticketId);
+    if (!t) return;
+    const lyDo = lyDoKhongDongDuocPhieu(t);
+    if (lyDo) return say(`Chưa đóng được phiếu #${t.code}: ${lyDo}`);
+    t.status = DONE;
+    t.desc += `\n— Phiếu đóng ngày ${fmtD(today())}: mọi công việc đã hoàn tất.`;
+    if (typeof addFeed === "function") addFeed(`Phiếu <b>#${t.code}</b> đã đóng — mọi công việc hoàn tất.`, "f-done");
+    save(); render(); say(`Đã đóng phiếu #${t.code} ✓`);
+  }
+
+  /* Con người đóng một việc lại vì không làm được — lối thoát cuối cùng của QT3.
+     Bắt buộc có lý do: đóng im lặng thì ba tháng sau không ai biết vì sao. */
+  function dongViecCoLyDo(taskId, lyDo) {
+    const k = taskById(taskId);
+    if (!k) return;
+    if (!lyDo || !lyDo.trim()) return say("Bắt buộc nhập lý do đóng — không đóng việc trong im lặng");
+    const luc = new Date().toISOString();
+    k.status = DONE;
+    k.vuong = { ...(k.vuong || {}), trangThai: "human-dong", dongLuc: luc, dongLyDo: lyDo.trim(),
+      lichSu: [...((k.vuong && k.vuong.lichSu) || []), { at: luc, hanhDong: "Người đóng lại", ghiChu: lyDo.trim() }] };
+    k.reports.push({ at: today(), progress: k.progress || 0,
+      note: `🙋 ${staffName(k.owner)} đóng công việc dù chưa đạt kết quả.\nLý do: ${lyDo.trim()}`,
+      by: k.owner, byType: "human" });
+    capNhatTrangThaiPhieu(ticketById(k.ticket));
+    save(); closeModal(); render(); say("Đã đóng công việc kèm lý do ✓");
+  }
+
+  /* Orches điều phối lại: đổi người thực hiện (Agent khác hoặc người thật). */
+  function dieuPhoiLai(taskId, execRaw, ghiChu) {
+    const k = taskById(taskId);
+    if (!k) return;
+    const cu = isAgentTask(k) ? (agentById(k.executor.id) || {}).name || k.executor.id : staffName(k.executor.id);
+    k.executor = parseExecutor(execRaw);
+    k.owner = defaultOwner(k.executor);
+    const moi = isAgentTask(k) ? (agentById(k.executor.id) || {}).name || k.executor.id : staffName(k.executor.id);
+    const luc = new Date().toISOString();
+    k.status = "Đang thực hiện";
+    k.vuong = { ...(k.vuong || {}), trangThai: "da-dieu-phoi",
+      lichSu: [...((k.vuong && k.vuong.lichSu) || []), { at: luc, hanhDong: `Điều phối: ${cu} → ${moi}`, ghiChu: ghiChu || "" }] };
+    k.reports.push({ at: today(), progress: k.progress || 0,
+      note: `🧭 Orches điều phối lại: ${cu} → ${moi}.${ghiChu ? "\nGhi chú: " + ghiChu : ""}`,
+      by: k.owner, byType: "human" });
+    if (typeof addFeed === "function") addFeed(`<b>Orches</b> điều phối lại "${esc(k.title.slice(0, 50))}": ${esc(cu)} → <b>${esc(moi)}</b>`, "f-orches");
+    capNhatTrangThaiPhieu(ticketById(k.ticket));
+    save(); closeModal(); render(); say(`Đã chuyển sang ${moi} ✓`);
+  }
+
   function approveTask(taskId) {
     const k = taskById(taskId);
     if (!k) return;
     k.status = DONE; k.progress = 100;
+    if (k.vuong) k.vuong = { ...k.vuong, trangThai: "da-dieu-phoi", giaiQuyetLuc: new Date().toISOString() };
     k.reports.push({ at: today(), progress: 100, note: `Đã duyệt kết quả${isAgentTask(k) ? ` do ${(agentById(k.executor.id) || {}).name || k.executor.id} thực hiện` : ""} và đóng công việc.`, by: k.owner, byType: "human" });
+    // Việc cuối cùng đóng lại có thể làm cả phiếu đủ điều kiện hoàn tất
+    capNhatTrangThaiPhieu(ticketById(k.ticket));
     save(); closeModal(); say("Đã duyệt và đóng công việc ✓"); render();
   }
   function rejectTask(taskId) {
@@ -2505,16 +2928,10 @@
       return data.reply;
     } catch (e) {
       k.run = { status: "failed", agentId: k.executor.id, error: e.message, endedAt: new Date().toISOString() };
-      // Để "Đang thực hiện" thì việc hỏng trông y hệt việc đang chạy và sẽ trôi mất trong
-      // bảng. Đặt Tạm dừng để nó nổi lên rõ, người soát bấm "Chạy lại" đúng mục này.
-      k.status = "Tạm dừng";
-      k.reports.push({
-        at: today(), progress: k.progress,
-        note: `⚠️ Không chạy được ${a.name}: ${e.message}`,
-        by: k.owner, byType: "agent", agentId: k.executor.id,
-      });
+      // QT2/QT3: không để việc dừng trơ ở "Tạm dừng" mà không ai biết vì sao và làm gì
+      // tiếp. chuyenVeOrches đặt trạng thái, ghi lý do cụ thể và đẩy vào hàng đợi điều phối.
+      chuyenVeOrches(k, `${a.name} không chạy được: ${e.message}`);
       save();
-      if (typeof addFeed === "function") addFeed(`<b>${esc(a.name)}</b> lỗi ở "${esc(k.title)}" — cần soát tay.`, "f-rule");
       return null;
     }
   }
@@ -2796,14 +3213,10 @@
     const bai = parseBlueprint(out2);
     if (!bai.length) {
       pipeLog("⛔", "Không đọc được danh sách bài từ blueprint S2 — dừng vòng lặp, KHÔNG tự bịa danh sách bài.");
-      ticket.status = "Tạm dừng";
       const kx = addAgentTask(ticket.id, "⚠️ Cần người chốt danh sách bài trước khi viết", CLUSTER_AGENTS.seo, "Cao");
-      kx.status = "Chờ duyệt"; kx.progress = 0;
-      kx.reports.push({
-        at: today(), progress: 0,
-        note: "S2 không trả về khối JSON blueprint nên không biết cần viết bao nhiêu bài. Hãy duyệt/nhập tay danh sách bài rồi chạy lại vòng lặp. Ở MOCK_MODE điều này là bình thường — Agent chưa nối Hermes thật nên không sinh được blueprint.",
-        by: kx.owner, byType: "agent", agentId: CLUSTER_AGENTS.seo,
-      });
+      kx.progress = 0;
+      chuyenVeOrches(kx, "S2 không trả về khối JSON blueprint nên không biết cần viết bao nhiêu bài. Cần chốt tay danh sách bài rồi chạy lại vòng lặp.", "S2");
+      capNhatTrangThaiPhieu(ticket);
       save(); render();
       say("Vòng lặp dừng ở S2 — cần chốt danh sách bài");
       return ticket;
@@ -2830,9 +3243,9 @@
       /* Chặn bài hỏng NGAY tại đây, trước khi tiêu credit ảnh cho nó. */
       const loiBai = outW ? loiCuaBai(outW) : "agent không trả về nội dung";
       if (loiBai) {
-        kw.status = "Tạm dừng"; kw.progress = 0;
+        kw.progress = 0;
         kw.run = { ...(kw.run || {}), status: "failed", error: loiBai };
-        themBaoCao(kw, `Bài không đạt để đăng: ${loiBai}. Chưa sinh ảnh và chưa đăng — bấm "▶ Chạy lại" hoặc dùng chức năng chạy tiếp cluster để viết lại bài này.`, CLUSTER_AGENTS.writer);
+        chuyenVeOrches(kw, `Bài ${b.ma_bai} không đạt để đăng: ${loiBai}. Chưa sinh ảnh và chưa đăng.`, "S3");
         pipeLog("⛔", `${b.ma_bai} bị bỏ qua: ${loiBai} (không tiêu credit ảnh)`);
         save(); render();
         continue;
@@ -2919,9 +3332,9 @@
           await saveArticleToStore({ ...hoSo, noi_dung: outW, prompt_anh: [outP], anh,
             tripx: { id: kq.id, slug: kq.slug, url: kq.url, published: !!kq.published, dang_luc: new Date().toISOString() } });
         } else {
-          kd.status = "Tạm dừng"; kd.progress = 0;
-          kd.run = { status: "failed" };
-          themBaoCao(kd, `Đăng bài thất bại: ${(kq && kq.error) || "không rõ lỗi"}`, CLUSTER_AGENTS.publisher);
+          kd.progress = 0;
+          kd.run = { status: "failed", error: (kq && kq.error) || "" };
+          chuyenVeOrches(kd, `Đăng bài ${b.ma_bai} lên TripX thất bại: ${(kq && kq.error) || "không rõ lỗi"}`, "S5");
           pipeLog("⛔", `${b.ma_bai} đăng thất bại: ${(kq && kq.error) || "không rõ lỗi"}`);
         }
         save(); render();
@@ -2931,10 +3344,13 @@
     // ---- Đóng phiếu ----
     const ks = ticketTasks(ticket.id);
     const loi = ks.filter((k) => k.run && k.run.status === "failed").length;
-    ticket.status = loi ? "Tạm dừng" : "Hoàn tất";
+    // QT1: phiếu KHÔNG còn tự đóng theo "không có lỗi". Chạy xong mà mọi mục dừng ở
+    // "Chờ duyệt" thì phiếu vẫn đang thực hiện — chỉ đóng khi người đã duyệt hết.
+    capNhatTrangThaiPhieu(ticket);
     const daLuu = ks.filter((k) => k.artifact).length;
+    const vuongSo = ks.filter(dangVuong).length;
     ticket.desc += `\n\n— Vòng lặp kết thúc ${fmtD(today())}: ${ks.length} công việc, ${ks.length - loi} thành công, ${loi} lỗi.`
-      + (loi ? " Phiếu để Tạm dừng do có mục chạy lỗi." : " Mọi mục đã có báo cáo, chờ người chịu trách nhiệm duyệt để đóng từng công việc.")
+      + (vuongSo ? ` ${vuongSo} việc đang vướng, đã chuyển về Orches điều phối.` : " Mọi mục đã có báo cáo, chờ người chịu trách nhiệm duyệt để đóng từng công việc.")
       + `\n— Bài viết: ${daLuu ? `đã lưu vào marketing/data/bai-viet/${clusterId}/` : "KHÔNG lưu được ra kho, chỉ còn trong báo cáo công việc"}.`
       + (tongCredit ? `\n— Ảnh: đã tiêu ${tongCredit.toLocaleString("vi-VN")} credit Genful.` : "")
       + (daDang.length ? `\n— Đã đăng lên TripX ${daDang.length}/${bai.length} bài:\n` +
@@ -3040,9 +3456,9 @@
         pipeLog(outW ? "✅" : "⚠️", `${b.ma_bai} ${outW ? "viết xong" : "lỗi"}`);
         const loiBai = outW ? loiCuaBai(outW) : "agent không trả về nội dung";
         if (loiBai) {
-          kw.status = "Tạm dừng"; kw.progress = 0;
+          kw.progress = 0;
           kw.run = { ...(kw.run || {}), status: "failed", error: loiBai };
-          themBaoCao(kw, `Bài không đạt để đăng: ${loiBai}. Chưa sinh ảnh và chưa đăng.`, CLUSTER_AGENTS.writer);
+          chuyenVeOrches(kw, `Bài ${b.ma_bai} không đạt để đăng: ${loiBai}. Chưa sinh ảnh và chưa đăng.`, "S3");
           pipeLog("⛔", `${b.ma_bai} bị bỏ qua: ${loiBai} (không tiêu credit ảnh)`);
           save(); render();
           continue;
@@ -3099,8 +3515,8 @@
           await saveArticleToStore({ ...hoSo, noi_dung: outW, prompt_anh: outP ? [outP] : [], anh,
             tripx: { id: kq.id, slug: kq.slug, url: kq.url, published: !!kq.published, dang_luc: new Date().toISOString() } });
         } else {
-          kd.status = "Tạm dừng"; kd.run = { status: "failed", error: (kq && kq.error) || "" };
-          themBaoCao(kd, `Đăng thất bại: ${(kq && kq.error) || "không rõ lỗi"}`, CLUSTER_AGENTS.publisher);
+          kd.run = { status: "failed", error: (kq && kq.error) || "" };
+          chuyenVeOrches(kd, `Đăng bài ${b.ma_bai} lên TripX thất bại: ${(kq && kq.error) || "không rõ lỗi"}`, "S5");
           pipeLog("⛔", `${b.ma_bai} đăng thất bại: ${(kq && kq.error) || "không rõ"}`);
         }
         save(); render();
@@ -3109,8 +3525,9 @@
 
     const ksSau = ticketTasks(t.id);
     const loiSau = ksSau.filter((k) => k.run && k.run.status === "failed").length;
-    t.status = loiSau ? "Tạm dừng" : "Hoàn tất";
-    t.desc += `\n— Chạy tiếp ${fmtD(today())}: thêm ${daDang.length} bài, tiêu ${tongCredit.toLocaleString("vi-VN")} credit.`;
+    capNhatTrangThaiPhieu(t);
+    t.desc += `\n— Chạy tiếp ${fmtD(today())}: thêm ${daDang.length} bài, tiêu ${tongCredit.toLocaleString("vi-VN")} credit.`
+      + (loiSau ? ` Còn ${ksSau.filter(dangVuong).length} việc vướng chờ Orches điều phối.` : "");
     save(); render();
     pipeLog("🏁", `Chạy tiếp xong: thêm ${daDang.length} bài · ${tongCredit.toLocaleString("vi-VN")} credit`);
     return t;
@@ -3167,6 +3584,16 @@
       case "confirm-assign": confirmAssign(d.id, false); break;
       case "confirm-assign-run": confirmAssign(d.id, true); break;
       case "run-agent": mRunAgent(d.id); break;
+      // ---- Vướng mắc & điều phối ----
+      case "vuong-xem": mVuongChiTiet(d.id); break;
+      case "task-edit": mEditTask(d.id); break;
+      case "task-edit-save": luuSuaTask(d.id, false); break;
+      case "task-edit-run": luuSuaTask(d.id, true); break;
+      case "vuong-dieuphoi": mDieuPhoi(d.id); break;
+      case "vuong-dieuphoi-save": dieuPhoiLai(d.id, val("wk_dp_exec"), val("wk_dp_note")); break;
+      case "vuong-dong": mDongCoLyDo(d.id); break;
+      case "vuong-dong-save": dongViecCoLyDo(d.id, val("wk_dong_ly")); break;
+      case "dong-phieu": dongPhieu(d.id); break;
       case "task-chat": mTaskChat(d.id); break;
       case "chat-send": sendChat(d.id); break;
       case "chat-to-report": chatToReport(d.id); break;
@@ -3296,6 +3723,36 @@
     return added;
   }
 
+  /* Quy tắc vướng mắc thêm sau khi đã có dữ liệu chạy thật: những việc lỗi từ trước
+     đang nằm ở "Tạm dừng" trơ trọi, không có lý do và không có đường xử lý — đúng thứ
+     quy tắc này sinh ra để dẹp. Vá lúc nạp thay vì đổi SCHEMA_VERSION để không mất việc. */
+  function ensureVuong() {
+    let n = 0;
+    S.tasks.forEach((k) => {
+      if (k.vuong) return;
+      const hong = k.run && k.run.status === "failed";
+      if (!hong && k.status !== "Tạm dừng") return;
+      if (!hong && !isAgentTask(k)) return; // việc của người tạm dừng là chuyện bình thường
+      const lyDo = (k.run && k.run.error)
+        || (k.reports.slice().reverse().find((r) => /⚠️|⛔|lỗi|thất bại/i.test(r.note)) || {}).note
+        || "dừng từ lần chạy trước, chưa ghi nhận nguyên nhân";
+      k.vuong = {
+        lyDo: String(lyDo).replace(/^[⚠️⛔\s]+/, "").slice(0, 400),
+        luc: (k.run && k.run.endedAt) || new Date().toISOString(),
+        chang: (k.title.match(/^S\d/) || [""])[0],
+        trangThai: "cho-orches",
+        lichSu: [{ at: new Date().toISOString(), hanhDong: "Nhận diện khi áp quy tắc mới", ghiChu: "Việc dừng từ trước, được đưa vào hàng đợi điều phối" }],
+      };
+      n++;
+    });
+    if (n) {
+      // Phiếu từng bị đóng/để trống trạng thái cũng phải tính lại theo QT1
+      new Set(S.tasks.map((k) => k.ticket)).forEach((tid) => capNhatTrangThaiPhieu(ticketById(tid)));
+      save();
+    }
+    return n;
+  }
+
   /* Kho Lead được thêm sau P4 — dữ liệu đã lưu trước đó không có mảng này.
      Vá lúc nạp thay vì đổi SCHEMA_VERSION, để người dùng không mất dự án/phiếu đang chạy. */
   function ensureLeads() {
@@ -3322,6 +3779,7 @@
   ensureAgentOwners();
   ensureLeads();
   ensureLeadTaskTags();
+  ensureVuong();
   saveLocal();
   refreshCounters();
   bindHost();

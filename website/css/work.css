@@ -107,6 +107,24 @@
 }
 .wk-check input { width: auto; margin: 0; accent-color: var(--accent); }
 
+/* ---------- Vướng mắc & điều phối ----------
+   Việc hỏng phải NỔI LÊN chứ không lẫn vào bảng: đây là thứ khiến 10 công việc của
+   lần chạy trước nằm im mà không ai để ý. */
+.wk-panel-vuong { border-color: rgba(248,113,113,.45); background: rgba(248,113,113,.04); }
+.wk-panel-vuong .wk-panel-head h3 { color: var(--danger); }
+.wk-vuong-ly { max-width: 380px; font-size: .82rem; line-height: 1.45; }
+.wk-panel-foot {
+  display: flex; align-items: center; gap: .7rem; flex-wrap: wrap;
+  padding: .8rem 1rem; border-top: 1px solid var(--line);
+}
+.wk-panel-foot .wk-sub { margin: 0; }
+.wk-ls { margin: .4rem 0 0; padding-left: 1.1rem; font-size: .82rem; line-height: 1.6; }
+.wk-ls li { margin-bottom: .35rem; }
+.wk-empty-state { padding: 2.4rem 1.4rem; text-align: center; }
+.wk-empty-state h3 { font-size: 1rem; margin-bottom: .5rem; }
+.wk-empty-state p { color: var(--muted); font-size: .86rem; max-width: 48ch; margin: 0 auto; line-height: 1.6; }
+button[disabled] { opacity: .5; cursor: not-allowed; }
+
 .wk-prio { font-size: .72rem; font-weight: 700; white-space: nowrap; }
 .wk-prio.hi { color: var(--danger); } .wk-prio.md { color: var(--warn); } .wk-prio.lo { color: var(--muted); }
 .wk-late { color: var(--danger); font-weight: 700; }
