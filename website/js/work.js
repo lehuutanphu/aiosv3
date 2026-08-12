@@ -2334,10 +2334,14 @@
      lần lượt 4 Agent. Mỗi Agent thực thi = một Công việc trong phiếu đó; xong
      mục nào ghi báo cáo mục đó; xong hết thì đóng phiếu kèm ghi chú.
 
-     Bốn vai: mkt-3 nghiên cứu → mkt-4 kiến trúc SEO → mkt-1 viết bài → mkt-5 prompt ảnh.
+     Năm vai: mkt-3 nghiên cứu → mkt-4 kiến trúc SEO → mkt-1 viết bài → mkt-5 prompt +
+     sinh ảnh thật → mkt-6 đăng bài lên TripX.
+
+     S4 và S5 tiêu TIỀN THẬT (credit Genful) và tạo NỘI DUNG CÔNG KHAI (bài trên tripx.vn),
+     nên chỉ chạy khi người dùng bật rõ trong hộp thoại — mặc định tắt.
   ============================================================================ */
 
-  const CLUSTER_AGENTS = { research: "mkt-3", seo: "mkt-4", writer: "mkt-1", visual: "mkt-5" };
+  const CLUSTER_AGENTS = { research: "mkt-3", seo: "mkt-4", writer: "mkt-1", visual: "mkt-5", publisher: "mkt-6" };
   const CLUSTER_PROJECT_NAME = "Marketing — Content Cluster";
 
   // Mỗi chặng chạy theo đúng file SKILL.md trong marketing/skills/ — không nhúng lại
@@ -2582,6 +2586,19 @@
         </div>
         <h4>Đội thực thi</h4>
         <div>${ags}</div>
+
+        <h4>Hai chặng tốn tiền thật</h4>
+        <div class="wk-note warn">Hai lựa chọn dưới đây <b>mặc định tắt</b>: một cái tiêu credit Genful,
+          một cái tạo nội dung công khai trên tripx.vn. Bật là chạy thật, không có bước hỏi lại.</div>
+        <label class="wk-check"><input type="checkbox" id="wk_cl_anh">
+          <span>S4 — sinh ảnh thật bằng Genful <b>(${CREDIT_MOI_ANH} credit/ảnh)</b></span></label>
+        <label class="span2" style="margin-left:1.7rem">Số ảnh thân bài mỗi bài
+          <input type="number" id="wk_cl_soanh" value="2" min="0" max="4" style="max-width:6rem"></label>
+        <label class="wk-check"><input type="checkbox" id="wk_cl_dang">
+          <span>S5 — đăng bài lên <b>tripx.vn</b> qua api.tripx.vn</span></label>
+        <label class="wk-check" style="margin-left:1.7rem"><input type="checkbox" id="wk_cl_public" checked>
+          <span>Xuất bản công khai ngay (bỏ chọn = lưu nháp để duyệt trong /seo-studio)</span></label>
+
         <p class="bf-hint" style="margin:.7rem 0 0">Mỗi Agent chạy xong tạo một công việc kèm báo cáo trong phiếu. Kết quả dừng ở <b>Chờ duyệt</b> — Agent không tự đóng việc của mình.</p>
         <div class="bf-actions" style="margin-top:1.2rem">
           <button class="btn btn-ghost btn-sm" type="button" data-act="modal-close">Hủy</button>
@@ -2627,9 +2644,76 @@
     }
   }
 
-  async function startContentCluster(topic, sourceUrl) {
+  /* Gọi proxy và LUÔN trả về một object — kể cả khi lỗi — để vòng lặp không vỡ giữa
+     chừng vì một chặng hỏng. Lỗi nằm ở trường .error để chặng gọi tự quyết định. */
+  async function goiProxy(duongDan, payload, timeoutMs) {
+    try {
+      const res = await fetchCoHan(`${WORK_PROXY_BASE}${duongDan}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      }, timeoutMs || 900000); // sinh ảnh có thể mất vài phút mỗi tấm
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) return { error: d.error || `Proxy trả lỗi ${res.status}` };
+      return d;
+    } catch (e) {
+      return { error: e.name === "AbortError" ? "proxy không phản hồi kịp" : e.message };
+    }
+  }
+
+  function themBaoCao(k, note, agentId) {
+    k.reports.push({ at: today(), progress: k.progress || 100, note, by: k.owner, byType: "agent", agentId });
+    save();
+  }
+
+  /* Bóc prompt ảnh từ văn bản S4 trả về (dạng "1. ...", "2. ...").
+     KHÔNG tự bịa prompt khi bóc không ra — thà thiếu ảnh còn hơn sinh ảnh sai nội dung
+     bằng tiền thật. */
+  function tachPrompt(text, soLuong) {
+    const dong = String(text || "").split(/\r?\n/);
+    const ra = [];
+    for (const d of dong) {
+      const m = d.match(/^\s*(\d+)[.)]\s+(.{25,})$/);
+      if (m) ra.push(m[2].trim().replace(/^\*+|\*+$/g, "").trim());
+    }
+    return ra.slice(0, soLuong);
+  }
+
+  const CREDIT_MOI_ANH = 400; // Nano Banana 2 · 1k · vip2 — khớp genful.config.json
+
+  /* Kiểm tra bài viết TRƯỚC khi sinh ảnh và trước khi đăng.
+
+     Lý do: mô hình đôi khi trả về phản hồi bị cắt giữa chừng, và engine cũ coi mọi phản
+     hồi khác rỗng là thành công. Thực tế đã có bài chỉ dài 586 byte — cụt ngay giữa dòng
+     metaDescription — vẫn được sinh 3 ảnh (1.200 credit) rồi mới hỏng ở bước đăng. Tiền
+     mất, còn nguyên nhân thì hiện ra ở tận chặng cuối dưới dạng "thiếu tiêu đề".
+
+     Trả về null nếu hợp lệ, hoặc chuỗi mô tả lỗi. */
+  function loiCuaBai(md) {
+    const s = String(md || "");
+    if (s.trim().length < 1200) return `bài chỉ dài ${s.trim().length} ký tự — gần như chắc chắn bị cắt giữa chừng`;
+    const fm = s.match(/^\s*---\r?\n([\s\S]*?)\r?\n---\r?\n/);
+    if (!fm) return "front-matter không đóng bằng dòng --- (bộ đọc của TripX sẽ không thấy tiêu đề)";
+    if (!/^title:\s*\S/m.test(fm[1])) return "front-matter thiếu trường title";
+    const than = s.slice(fm[0].length).trim();
+    if (than.length < 800) return `thân bài chỉ ${than.length} ký tự — quá ngắn so với bài chuẩn SEO`;
+    if (!/^#\s+\S/m.test(than)) return "thân bài không có dòng H1 (# ...)";
+    return null;
+  }
+
+  // opts: { sinhAnh, soAnhThan, dangBai, xuatBanNgay }
+  async function startContentCluster(topic, sourceUrl, opts) {
     if (!topic || !topic.trim()) return say("Cần một chủ đề hoặc link nguồn");
     PIPE_LOG.length = 0;
+
+    const o = opts || {};
+    const SINH_ANH = !!o.sinhAnh;              // tốn credit thật
+    const SO_ANH_THAN = Number(o.soAnhThan || 2);
+    const DANG_BAI = !!o.dangBai;              // tạo nội dung công khai
+    const XUAT_BAN_NGAY = o.xuatBanNgay !== false;
+    const SO_BAI = Number(o.soBai || 0);       // 0 = để Agent SEO tự quyết số bài
+    let tongCredit = 0;
+    const daDang = [];
 
     const clusterId = await nextClusterId();
     const p = ensureClusterProject();
@@ -2691,6 +2775,15 @@
       ``,
       `KẾT QUẢ NGHIÊN CỨU TỪ S1:`, (out1 || "(S1 chưa có kết quả)").slice(0, 6000),
       ``,
+      SO_BAI ? `Quy mô cluster: đúng 1 bài Pillar (P-00) + ${SO_BAI - 1} bài Cluster (C-01…C-${String(SO_BAI - 1).padStart(2, "0")}). Không nhiều hơn, không ít hơn.` : "",
+      ``,
+      // Trần output 16.000 token cộng tốc độ sinh ~190 ký tự/giây nghĩa là nếu model viết
+      // hết trần thì lượt gọi chạm 300s và bị cắt — đã hỏng đúng như vậy hai lần liên tiếp.
+      // Chặn độ dài phần văn xuôi là cách rẻ nhất để lượt này về trong khoảng chục giây.
+      `GIỚI HẠN ĐỘ DÀI: phần văn xuôi trước khối JSON tối đa 400 từ — chỉ nêu logic phân tầng`,
+      `từ khóa và nguyên tắc liên kết, KHÔNG liệt kê lại từng bài dưới dạng văn xuôi (danh sách`,
+      `bài đã nằm trong khối JSON rồi, viết hai lần là thừa và làm lượt gọi bị cắt giữa chừng).`,
+      ``,
       `BẮT BUỘC: kết thúc câu trả lời bằng đúng một khối \`\`\`json, và khối đó phải TỐI GIẢN —`,
       `mỗi bài chỉ 3 trường ma_bai, tieu_de, tu_khoa_chinh theo đúng thứ tự này, không thêm`,
       `tu_khoa_phu/tu_khoa_lsi/meta vào khối JSON (viết chúng ở phần văn xuôi phía trên).`,
@@ -2734,6 +2827,17 @@
       ].join("\n")));
       pipeLog(outW ? "✅" : "⚠️", `${b.ma_bai} ${outW ? "viết xong" : "lỗi"} — đã ghi báo cáo`);
 
+      /* Chặn bài hỏng NGAY tại đây, trước khi tiêu credit ảnh cho nó. */
+      const loiBai = outW ? loiCuaBai(outW) : "agent không trả về nội dung";
+      if (loiBai) {
+        kw.status = "Tạm dừng"; kw.progress = 0;
+        kw.run = { ...(kw.run || {}), status: "failed", error: loiBai };
+        themBaoCao(kw, `Bài không đạt để đăng: ${loiBai}. Chưa sinh ảnh và chưa đăng — bấm "▶ Chạy lại" hoặc dùng chức năng chạy tiếp cluster để viết lại bài này.`, CLUSTER_AGENTS.writer);
+        pipeLog("⛔", `${b.ma_bai} bị bỏ qua: ${loiBai} (không tiêu credit ảnh)`);
+        save(); render();
+        continue;
+      }
+
       /* Lưu NGAY từng bài, không đợi hết vòng: vòng lặp 11 bài chạy ~25 phút, đứt giữa
          chừng mà chưa lưu thì mất hết phần đã viết. */
       const hoSo = { cluster: clusterId, ma_bai: b.ma_bai, tieu_de: b.tieu_de,
@@ -2750,23 +2854,77 @@
         save();
       }
 
-      const kp = addAgentTask(ticket.id, `S4 · Prompt ảnh ${b.ma_bai}`, CLUSTER_AGENTS.visual, "Trung bình");
+      const kp = addAgentTask(ticket.id, `S4 · Prompt & ảnh ${b.ma_bai}`, CLUSTER_AGENTS.visual, "Trung bình");
       save(); render();
       pipeLog("🖼️", `${b.ma_bai} — đang dựng prompt ảnh…`);
       const outP = await runTaskViaProxy(kp, await stagePrompt("visual", [
-        `Sinh AI Image Prompt cho mọi [IMAGE_PLACEHOLDER_X] trong bài ${b.ma_bai} dưới đây.`,
-        `Chỉ tạo prompt, KHÔNG gọi công cụ sinh ảnh (bước đó cần duyệt credit riêng).`,
+        `Sinh AI Image Prompt tiếng Anh cho bài ${b.ma_bai} dưới đây: đúng ${1 + SO_ANH_THAN} prompt.`,
+        `Prompt 1 = ảnh BÌA (bao quát chủ đề bài). Các prompt sau = ảnh minh hoạ cho từng`,
+        `placeholder ![...](/images/blog/...-1.jpg), ![...](/images/blog/...-2.jpg) theo đúng thứ tự.`,
+        `Ảnh là cảnh thật, KHÔNG có chữ/số/bảng biểu (mô hình sinh ảnh không viết đúng tiếng Việt).`,
+        `Nếu cảnh có xe lộ biển số, thêm câu che biển số bằng miếng dán trắng có logo TripX.`,
+        ``,
+        `Định dạng trả về: mỗi prompt một dòng, đánh số "1." "2." "3.", không thêm lời dẫn.`,
         ``, `BÀI VIẾT:`, (outW || "(chưa có nội dung bài)").slice(0, 8000),
       ].join("\n")));
       pipeLog(outP ? "✅" : "⚠️", `${b.ma_bai} prompt ảnh ${outP ? "xong" : "lỗi"} — đã ghi báo cáo`);
 
-      // Ghi đè bài vừa lưu để đính kèm prompt ảnh — bài đã an toàn từ bước trên rồi
+      /* Sinh ảnh THẬT — tốn credit, chỉ chạy khi người dùng bật rõ ở hộp thoại. */
+      let anh = [];
+      if (SINH_ANH && outP) {
+        const prompts = tachPrompt(outP, 1 + SO_ANH_THAN);
+        if (!prompts.length) {
+          pipeLog("⚠️", `${b.ma_bai} không bóc được prompt nào từ kết quả S4 — bỏ qua sinh ảnh, KHÔNG tự bịa prompt`);
+        } else {
+          pipeLog("🎨", `${b.ma_bai} — đang sinh ${prompts.length} ảnh (${prompts.length * CREDIT_MOI_ANH} credit)…`);
+          const kq = await goiProxy("/api/tripx/images", { cluster: clusterId, ma_bai: b.ma_bai, prompts });
+          anh = (kq && kq.anh) || [];
+          tongCredit += (kq && kq.credit_da_dung) || 0;
+          const ok = anh.filter((a) => a.ok).length;
+          pipeLog(ok === prompts.length ? "✅" : "⚠️",
+            `${b.ma_bai}: ${ok}/${prompts.length} ảnh xong, đã chèn watermark và upload lên TripX` +
+            (ok < prompts.length ? ` — lỗi: ${anh.filter((a) => !a.ok).map((a) => a.loi).join("; ").slice(0, 160)}` : ""));
+          themBaoCao(kp, `Đã sinh ${ok}/${prompts.length} ảnh, tốn ${(kq && kq.credit_da_dung) || 0} credit.\n` +
+            anh.map((a) => `- ${a.vi_tri}: ${a.ok ? a.url_tripx : "LỖI — " + a.loi}`).join("\n"), CLUSTER_AGENTS.visual);
+        }
+      }
+
+      // Ghi đè bài vừa lưu để đính kèm prompt + ảnh — bài đã an toàn từ bước trên rồi
       if (outW && outP) {
-        const luu2 = await saveArticleToStore({ ...hoSo, noi_dung: outW, prompt_anh: [outP] });
+        const luu2 = await saveArticleToStore({ ...hoSo, noi_dung: outW, prompt_anh: [outP], anh });
         if (luu2.saved) { kp.artifact = { cluster: clusterId, ma_bai: b.ma_bai, file: luu2.file }; save(); }
         pipeLog(luu2.saved ? "💾" : "⚠️", luu2.saved
-          ? `${b.ma_bai} đã đính prompt ảnh vào bài đã lưu`
-          : `${b.ma_bai} không đính được prompt ảnh vào kho (${luu2.error}) — prompt vẫn còn trong báo cáo S4`);
+          ? `${b.ma_bai} đã đính prompt${anh.length ? " + ảnh" : ""} vào bài đã lưu`
+          : `${b.ma_bai} không đính được vào kho (${luu2.error}) — vẫn còn trong báo cáo S4`);
+      }
+
+      /* ---- S5: đăng lên TripX ---- */
+      if (DANG_BAI && outW) {
+        const kd = addAgentTask(ticket.id, `S5 · Đăng bài ${b.ma_bai} lên tripx.vn`, CLUSTER_AGENTS.publisher, "Cao");
+        save(); render();
+        pipeLog("🚀", `${b.ma_bai} — đang đăng lên tripx.vn…`);
+        const kq = await goiProxy("/api/tripx/publish", {
+          cluster: clusterId, ma_bai: b.ma_bai, markdown: outW, anh, publish: XUAT_BAN_NGAY,
+        });
+        if (kq && kq.slug) {
+          kd.status = "Hoàn tất"; kd.progress = 100;
+          kd.artifact = { cluster: clusterId, ma_bai: b.ma_bai, tripx: kq.url || kq.slug };
+          themBaoCao(kd, `Đã ${kq.published ? "xuất bản" : "lưu nháp"} trên TripX.\n` +
+            `- slug: ${kq.slug}\n- id: ${kq.id}\n- link: ${kq.url || "(chưa xuất bản)"}\n` +
+            `- ảnh gắn vào thân bài: ${kq.so_anh_gan}` +
+            (kq.placeholder_da_go ? `\n- đã gỡ ${kq.placeholder_da_go} placeholder ảnh không sinh được` : ""),
+            CLUSTER_AGENTS.publisher);
+          daDang.push({ ma_bai: b.ma_bai, slug: kq.slug, url: kq.url });
+          pipeLog("✅", `${b.ma_bai} → ${kq.url || "nháp: " + kq.slug}`);
+          await saveArticleToStore({ ...hoSo, noi_dung: outW, prompt_anh: [outP], anh,
+            tripx: { id: kq.id, slug: kq.slug, url: kq.url, published: !!kq.published, dang_luc: new Date().toISOString() } });
+        } else {
+          kd.status = "Tạm dừng"; kd.progress = 0;
+          kd.run = { status: "failed" };
+          themBaoCao(kd, `Đăng bài thất bại: ${(kq && kq.error) || "không rõ lỗi"}`, CLUSTER_AGENTS.publisher);
+          pipeLog("⛔", `${b.ma_bai} đăng thất bại: ${(kq && kq.error) || "không rõ lỗi"}`);
+        }
+        save(); render();
       }
     }
 
@@ -2777,17 +2935,185 @@
     const daLuu = ks.filter((k) => k.artifact).length;
     ticket.desc += `\n\n— Vòng lặp kết thúc ${fmtD(today())}: ${ks.length} công việc, ${ks.length - loi} thành công, ${loi} lỗi.`
       + (loi ? " Phiếu để Tạm dừng do có mục chạy lỗi." : " Mọi mục đã có báo cáo, chờ người chịu trách nhiệm duyệt để đóng từng công việc.")
-      + `\n— Bài viết: ${daLuu ? `đã lưu vào marketing/data/bai-viet/${clusterId}/` : "KHÔNG lưu được ra kho, chỉ còn trong báo cáo công việc"}.`;
+      + `\n— Bài viết: ${daLuu ? `đã lưu vào marketing/data/bai-viet/${clusterId}/` : "KHÔNG lưu được ra kho, chỉ còn trong báo cáo công việc"}.`
+      + (tongCredit ? `\n— Ảnh: đã tiêu ${tongCredit.toLocaleString("vi-VN")} credit Genful.` : "")
+      + (daDang.length ? `\n— Đã đăng lên TripX ${daDang.length}/${bai.length} bài:\n` +
+          daDang.map((x) => `  · ${x.ma_bai}: ${x.url || x.slug}`).join("\n") : "");
     save(); render();
     pipeLog(daLuu ? "📦" : "⛔", daLuu
       ? `Bài viết nằm tại marketing/data/bai-viet/${clusterId}/ — mở được bằng editor, không mất khi xoá cache`
       : "Không lưu được bài nào ra kho — kiểm tra Backend Proxy rồi chạy lại");
+    if (tongCredit) pipeLog("💳", `Tổng credit Genful đã tiêu: ${tongCredit.toLocaleString("vi-VN")}`);
+    if (daDang.length) pipeLog("🌐", `Đã đăng ${daDang.length}/${bai.length} bài lên tripx.vn`);
     pipeLog(loi ? "⚠️" : "🏁", loi
       ? `Xong vòng lặp nhưng có ${loi} mục lỗi — phiếu #${ticket.code} để Tạm dừng`
       : `Hoàn tất phiếu #${ticket.code} — ${ks.length} công việc đều có báo cáo`);
     if (typeof addFeed === "function") addFeed(`Phiếu <b>#${ticket.code}</b> Content Cluster kết thúc — ${ks.length} công việc, ${loi} lỗi.`, loi ? "f-rule" : "f-done");
     say(loi ? `Phiếu #${ticket.code}: có ${loi} mục lỗi` : `Phiếu #${ticket.code} hoàn tất ✓`);
     return ticket;
+  }
+
+  /* ---------- Chạy tiếp một cluster dở dang ----------
+     Vòng lặp 11 bài chạy hơn một tiếng, và trong khoảng đó máy có thể ngủ, mạng có thể
+     rớt, proxy có thể được khởi động lại — lần chạy đầu đứt đúng như vậy ở bài thứ 7.
+     Chạy lại từ đầu là tiêu lại toàn bộ credit ảnh của những bài ĐÃ xong, nên phải có
+     đường đi tiếp: đọc blueprint từ báo cáo S2, đối chiếu bài nào đã đăng, chỉ làm phần
+     còn thiếu. Bài đã viết mà chưa đăng thì dùng lại nội dung cũ, không viết lại. */
+  async function resumeContentCluster(ticketCode, opts) {
+    const t = S.tickets.find((x) => x.code === Number(ticketCode));
+    if (!t) return say(`Không thấy phiếu #${ticketCode}`);
+    const clusterId = t.cluster;
+    if (!clusterId) return say(`Phiếu #${ticketCode} không gắn mã cluster nào`);
+
+    const o = opts || {};
+    const SINH_ANH = o.sinhAnh !== false;
+    const SO_ANH_THAN = Number(o.soAnhThan || 2);
+    const DANG_BAI = o.dangBai !== false;
+    const XUAT_BAN_NGAY = o.xuatBanNgay !== false;
+    let tongCredit = 0;
+    const daDang = [];
+
+    PIPE_LOG.length = 0;
+    openModal(modalHead("🔁", `Chạy tiếp cluster ${clusterId} — phiếu #${t.code}`, esc(t.title.slice(0, 120))) + `
+      <div class="hr-intake-form">
+        <div class="wk-note">Chỉ làm những bài còn thiếu. Bài đã đăng được giữ nguyên, không sinh lại ảnh.</div>
+        <div id="wk_pipe_log" class="wk-steps" style="max-height:340px;overflow-y:auto"></div>
+        <div class="bf-actions" style="margin-top:1rem">
+          <button class="btn btn-ghost btn-sm" type="button" data-act="modal-close">Đóng</button>
+          <button class="btn btn-primary btn-sm" type="button" data-act="go" data-view="ticketDetail" data-id="${t.id}">Mở phiếu #${t.code}</button>
+        </div>
+      </div>`);
+
+    // Blueprint lấy lại từ chính báo cáo S2 — KHÔNG dựng lại danh sách bài từ trí nhớ
+    const ks = ticketTasks(t.id);
+    const s2 = ks.find((k) => k.title.startsWith("S2"));
+    const bai = parseBlueprint((s2 && s2.run && s2.run.output) || "");
+    if (!bai.length) {
+      pipeLog("⛔", "Không đọc lại được blueprint từ báo cáo S2 — không thể chạy tiếp mà không bịa danh sách bài.");
+      return t;
+    }
+
+    // Bài nào đã có trên kho và đã đăng thì bỏ qua
+    let daCo = {};
+    const kho = await (async () => {
+      try {
+        const r = await fetchCoHan(`${WORK_PROXY_BASE}/api/db/clusters/${encodeURIComponent(clusterId)}/articles`, {}, 30000);
+        return r.ok ? await r.json() : null;
+      } catch (e) { return null; }
+    })();
+    (kho && kho.bai_viet || []).forEach((b) => { daCo[b.ma_bai] = b; });
+
+    const canLam = bai.filter((b) => !(daCo[b.ma_bai] && daCo[b.ma_bai].tripx && daCo[b.ma_bai].tripx.published));
+    pipeLog("📋", `Blueprint ${bai.length} bài · đã đăng ${bai.length - canLam.length} · còn phải làm ${canLam.length}`);
+    if (!canLam.length) { pipeLog("🏁", "Cluster đã đủ bài, không còn gì để làm."); return t; }
+
+    for (const b of canLam) {
+      const cu = daCo[b.ma_bai];
+      const hoSo = { cluster: clusterId, ma_bai: b.ma_bai, tieu_de: b.tieu_de,
+        loai: b.ma_bai === "P-00" ? "pillar" : "cluster", tu_khoa_chinh: b.tu_khoa,
+        nguon: "", chu_de: t.title };
+
+      // --- S3: chỉ viết lại khi CHƯA có nội dung, hoặc bản trong kho bị hỏng ---
+      let outW = cu && cu.noi_dung ? cu.noi_dung : null;
+      if (outW) {
+        const loiKho = loiCuaBai(outW);
+        if (loiKho) {
+          pipeLog("♻️", `${b.ma_bai} bản trong kho không dùng được (${loiKho}) — viết lại từ đầu`);
+          outW = null;
+        }
+      }
+      if (outW) {
+        pipeLog("♻️", `${b.ma_bai} đã có bài viết trong kho (${outW.length.toLocaleString("vi-VN")} ký tự) — dùng lại, không viết lại`);
+      } else {
+        const kw = addAgentTask(t.id, `S3 · Viết bài ${b.ma_bai} — ${b.tieu_de}`.slice(0, 120), CLUSTER_AGENTS.writer);
+        save(); render();
+        pipeLog("✍️", `${b.ma_bai} — đang viết…`);
+        outW = await runTaskViaProxy(kw, await stagePrompt("writer", [
+          `Viết trọn bài ${b.ma_bai} — loại: ${b.ma_bai === "P-00" ? "PILLAR (trụ cột)" : "CLUSTER (vệ tinh)"}.`,
+          `Tiêu đề: ${b.tieu_de}`,
+          `Từ khóa chính: ${b.tu_khoa}`,
+          `Độ dài mục tiêu: ${b.ma_bai === "P-00" ? "2.000–2.500" : "1.200–1.800"} từ.`,
+          `Các bài khác trong cluster (đừng giẫm góc nhìn): ${bai.map((x) => x.tieu_de).join(" · ")}`,
+          ``,
+          `CHỈ trả về nội dung bài viết: bắt đầu bằng front-matter theo đúng template, rồi tới thân bài.`,
+        ].join("\n")));
+        pipeLog(outW ? "✅" : "⚠️", `${b.ma_bai} ${outW ? "viết xong" : "lỗi"}`);
+        const loiBai = outW ? loiCuaBai(outW) : "agent không trả về nội dung";
+        if (loiBai) {
+          kw.status = "Tạm dừng"; kw.progress = 0;
+          kw.run = { ...(kw.run || {}), status: "failed", error: loiBai };
+          themBaoCao(kw, `Bài không đạt để đăng: ${loiBai}. Chưa sinh ảnh và chưa đăng.`, CLUSTER_AGENTS.writer);
+          pipeLog("⛔", `${b.ma_bai} bị bỏ qua: ${loiBai} (không tiêu credit ảnh)`);
+          save(); render();
+          continue;
+        }
+        const l = await saveArticleToStore({ ...hoSo, noi_dung: outW });
+        if (l.saved) { kw.artifact = { cluster: clusterId, ma_bai: b.ma_bai, file: l.file }; save(); }
+        pipeLog(l.saved ? "💾" : "⛔", l.saved ? `${b.ma_bai} đã lưu → ${l.file}` : `${b.ma_bai} KHÔNG lưu được: ${l.error}`);
+      }
+      if (!outW) continue;
+
+      // --- S4: ảnh (dùng lại nếu đã sinh đủ) ---
+      let anh = (cu && Array.isArray(cu.anh) && cu.anh.filter((a) => a.ok).length) ? cu.anh : [];
+      let outP = (cu && cu.prompt_anh && cu.prompt_anh[0]) || null;
+      if (anh.length) {
+        pipeLog("♻️", `${b.ma_bai} đã có ${anh.filter((a) => a.ok).length} ảnh — dùng lại, không tiêu thêm credit`);
+      } else if (SINH_ANH) {
+        const kp = addAgentTask(t.id, `S4 · Prompt & ảnh ${b.ma_bai}`, CLUSTER_AGENTS.visual, "Trung bình");
+        save(); render();
+        pipeLog("🖼️", `${b.ma_bai} — đang dựng prompt ảnh…`);
+        outP = await runTaskViaProxy(kp, await stagePrompt("visual", [
+          `Sinh AI Image Prompt tiếng Anh cho bài ${b.ma_bai} dưới đây: đúng ${1 + SO_ANH_THAN} prompt.`,
+          `Prompt 1 = ảnh BÌA. Các prompt sau = ảnh cho từng placeholder theo thứ tự.`,
+          `Ảnh là cảnh thật, KHÔNG có chữ/số/bảng biểu.`,
+          `Định dạng: mỗi prompt một dòng, đánh số "1." "2." "3.", không lời dẫn.`,
+          ``, `BÀI VIẾT:`, outW.slice(0, 8000),
+        ].join("\n")));
+        const prompts = tachPrompt(outP || "", 1 + SO_ANH_THAN);
+        if (!prompts.length) {
+          pipeLog("⚠️", `${b.ma_bai} không bóc được prompt — bỏ qua sinh ảnh`);
+        } else {
+          pipeLog("🎨", `${b.ma_bai} — đang sinh ${prompts.length} ảnh (${prompts.length * CREDIT_MOI_ANH} credit)…`);
+          const kq = await goiProxy("/api/tripx/images", { cluster: clusterId, ma_bai: b.ma_bai, prompts });
+          anh = (kq && kq.anh) || [];
+          tongCredit += (kq && kq.credit_da_dung) || 0;
+          const ok = anh.filter((a) => a.ok).length;
+          pipeLog(ok === prompts.length ? "✅" : "⚠️", `${b.ma_bai}: ${ok}/${prompts.length} ảnh xong`);
+          themBaoCao(kp, `Đã sinh ${ok}/${prompts.length} ảnh, tốn ${(kq && kq.credit_da_dung) || 0} credit.`, CLUSTER_AGENTS.visual);
+        }
+        await saveArticleToStore({ ...hoSo, noi_dung: outW, prompt_anh: outP ? [outP] : [], anh });
+      }
+
+      // --- S5: đăng ---
+      if (DANG_BAI) {
+        const kd = addAgentTask(t.id, `S5 · Đăng bài ${b.ma_bai} lên tripx.vn`, CLUSTER_AGENTS.publisher, "Cao");
+        save(); render();
+        pipeLog("🚀", `${b.ma_bai} — đang đăng…`);
+        const kq = await goiProxy("/api/tripx/publish", { cluster: clusterId, ma_bai: b.ma_bai, markdown: outW, anh, publish: XUAT_BAN_NGAY });
+        if (kq && kq.slug) {
+          kd.status = "Hoàn tất"; kd.progress = 100;
+          kd.artifact = { cluster: clusterId, ma_bai: b.ma_bai, tripx: kq.url || kq.slug };
+          themBaoCao(kd, `Đã ${kq.published ? "xuất bản" : "lưu nháp"}: ${kq.url || kq.slug} (id ${kq.id}), ${kq.so_anh_gan} ảnh trong thân bài.`, CLUSTER_AGENTS.publisher);
+          daDang.push({ ma_bai: b.ma_bai, slug: kq.slug, url: kq.url });
+          pipeLog("✅", `${b.ma_bai} → ${kq.url || kq.slug}`);
+          await saveArticleToStore({ ...hoSo, noi_dung: outW, prompt_anh: outP ? [outP] : [], anh,
+            tripx: { id: kq.id, slug: kq.slug, url: kq.url, published: !!kq.published, dang_luc: new Date().toISOString() } });
+        } else {
+          kd.status = "Tạm dừng"; kd.run = { status: "failed", error: (kq && kq.error) || "" };
+          themBaoCao(kd, `Đăng thất bại: ${(kq && kq.error) || "không rõ lỗi"}`, CLUSTER_AGENTS.publisher);
+          pipeLog("⛔", `${b.ma_bai} đăng thất bại: ${(kq && kq.error) || "không rõ"}`);
+        }
+        save(); render();
+      }
+    }
+
+    const ksSau = ticketTasks(t.id);
+    const loiSau = ksSau.filter((k) => k.run && k.run.status === "failed").length;
+    t.status = loiSau ? "Tạm dừng" : "Hoàn tất";
+    t.desc += `\n— Chạy tiếp ${fmtD(today())}: thêm ${daDang.length} bài, tiêu ${tongCredit.toLocaleString("vi-VN")} credit.`;
+    save(); render();
+    pipeLog("🏁", `Chạy tiếp xong: thêm ${daDang.length} bài · ${tongCredit.toLocaleString("vi-VN")} credit`);
+    return t;
   }
 
   /* ================= SỰ KIỆN ================= */
@@ -2850,7 +3176,13 @@
       case "start-cluster": {
         const topic = val("wk_cl_topic");
         if (!topic) return say("Nhập chủ đề hoặc dán link nguồn");
-        startContentCluster(topic, val("wk_cl_url") || topic);
+        const tick = (id) => { const el = document.getElementById(id); return !!(el && el.checked); };
+        startContentCluster(topic, val("wk_cl_url") || topic, {
+          sinhAnh: tick("wk_cl_anh"),
+          soAnhThan: Number(val("wk_cl_soanh") || 2),
+          dangBai: tick("wk_cl_dang"),
+          xuatBanNgay: tick("wk_cl_public"),
+        });
         break;
       }
       // ---- Kho Lead ----
@@ -3009,6 +3341,7 @@
     PROXY_BASE: WORK_PROXY_BASE,
     // Orches gọi vào đây khi nhận lệnh sản xuất content cluster
     startContentCluster,
+    resumeContentCluster,
     CLUSTER_AGENTS,
     // Orches gọi vào đây khi nhận lệnh thu thập Lead từ mạng xã hội
     startLeadHarvest,

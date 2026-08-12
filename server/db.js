@@ -347,6 +347,10 @@ async function saveArticle(payload) {
     noi_dung: String(payload.noi_dung),
     so_tu: String(payload.noi_dung).trim().split(/\s+/).length,
     prompt_anh: Array.isArray(payload.prompt_anh) ? payload.prompt_anh : [],
+    // Ảnh đã sinh thật: { vi_tri, prompt, url_tripx, file_local, id_base, credit }
+    anh: Array.isArray(payload.anh) ? payload.anh : [],
+    // Kết quả đăng lên TripX: { id, slug, url, published, dang_luc }
+    tripx: payload.tripx || null,
     nguon: payload.nguon || "",
     task_id: payload.task_id || "",
     tao_luc: payload.tao_luc || new Date().toISOString(),

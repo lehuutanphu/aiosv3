@@ -6,7 +6,9 @@ const http = require("http");
 const fs = require("fs");
 const path = require("path");
 const db = require("./db");
+const genful = require("./genful");
 const hr = require("./hr");
+const tripx = require("./tripx");
 const marketing = require("./marketing");
 const { callChatModel } = require("./openrouter");
 const sales = require("./sales");
@@ -286,6 +288,75 @@ const server = http.createServer(async (req, res) => {
           const payload = await readJsonBody(req, 8 * 1024 * 1024);
           return sendJson(res, 200, await db.saveAgents(payload));
         }
+      }
+    }
+
+    /* ---------- TripX: sinh ảnh thật + đăng bài lên SEO-CMS ----------
+       Hai chặng cuối của vòng lặp Content Cluster. Tách làm hai endpoint để mỗi chặng
+       vẫn là một công việc riêng có báo cáo riêng trong phiếu, đúng cách các chặng
+       S1-S3 đang chạy — chứ không gộp thành một hộp đen. */
+    if (parts[0] === "api" && parts[1] === "tripx") {
+      if (parts[2] === "status" && req.method === "GET") {
+        return sendJson(res, 200, {
+          tripx: tripx.trangThai(),
+          genful: genful.trangThai(),
+          credit: genful.sanSang() ? await genful.soDuCredit().catch((e) => ({ loi: e.message })) : null,
+        });
+      }
+
+      // S4: sinh ảnh thật từ prompt, chèn watermark rồi upload lên thư viện media TripX
+      if (parts[2] === "images" && req.method === "POST") {
+        const p = await readJsonBody(req);
+        const prompts = Array.isArray(p.prompts) ? p.prompts.filter((x) => x && String(x).trim()) : [];
+        if (!prompts.length) return sendJson(res, 400, { error: "Thiếu mảng 'prompts'" });
+        if (!genful.sanSang()) return sendJson(res, 503, { error: "Chưa cấu hình Genful (genful.config.json)" });
+
+        const thuMuc = path.join(ROOT, "..", "marketing", "data", "bai-viet", String(p.cluster || "chung"), "anh");
+        const anh = [];
+        for (let i = 0; i < prompts.length; i++) {
+          const ten = `${p.ma_bai || "BAI"}-${i === 0 ? "cover" : i}`;
+          try {
+            const g = await genful.sinhAnh({ prompt: prompts[i], outPath: path.join(thuMuc, `${ten}.jpg`) });
+            const url = await tripx.uploadAnh(g.file); // luôn kèm watermark logo TripX
+            anh.push({ vi_tri: i === 0 ? "cover" : `body-${i}`, prompt: prompts[i], url_tripx: url,
+                       file_local: path.relative(path.join(ROOT, ".."), g.file).replace(/\\/g, "/"),
+                       id_base: g.id_base, credit: g.credit, ok: true });
+          } catch (e) {
+            // Một ảnh hỏng KHÔNG được làm hỏng cả bài — bài vẫn đăng được, chỉ thiếu ảnh đó
+            anh.push({ vi_tri: i === 0 ? "cover" : `body-${i}`, prompt: prompts[i], ok: false, loi: e.message });
+          }
+        }
+        const tonCredit = anh.filter((a) => a.ok).reduce((s, a) => s + (a.credit || 0), 0);
+        return sendJson(res, 200, { anh, so_thanh_cong: anh.filter((a) => a.ok).length, credit_da_dung: tonCredit });
+      }
+
+      // S5: thay placeholder bằng URL ảnh thật rồi tạo + xuất bản bài
+      if (parts[2] === "publish" && req.method === "POST") {
+        const p = await readJsonBody(req, 8 * 1024 * 1024);
+        if (!p.markdown || !String(p.markdown).trim()) return sendJson(res, 400, { error: "Thiếu 'markdown'" });
+        if (!tripx.sanSang()) return sendJson(res, 503, { error: "Chưa cấu hình TripX (config.json trong skill tripx-webpost)" });
+
+        let md = String(p.markdown);
+        const anh = Array.isArray(p.anh) ? p.anh.filter((a) => a && a.ok && a.url_tripx) : [];
+        const cover = (anh.find((a) => a.vi_tri === "cover") || {}).url_tripx || null;
+
+        // Placeholder trong bài có dạng /images/blog/<slug>-1.jpg — thay theo thứ tự ảnh thân bài
+        const than = anh.filter((a) => a.vi_tri !== "cover");
+        than.forEach((a, i) => {
+          const re = new RegExp(`\\(/images/blog/[^)]*-${i + 1}\\.(jpg|png)\\)`, "g");
+          md = md.replace(re, `(${a.url_tripx})`);
+        });
+        // Placeholder còn sót (ảnh sinh lỗi) phải gỡ bỏ — để lại là bài đăng lên bị vỡ ảnh
+        const conSot = md.match(/!\[[^\]]*\]\(\/images\/blog\/[^)]+\)/g) || [];
+        md = md.replace(/!\[[^\]]*\]\(\/images\/blog\/[^)]+\)\s*/g, "");
+
+        const thuMuc = path.join(ROOT, "..", "marketing", "data", "bai-viet", String(p.cluster || "chung"));
+        fs.mkdirSync(thuMuc, { recursive: true });
+        const fileMd = path.join(thuMuc, `${p.ma_bai || "BAI"}-tripx.md`);
+        fs.writeFileSync(fileMd, md, "utf8");
+
+        const kq = await tripx.dangBai({ fileMarkdown: fileMd, publish: p.publish !== false, coverImage: cover });
+        return sendJson(res, 200, { ...kq, cover, so_anh_gan: than.length, placeholder_da_go: conSot.length });
       }
     }
 

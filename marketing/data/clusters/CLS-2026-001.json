@@ -1,0 +1,86 @@
+{
+  "cluster": "CLS-2026-001",
+  "chu_de": "Content Cluster: Cẩm nang du lịch Nha Trang từ A đến Z",
+  "nguon": "https://vnexpress.net/cam-nang-du-lich-nha-trang-tu-a-den-z-4127199.html",
+  "tao_luc": "2026-08-11T16:08:57.767Z",
+  "bai_viet": [
+    {
+      "ma_bai": "C-01",
+      "tieu_de": "Thời tiết Nha Trang – Mùa nào đẹp nhất để du lịch?",
+      "loai": "cluster",
+      "so_tu": 1450,
+      "file": "marketing/data/bai-viet/CLS-2026-001/C-01-thoi-tiet-nha-trang-mua-nao-dep-nhat-de-du-lich.md"
+    },
+    {
+      "ma_bai": "C-02",
+      "tieu_de": "Di chuyển đến Nha Trang – Máy bay, tàu hỏa, xe khách & thuê xe máy",
+      "loai": "cluster",
+      "so_tu": 1695,
+      "file": "marketing/data/bai-viet/CLS-2026-001/C-02-di-chuyen-den-nha-trang-may-bay-tau-hoa-xe-khach-thue-xe-may.md"
+    },
+    {
+      "ma_bai": "C-03",
+      "tieu_de": "Khách sạn Nha Trang – Kinh nghiệm chọn chỗ ở giá rẻ gần biển",
+      "loai": "cluster",
+      "so_tu": 1664,
+      "file": "marketing/data/bai-viet/CLS-2026-001/C-03-khach-san-nha-trang-kinh-nghiem-chon-cho-o-gia-re-gan-bien.md"
+    },
+    {
+      "ma_bai": "C-04",
+      "tieu_de": "Ẩm thực Nha Trang – Ăn gì ở Nha Trang? Gợi ý quán ngon, đặc sản",
+      "loai": "cluster",
+      "so_tu": 1835,
+      "file": "marketing/data/bai-viet/CLS-2026-001/C-04-am-thuc-nha-trang-an-gi-o-nha-trang-goi-y-quan-ngon-dac-san.md"
+    },
+    {
+      "ma_bai": "C-05",
+      "tieu_de": "Bãi biển Nha Trang – Top bãi tắm đẹp và hoạt động biển hấp dẫn",
+      "loai": "cluster",
+      "so_tu": 1413,
+      "file": "marketing/data/bai-viet/CLS-2026-001/C-05-bai-bien-nha-trang-top-bai-tam-dep-va-hoat-dong-bien-hap-dan.md"
+    },
+    {
+      "ma_bai": "C-06",
+      "tieu_de": "Tour đảo Nha Trang – So sánh giá tour, kinh nghiệm chọn combo",
+      "loai": "cluster",
+      "so_tu": 1530,
+      "file": "marketing/data/bai-viet/CLS-2026-001/C-06-tour-dao-nha-trang-so-sanh-gia-tour-kinh-nghiem-chon-combo.md"
+    },
+    {
+      "ma_bai": "C-07",
+      "tieu_de": "Hòn Mun Nha Trang – Kinh nghiệm lặn san hô và khám phá đảo",
+      "loai": "cluster",
+      "so_tu": 1644,
+      "file": "marketing/data/bai-viet/CLS-2026-001/C-07-hon-mun-nha-trang-kinh-nghiem-lan-san-ho-va-kham-pha-dao.md"
+    },
+    {
+      "ma_bai": "C-08",
+      "tieu_de": "VinWonders Nha Trang – Giá vé, giờ mở cửa và trò chơi hot nhất",
+      "loai": "cluster",
+      "so_tu": 1484,
+      "file": "marketing/data/bai-viet/CLS-2026-001/C-08-vinwonders-nha-trang-gia-ve-gio-mo-cua-va-tro-choi-hot-nhat.md"
+    },
+    {
+      "ma_bai": "C-09",
+      "tieu_de": "Tháp bà Ponagar Nha Trang – Kiến trúc, lịch sử và giờ tham quan",
+      "loai": "cluster",
+      "so_tu": 1312,
+      "file": "marketing/data/bai-viet/CLS-2026-001/C-09-thap-ba-ponagar-nha-trang-kien-truc-lich-su-va-gio-tham-quan.md"
+    },
+    {
+      "ma_bai": "C-10",
+      "tieu_de": "Núi Cô Tiên Nha Trang – Leo núi, cắm trại và ngắm thành phố",
+      "loai": "cluster",
+      "so_tu": 1313,
+      "file": "marketing/data/bai-viet/CLS-2026-001/C-10-nui-co-tien-nha-trang-leo-nui-cam-trai-va-ngam-thanh-pho.md"
+    },
+    {
+      "ma_bai": "P-00",
+      "tieu_de": "Cẩm nang du lịch Nha Trang từ A đến Z",
+      "loai": "pillar",
+      "so_tu": 2219,
+      "file": "marketing/data/bai-viet/CLS-2026-001/P-00-cam-nang-du-lich-nha-trang-tu-a-den-z.md"
+    }
+  ],
+  "cap_nhat_luc": "2026-08-12T01:13:43.405Z"
+}

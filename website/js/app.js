@@ -136,6 +136,24 @@ const AGENTS = [
     rules: ["Không đưa tên thương hiệu đã đăng ký nhãn hiệu vào prompt", "Không yêu cầu chữ trong ảnh", "Sinh ảnh thật phải có duyệt credit"],
   },
   {
+    id: "mkt-6", dept: "mkt", icon: "🚀", name: "Publisher Agent",
+    role: "Agent 5 — đăng bài chuẩn SEO lên TripX SEO-CMS",
+    model: "Không dùng LLM", mode: "Fast",
+    modelWhy: "Chặng này là thao tác xác định: kiểm tra front-matter, sinh ảnh, chèn watermark, gọi API đăng bài. Để LLM tự do ở đây chỉ thêm chỗ sai mà không thêm giá trị.",
+    maturity: 50, stage: "Học việc",
+    status: "idle",
+    task: "Chờ lệnh — sẵn sàng đăng bài lên tripx.vn",
+    keywords: ["đăng bài", "post bài", "publish", "xuất bản", "tripx", "seo-cms", "lên web", "blog"],
+    knowledge: ["Chuẩn front-matter TripX: title · slug · category · metaTitle · metaDescription · excerpt", "category chỉ nhận: move | stay | eat | exp | event | guide"],
+    workflows: ["/tripx-webpost — sinh ảnh, chèn watermark, đăng bài và xuất bản"],
+    skills: ["tripx-webpost"],
+    rules: [
+      "Mọi ảnh do AI sinh phải có watermark logo TripX trước khi upload",
+      "Không đăng bài thiếu metaDescription hoặc quá 155 ký tự",
+      "Không bịa giá trị category ngoài sáu giá trị hợp lệ",
+    ],
+  },
+  {
     id: "hr-1", dept: "hr", icon: "🧑‍💼", name: "HR Agent",
     role: "Chuyên viên tuyển dụng & hồ sơ nhân sự",
     hrIntake: true, // có pipeline tuyển dụng THẬT (project/aios/hr) — xem hr/README.md

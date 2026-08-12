@@ -100,6 +100,13 @@
 .wk-sync-local { border-color: rgba(91,124,250,.45);   color: #93aefb;      background: rgba(91,124,250,.08); }
 .wk-sync-off   { border-color: rgba(248,113,113,.5);   color: var(--danger);background: rgba(248,113,113,.08); }
 
+/* Ô chọn cho các bước tiêu tiền thật trong hộp thoại Content Cluster */
+.wk-check {
+  display: flex; align-items: center; gap: .55rem;
+  margin: .5rem 0; font-size: .85rem; cursor: pointer;
+}
+.wk-check input { width: auto; margin: 0; accent-color: var(--accent); }
+
 .wk-prio { font-size: .72rem; font-weight: 700; white-space: nowrap; }
 .wk-prio.hi { color: var(--danger); } .wk-prio.md { color: var(--warn); } .wk-prio.lo { color: var(--muted); }
 .wk-late { color: var(--danger); font-weight: 700; }

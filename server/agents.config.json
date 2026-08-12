@@ -65,6 +65,10 @@
     "cskh-2": {
       "name": "Care Agent",
       "port": 8651
+    },
+    "mkt-6": {
+      "name": "Publisher Agent",
+      "port": 8655
     }
   }
 }
