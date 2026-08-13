@@ -67,8 +67,8 @@ const AGENTS = [
   {
     id: "mkt-1", dept: "mkt", icon: "✍️", name: "Content Agent",
     role: "Chuyên viên nội dung dài (blog, email campaign, landing page)",
-    model: "Claude Sonnet 4.5", mode: "Planning",
-    modelWhy: "Văn phong hấp dẫn, kể chuyện tự nhiên — phù hợp blog, email cần tỷ lệ chuyển đổi cao.",
+    model: "DeepSeek V4 Flash", mode: "Planning",
+    modelWhy: "Chạy thật qua OpenRouter (backend openrouter trong agents.config.json) — văn phong tự nhiên, chi phí thấp, đủ nhanh cho bài dài 1.200-2.500 từ trong vòng lặp Content Cluster.",
     maturity: 78, stage: "Thạo việc",
     status: "working",
     task: "Viết landing page cho chương trình khuyến mãi tháng 7",
@@ -96,8 +96,8 @@ const AGENTS = [
   {
     id: "mkt-3", dept: "mkt", icon: "🔎", name: "Research Agent",
     role: "Agent 1 — nghiên cứu nguồn & bóc tách chủ đề con",
-    model: "Gemini 3 Pro", mode: "Planning",
-    modelWhy: "Cửa sổ ngữ cảnh lớn, đọc trọn bài dài và trang nguồn mà không mất chi tiết ở giữa.",
+    model: "DeepSeek V4 Flash", mode: "Planning",
+    modelWhy: "Chạy thật qua OpenRouter — ngữ cảnh 1M token đủ đọc trọn trang nguồn (thường 10-40k ký tự sau khi proxy tải hộ) mà không mất chi tiết.",
     maturity: 62, stage: "Học việc",
     status: "idle",
     task: "Chờ lệnh — sẵn sàng nhận chủ đề gốc từ Orches",
@@ -110,8 +110,8 @@ const AGENTS = [
   {
     id: "mkt-4", dept: "mkt", icon: "🗺️", name: "SEO Architect Agent",
     role: "Agent 2 — kiến trúc từ khóa & ma trận liên kết nội bộ",
-    model: "Claude Sonnet 4.5", mode: "Planning",
-    modelWhy: "Suy luận có cấu trúc, bám ràng buộc tốt — hợp việc phân tầng từ khóa và soát chồng lấn.",
+    model: "DeepSeek V4 Flash", mode: "Planning",
+    modelWhy: "Chạy thật qua OpenRouter — phần văn xuôi trước khối JSON blueprint bị giới hạn 400 từ trong prompt để tránh chạm trần token, đã kiểm chứng blueprint 11 bài về đúng dạng sau ~130s.",
     maturity: 70, stage: "Thạo việc",
     status: "idle",
     task: "Chờ lệnh — sẵn sàng dựng blueprint SEO",
@@ -124,8 +124,8 @@ const AGENTS = [
   {
     id: "mkt-5", dept: "mkt", icon: "🖼️", name: "Visual Prompt Agent",
     role: "Agent 4 — sinh AI Image Prompt cho từng vị trí ảnh",
-    model: "Gemini 3 Flash", mode: "Fast",
-    modelWhy: "Nhanh và rẻ cho việc sinh nhiều prompt ngắn có cấu trúc cố định.",
+    model: "DeepSeek V4 Flash", mode: "Fast",
+    modelWhy: "Chạy thật qua OpenRouter — rẻ và đủ nhanh cho việc sinh nhiều prompt ngắn có cấu trúc cố định (chỉ tạo prompt, việc sinh ảnh thật do Agent Image/Genful đảm nhận).",
     maturity: 58, stage: "Học việc",
     status: "idle",
     task: "Chờ lệnh — sẵn sàng dựng prompt ảnh",
@@ -1047,7 +1047,7 @@ function orgChartHTML() {
     <div class="org-chart">
       <div class="org-node ceo" id="orgCEO" title="Xem & bổ sung Global Rule toàn công ty"><b>👤 CEO / Chủ doanh nghiệp</b><span>Ra lệnh · Duyệt · Giám sát ngoại lệ · 🌐 ${GLOBAL_RULES.length} Global Rule</span></div>
       <div class="org-line"></div>
-      <div class="org-node orches" id="orgOrches"><b>🧭 Orches Agent</b><span>Gemini 3 Pro (High) · Điều phối &amp; phân việc toàn đội</span></div>
+      <div class="org-node orches" id="orgOrches"><b>🧭 Orches Agent</b><span>DeepSeek V4 Flash · Điều phối &amp; phân việc toàn đội</span></div>
       <div class="org-line"></div>
       <div class="org-branch"></div>
       <div class="org-depts">${deptCols}</div>
