@@ -268,10 +268,25 @@
      Người dùng yên tâm nhầm là cách chắc nhất để mất dữ liệu lần nữa. */
   const PUSH_TIMEOUT_MS = 15000;
 
+  // Gộp hai AbortSignal thành một — không dùng AbortSignal.any() vì chưa chắc trình duyệt
+  // nào cũng có, viết tay để chạy được ở mọi nơi. Cần cho nút Dừng: một request phải huỷ
+  // được vì HOẶC hết giờ HOẶC người dùng bấm Dừng, tuỳ cái nào tới trước.
+  function gopSignal(a, b) {
+    if (!a) return b;
+    if (!b) return a;
+    if (a.aborted || b.aborted) { const c = new AbortController(); c.abort(); return c.signal; }
+    const ctrl = new AbortController();
+    const huy = () => ctrl.abort();
+    a.addEventListener("abort", huy, { once: true });
+    b.addEventListener("abort", huy, { once: true });
+    return ctrl.signal;
+  }
+
   function fetchCoHan(url, opts, ms) {
     const ac = new AbortController();
     const timer = setTimeout(() => ac.abort(), ms);
-    return fetch(url, { ...opts, signal: ac.signal }).finally(() => clearTimeout(timer));
+    const signal = opts && opts.signal ? gopSignal(ac.signal, opts.signal) : ac.signal;
+    return fetch(url, { ...opts, signal }).finally(() => clearTimeout(timer));
   }
 
   async function pushToServer() {
@@ -760,10 +775,11 @@
         <td>${whoBadge(k)}</td>
         <td>${fmtD(k.start)}</td>
         <td>${dlCell(k.deadline, k.status)}</td>
-        <td>${pill(k.status)}${vuongTag(k)}${needsReport(k) ? ' <span class="wk-pill late" title="Đang làm nhưng không có báo cáo mới">im lặng</span>' : ""}</td>
+        <td>${pill(k.status)}${chayNenTag(k)}${vuongTag(k)}${needsReport(k) ? ' <span class="wk-pill late" title="Đang làm nhưng không có báo cáo mới">im lặng</span>' : ""}</td>
         <td>${bar(k.progress)}</td>
         <td class="wk-muted" style="max-width:220px">${last ? esc(last.note.slice(0, 70)) : "—"}</td>
         <td>${dangVuong(k) ? nutXuLyVuong(k) : `<div class="wk-cellflex">
+          ${k.run && k.run.output ? `<button class="wk-minibtn go" data-act="xem-ketqua" data-id="${k.id}" title="Xem trọn bài viết/ảnh trước khi duyệt">👁 Xem</button>` : ""}
           ${k.status === "Chờ duyệt" ? `<button class="wk-minibtn go" data-act="approve" data-id="${k.id}">Duyệt</button><button class="wk-minibtn" data-act="reject" data-id="${k.id}">Trả lại</button>` : ""}
           ${runBtn(k)}
           <button class="wk-minibtn" data-act="report" data-id="${k.id}">Báo cáo</button>
@@ -881,9 +897,10 @@
           <td>${p ? `<span class="wk-link" data-act="go" data-view="projectDetail" data-id="${p.id}">${esc(p.name)}</span>` : "—"}</td>
           <td>${whoBadge(k)}</td>
           <td>${dlCell(k.deadline, k.status)}</td>
-          <td>${pill(k.status)}${needsReport(k) ? ' <span class="wk-pill late" title="Đang làm nhưng không có báo cáo mới">im lặng</span>' : ""}</td>
+          <td>${pill(k.status)}${chayNenTag(k)}${vuongTag(k)}${needsReport(k) ? ' <span class="wk-pill late" title="Đang làm nhưng không có báo cáo mới">im lặng</span>' : ""}</td>
           <td>${bar(k.progress)}</td>
           <td><div class="wk-cellflex">
+            ${k.run && k.run.output ? `<button class="wk-minibtn go" data-act="xem-ketqua" data-id="${k.id}" title="Xem trọn bài viết/ảnh trước khi duyệt">👁 Xem</button>` : ""}
             ${k.status === "Chờ duyệt" ? `<button class="wk-minibtn go" data-act="approve" data-id="${k.id}">Duyệt</button>` : ""}
             ${runBtn(k)}
             <button class="wk-minibtn" data-act="report" data-id="${k.id}">Báo cáo</button>
@@ -906,7 +923,7 @@
         ${ks.map((k) => {
           const t = ticketById(k.ticket);
           return `<div class="wk-card ${isAgentTask(k) ? "agent" : "human"}" draggable="true" data-task="${k.id}" data-act="report" data-id="${k.id}">
-            <div class="t">${esc(k.title)}</div>
+            <div class="t">${esc(k.title)}${chayNenTag(k)}${vuongTag(k)}</div>
             <div class="m">${whoBadge(k)}${t ? `<span>#${t.code}</span>` : ""}</div>
             <div class="m">${dlCell(k.deadline, k.status)}<span style="flex:1">${bar(k.progress)}</span></div>
           </div>`;
@@ -1999,6 +2016,11 @@
     set("reports", m.silent);
     set("leads", (S.leads || []).filter((l) => l.trang_thai === "moi").length);
     set("dieuphoi", viecDangVuong().length);
+    // "Đang chạy" chỉ hiện khi > 0 — khác các bộ đếm khác, đây là tín hiệu tạm thời,
+    // hiện số 0 thường trực chỉ gây nhiễu chứ không có tác dụng cảnh báo.
+    const soChay = S.tasks.filter(dangChayNen).length;
+    const elChay = document.querySelector('[data-work-cnt="running"]');
+    if (elChay) elChay.textContent = soChay ? `⏳ ${soChay}` : "";
   }
 
   /* ================= MODAL ================= */
@@ -2146,6 +2168,72 @@
 
   // ---- Báo cáo tiến độ ----
   let CURRENT_REPORT = null; // công việc đang mở modal báo cáo
+  /* Markdown-nhẹ → HTML, KHÔNG dùng thư viện ngoài (đúng chủ trương "không framework" của
+     dự án). Escape HTML TRƯỚC khi biến đổi — nội dung tới từ LLM, không được tin nó không
+     chứa thẻ HTML nguy hiểm. Chỉ xử lý phần cú pháp markdown mà template bài viết thực sự
+     dùng (H1-H3, in đậm/nghiêng, danh sách, bảng, đoạn văn) — không cần một parser đầy đủ. */
+  function mdNhe(text) {
+    // Bỏ khối front-matter YAML đầu bài (title/slug/category/...) — đó là metadata cho
+    // TripX đọc, không phải nội dung để người soát đọc trong khung xem trước này.
+    const noiDung = String(text || "").replace(/^\s*---\r?\n[\s\S]*?\r?\n---\r?\n?/, "");
+    let s = esc(noiDung);
+    s = s.replace(/```[\s\S]*?```/g, (m) => `<pre class="wk-code">${m.replace(/```/g, "")}</pre>`);
+    s = s.replace(/^### (.+)$/gm, "<h4>$1</h4>").replace(/^## (.+)$/gm, "<h3>$1</h3>").replace(/^# (.+)$/gm, "<h2>$1</h2>");
+    s = s.replace(/\*\*(.+?)\*\*/g, "<b>$1</b>").replace(/(?<!\*)\*([^*\n]+)\*(?!\*)/g, "<i>$1</i>");
+    s = s.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '<img class="wk-md-img" src="$2" alt="$1">');
+    s = s.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
+    // Bảng markdown: hàng tiêu đề + hàng gạch ngang "---" + các hàng dữ liệu
+    s = s.replace(/^\|(.+)\|\r?\n\|[\s:|-]+\|\r?\n((?:\|.+\|\r?\n?)*)/gm, (m, head, body) => {
+      const th = head.split("|").map((c) => c.trim()).filter(Boolean).map((c) => `<th>${c}</th>`).join("");
+      const rows = body.trim().split(/\r?\n/).map((r) =>
+        "<tr>" + r.split("|").map((c) => c.trim()).filter(Boolean).map((c) => `<td>${c}</td>`).join("") + "</tr>").join("");
+      return `<table class="wk-md-table"><thead><tr>${th}</tr></thead><tbody>${rows}</tbody></table>`;
+    });
+    // Danh sách gạch đầu dòng — gộp các dòng "- " liên tiếp vào một <ul>
+    s = s.replace(/(^- .+(?:\n^- .+)*)/gm, (m) =>
+      "<ul>" + m.split("\n").map((l) => `<li>${l.replace(/^- /, "")}</li>`).join("") + "</ul>");
+    // Đoạn văn: khối text còn lại (không phải thẻ đã sinh ở trên) tách theo dòng trống
+    s = s.split(/\n{2,}/).map((block) => (/^<(h\d|ul|table|pre|img)/.test(block.trim()) ? block : `<p>${block.replace(/\n/g, "<br>")}</p>`)).join("\n");
+    return s;
+  }
+
+  /* ---------- Modal xem trước kết quả — bài viết + ảnh + link đã đăng, trước khi Duyệt ---------- */
+  function mXemKetQua(taskId) {
+    const k = taskById(taskId);
+    if (!k) return;
+    const t = ticketById(k.ticket);
+    const noiDung = k.run && k.run.output;
+    const anh = k.anhDaSinh || [];
+    const linkTripx = k.artifact && k.artifact.tripx;
+
+    const phanAnh = anh.length ? `
+      <h4>Ảnh đã sinh (${anh.filter((a) => a.ok).length}/${anh.length})</h4>
+      <div class="wk-anh-grid">${anh.map((a) => a.ok
+        ? `<figure><img src="${esc(a.url_tripx)}" alt="${esc(a.vi_tri)}" loading="lazy"><figcaption>${esc(a.vi_tri)}</figcaption></figure>`
+        : `<figure class="loi"><div class="wk-anh-loi">⚠️ ${esc(a.vi_tri)}<br>${esc(a.loi || "lỗi")}</div></figure>`
+      ).join("")}</div>` : "";
+
+    const phanTripx = linkTripx ? `
+      <div class="wk-note" style="margin-top:1rem">🌐 Đã đăng: <a href="${esc(String(linkTripx).startsWith("http") ? linkTripx : "#")}" target="_blank" rel="noopener"><b>${esc(linkTripx)}</b></a></div>` : "";
+
+    const phanBai = noiDung ? `<div class="wk-md-preview">${mdNhe(noiDung)}</div>`
+      : '<p class="bf-hint">Chưa có nội dung — công việc chưa chạy hoặc chưa có kết quả.</p>';
+
+    openModal(modalHead("👁", "Xem kết quả", `${esc(k.title)}${t ? ` · phiếu #${t.code}` : ""}`) + `
+      <div class="hr-intake-form">
+        ${phanBai}
+        ${phanAnh}
+        ${phanTripx}
+        <div class="bf-actions" style="margin-top:1.2rem">
+          <button class="btn btn-ghost btn-sm" type="button" data-act="modal-close">Đóng</button>
+          <button class="btn btn-ghost btn-sm" type="button" data-act="report" data-id="${k.id}">📈 Xem báo cáo</button>
+          ${k.status === "Chờ duyệt" ? `
+            <button class="btn btn-ghost btn-sm" type="button" data-act="reject" data-id="${k.id}">Trả lại</button>
+            <button class="btn btn-primary btn-sm" type="button" data-act="approve" data-id="${k.id}">✓ Duyệt &amp; đóng việc</button>` : ""}
+        </div>
+      </div>`);
+  }
+
   function mReport(taskId) {
     const k = taskById(taskId);
     if (!k) return;
@@ -2255,6 +2343,14 @@
   const vuongTag = (k) => (dangVuong(k)
     ? ` <span class="wk-pill late" title="${esc(k.vuong.lyDo)}">⛔ vướng</span>` : "");
   const viecDangVuong = () => S.tasks.filter(dangVuong);
+
+  /* Task đã kiểm chứng THẬT vẫn chạy tiếp ở nền dù đóng modal (xem runTaskViaProxy/startRun,
+     cả hai đều gán k.run.status="running" ngay lúc bắt đầu) — thứ THIẾU trước đây không phải
+     việc dừng thật, mà là không đâu trên giao diện cho biết Agent vẫn đang chạy sau khi đóng
+     modal, nên trông giống hệt như đã dừng. Đây là chỉ báo bù cho khoảng trống đó. */
+  const dangChayNen = (k) => !!(k.run && k.run.status === "running");
+  const chayNenTag = (k) => (dangChayNen(k)
+    ? ` <span class="wk-pill doing wk-pulse" title="Agent vẫn đang chạy ở nền dù đóng cửa sổ — không cần mở lại để giữ cho nó tiếp tục">⏳ đang chạy nền</span>` : "");
 
   /* QT1 — trả về lý do KHÔNG đóng được phiếu, hoặc null nếu đóng được. */
   function lyDoKhongDongDuocPhieu(t) {
@@ -3022,18 +3118,25 @@
 
   /* Chạy một Agent trên một công việc, ghi kết quả thành báo cáo. Trả về text hoặc null.
      autoApprove = true  → công việc đóng luôn ở "Hoàn tất" (chế độ chạy tự động cả cluster).
-     autoApprove = false → dừng ở "Chờ duyệt" để người soát tay (dùng khi bấm Chạy lại). */
+     autoApprove = false → dừng ở "Chờ duyệt" để người soát tay (dùng khi bấm Chạy lại).
+     opts.signal — nút "⏹ Dừng" của vòng lặp cluster huỷ qua đây. k.run.status="running" được
+     đặt NGAY khi bắt đầu (không đợi tới lúc xong) để có chỗ bám cho chỉ báo "đang chạy nền"
+     trên bảng công việc — trước đây k.run chỉ được ghi sau khi xong, nên đóng modal giữa
+     chừng thì không đâu trên giao diện cho biết Agent vẫn đang chạy. */
   async function runTaskViaProxy(k, promptOverride, opts) {
     const autoApprove = !opts || opts.autoApprove !== false;
     const a = agentById(k.executor.id);
     if (!a) return null;
     const started = Date.now();
-    k.status = "Đang thực hiện"; k.progress = 10; save();
+    k.status = "Đang thực hiện"; k.progress = 10;
+    k.run = { status: "running", agentId: k.executor.id, startedAt: new Date().toISOString() };
+    save(); render();
     const prompt = promptOverride || buildPrompt(k, a);
     try {
       const res = await fetch(`${WORK_PROXY_BASE}/api/agents/${encodeURIComponent(k.executor.id)}/chat`, {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ message: prompt }),
+        signal: opts && opts.signal,
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || `Proxy trả lỗi ${res.status}`);
@@ -3054,10 +3157,15 @@
         `<b>${esc(a.name)}</b> hoàn thành "${esc(k.title)}"${autoApprove ? " — tự động duyệt" : ` — chờ ${esc(staffName(k.owner))} soát`}.`, "f-done");
       return data.reply;
     } catch (e) {
+      const nguoiDung = e.name === "AbortError";
       k.run = { status: "failed", agentId: k.executor.id, error: e.message, endedAt: new Date().toISOString() };
       // QT2/QT3: không để việc dừng trơ ở "Tạm dừng" mà không ai biết vì sao và làm gì
       // tiếp. chuyenVeOrches đặt trạng thái, ghi lý do cụ thể và đẩy vào hàng đợi điều phối.
-      chuyenVeOrches(k, `${a.name} không chạy được: ${e.message}`);
+      // Người dùng bấm Dừng KHÔNG phải Agent lỗi — ghi lý do khác hẳn để không gây hoang
+      // mang, và để Điều phối biết đây là việc dở dang có chủ đích, không phải sự cố.
+      chuyenVeOrches(k, nguoiDung
+        ? `Người dùng đã bấm Dừng vòng lặp — dừng đúng lúc ${a.name} đang chạy, không phải lỗi Agent.`
+        : `${a.name} không chạy được: ${e.message}`);
       save();
       return null;
     }
@@ -3108,6 +3216,22 @@
   }
 
   const PIPE_LOG = [];
+
+  /* Nút "⏹ Dừng" — mỗi vòng lặp cluster đang chạy có một AbortController riêng, khoá theo
+     ticket.id. Bấm Dừng thì abort() ngay: lượt gọi Agent đang dở dang bị huỷ thật (dừng
+     billing thêm), và cờ signal.aborted chặn vòng lặp bắt đầu chặng kế tiếp. */
+  const CLUSTER_STOP = {};
+
+  function dungGiuaChung(ticket, ghiChu) {
+    pipeLog("🛑", `Đã dừng theo yêu cầu người dùng${ghiChu ? " — " + ghiChu : ""}.`);
+    capNhatTrangThaiPhieu(ticket);
+    save(); render();
+    say(`Đã dừng phiếu #${ticket.code} theo yêu cầu`);
+    delete CLUSTER_STOP[ticket.id];
+    const btn = document.getElementById("wk_cluster_stop_btn");
+    if (btn) btn.remove();
+    return ticket;
+  }
   function pipeLog(icon, text) {
     PIPE_LOG.push({ icon, text, at: new Date().toLocaleTimeString("vi-VN") });
     const box = fld("wk_pipe_log");
@@ -3122,33 +3246,68 @@
       const a = agentById(id);
       return `<span class="wk-chip">${esc(a ? a.icon || "🤖" : "")} ${esc(a ? a.name : id)} <span class="wk-owner">· ${esc(staffName(S.agentOwners[id]))}</span></span>`;
     }).join("");
-    openModal(modalHead("🔁", "Chạy vòng lặp Content Cluster", "Orches giao chủ đề → tạo phiếu → 4 Agent chạy lần lượt, mỗi Agent một công việc + một báo cáo.") + `
+    openModal(modalHead("🔁", "Chạy vòng lặp Content Cluster", "Orches giao chủ đề → tạo phiếu → chạy liền mạch S1→S5 qua từng Agent, không dừng chờ duyệt giữa chừng. Chỉ dừng khi bạn bấm nút Dừng.") + `
       <div class="hr-intake-form">
         <div class="hr-grid">
           <label class="span2">Chủ đề hoặc tiêu đề nguồn <span class="req">*</span><input type="text" id="wk_cl_topic" placeholder="VD: Cẩm nang du lịch Nha Trang từ A đến Z"></label>
           <label class="span2">Link nguồn (nếu có)<input type="text" id="wk_cl_url" placeholder="https://..."></label>
+          <label>Số bài dự kiến (Pillar + Cluster)<input type="number" id="wk_cl_sobai" value="9" min="2" max="20"></label>
         </div>
         <h4>Đội thực thi</h4>
         <div>${ags}</div>
 
-        <h4>Hai chặng tốn tiền thật</h4>
-        <div class="wk-note warn">Hai lựa chọn dưới đây <b>mặc định tắt</b>: một cái tiêu credit Genful,
-          một cái tạo nội dung công khai trên tripx.vn. Bật là chạy thật, không có bước hỏi lại.</div>
-        <label class="wk-check"><input type="checkbox" id="wk_cl_anh">
+        <h4>Kết quả cuối: bài + ảnh đăng thật lên website</h4>
+        <div class="wk-note warn">S4/S5 <b>mặc định BẬT</b> — đúng nghĩa "chạy xong là có bài lên website kèm ảnh",
+          không chỉ dừng ở văn bản. Đây là tiền thật (Genful) và nội dung công khai thật (tripx.vn — xuất bản ngay,
+          không qua duyệt trước) mỗi lần chạy. Bỏ chọn nếu chỉ muốn thử văn bản/prompt trước.</div>
+        <label class="wk-check"><input type="checkbox" id="wk_cl_anh" checked>
           <span>S4 — sinh ảnh thật bằng Genful <b>(${CREDIT_MOI_ANH} credit/ảnh)</b></span></label>
         <label class="span2" style="margin-left:1.7rem">Số ảnh thân bài mỗi bài
           <input type="number" id="wk_cl_soanh" value="2" min="0" max="4" style="max-width:6rem"></label>
-        <label class="wk-check"><input type="checkbox" id="wk_cl_dang">
+        <label class="wk-check"><input type="checkbox" id="wk_cl_dang" checked>
           <span>S5 — đăng bài lên <b>tripx.vn</b> qua api.tripx.vn</span></label>
         <label class="wk-check" style="margin-left:1.7rem"><input type="checkbox" id="wk_cl_public" checked>
           <span>Xuất bản công khai ngay (bỏ chọn = lưu nháp để duyệt trong /seo-studio)</span></label>
 
-        <p class="bf-hint" style="margin:.7rem 0 0">Mỗi Agent chạy xong tạo một công việc kèm báo cáo trong phiếu. Kết quả dừng ở <b>Chờ duyệt</b> — Agent không tự đóng việc của mình.</p>
+        <div class="wk-note" id="wk_cl_uoctinh" style="margin-top:.8rem"></div>
+
+        <p class="bf-hint" style="margin:.7rem 0 0">Mỗi Agent chạy xong tạo một công việc kèm báo cáo trong phiếu, tự chuyển sang Agent kế tiếp.
+          Việc nào lỗi thì quay về hàng đợi <b>Điều phối</b> để Orches xử lý — không phải chờ người duyệt từng bước.</p>
         <div class="bf-actions" style="margin-top:1.2rem">
           <button class="btn btn-ghost btn-sm" type="button" data-act="modal-close">Hủy</button>
           <button class="btn btn-primary btn-sm" type="button" data-act="start-cluster">▶ Tạo phiếu &amp; chạy</button>
         </div>
       </div>`);
+
+    capNhatUocTinhCluster();
+    ["wk_cl_sobai", "wk_cl_anh", "wk_cl_soanh", "wk_cl_dang"].forEach((id) => {
+      const el = fld(id);
+      if (el) el.addEventListener("input", capNhatUocTinhCluster);
+    });
+  }
+
+  /* Ước tính chi phí HIỂN THỊ TRƯỚC khi bấm chạy — cập nhật theo thời gian thực khi người
+     dùng đổi số bài/số ảnh. Không thay cho việc credit thật bị trừ theo từng ảnh sinh ra
+     (con số cuối có thể lệch nếu S2 trả về khác số bài dự kiến), nhưng đủ để không ai bấm
+     chạy mà không biết quy mô tiền sắp tiêu. */
+  function capNhatUocTinhCluster() {
+    const box = fld("wk_cl_uoctinh");
+    if (!box) return;
+    const soBai = Number(val("wk_cl_sobai") || 0);
+    const sinhAnh = !!(fld("wk_cl_anh") && fld("wk_cl_anh").checked);
+    const soAnh = Number(val("wk_cl_soanh") || 0);
+    const dangBai = !!(fld("wk_cl_dang") && fld("wk_cl_dang").checked);
+    if (!sinhAnh && !dangBai) { box.innerHTML = "Không sinh ảnh, không đăng bài — chỉ tạo văn bản, không tốn tiền thật."; return; }
+    const parts = [];
+    if (sinhAnh && soBai > 0) {
+      const soAnhTong = soBai * (1 + soAnh);
+      const credit = soAnhTong * CREDIT_MOI_ANH;
+      parts.push(`💳 Ước tính <b>${soAnhTong} ảnh × ${CREDIT_MOI_ANH} credit = ${credit.toLocaleString("vi-VN")} credit Genful</b> (${soBai} bài × ${1 + soAnh} ảnh/bài)`);
+    }
+    if (dangBai && soBai > 0) {
+      parts.push(`🌐 <b>${soBai} bài sẽ xuất bản công khai</b> lên tripx.vn ngay khi viết xong từng bài`);
+    }
+    box.innerHTML = parts.join("<br>") + `<br><span class="wk-sub">Số bài thật do S2 (SEO Architect) quyết định, có thể lệch với số dự kiến — chi phí thật tính theo số ảnh thực sự sinh ra.</span>`;
   }
 
   /* ---------- Đưa bài viết ra kho thật ----------
@@ -3190,18 +3349,19 @@
 
   /* Gọi proxy và LUÔN trả về một object — kể cả khi lỗi — để vòng lặp không vỡ giữa
      chừng vì một chặng hỏng. Lỗi nằm ở trường .error để chặng gọi tự quyết định. */
-  async function goiProxy(duongDan, payload, timeoutMs) {
+  async function goiProxy(duongDan, payload, timeoutMs, signal) {
     try {
       const res = await fetchCoHan(`${WORK_PROXY_BASE}${duongDan}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
+        signal,
       }, timeoutMs || 900000); // sinh ảnh có thể mất vài phút mỗi tấm
       const d = await res.json().catch(() => ({}));
       if (!res.ok) return { error: d.error || `Proxy trả lỗi ${res.status}` };
       return d;
     } catch (e) {
-      return { error: e.name === "AbortError" ? "proxy không phản hồi kịp" : e.message };
+      return { error: e.name === "AbortError" ? (signal && signal.aborted ? "người dùng đã bấm Dừng" : "proxy không phản hồi kịp") : e.message };
     }
   }
 
@@ -3276,13 +3436,18 @@
     say(`Đã tạo phiếu #${ticket.code} — giao đội AI Agent ✓`);
     if (typeof addFeed === "function") addFeed(`<b>Orches</b> mở phiếu <b>#${ticket.code}</b> "Content Cluster" và giao cho đội marketing.`, "f-orches");
 
+    const stopCtrl = new AbortController();
+    CLUSTER_STOP[ticket.id] = stopCtrl;
+
     openModal(modalHead("🔁", `Vòng lặp Content Cluster — phiếu #${ticket.code}`, esc(topic.slice(0, 120))) + `
       <div class="hr-intake-form">
-        <div class="wk-note">Mỗi Agent chạy xong sẽ tạo <b>một công việc</b> trong phiếu này kèm <b>báo cáo</b>.
-        Hết vòng lặp, phiếu được ghi chú hoàn thành. Người chịu trách nhiệm vẫn phải duyệt từng mục.</div>
+        <div class="wk-note">Chạy liền mạch từ S1 tới hết, Agent này trả kết quả xong tự chuyển sang Agent kế tiếp
+        — <b>không dừng chờ duyệt giữa chừng</b>. Chỉ dừng khi bạn bấm nút Dừng bên dưới, hoặc gặp lỗi phải chuyển
+        về Orches điều phối.</div>
         <div id="wk_pipe_log" class="wk-steps" style="max-height:340px;overflow-y:auto"></div>
         <div class="bf-actions" style="margin-top:1rem">
-          <button class="btn btn-ghost btn-sm" type="button" data-act="modal-close">Đóng</button>
+          <button class="btn btn-ghost btn-sm" type="button" data-act="modal-close">Đóng (vẫn chạy nền)</button>
+          <button class="btn btn-danger btn-sm" type="button" id="wk_cluster_stop_btn" data-act="cluster-stop" data-id="${ticket.id}">⏹ Dừng</button>
           <button class="btn btn-primary btn-sm" type="button" data-act="go" data-view="ticketDetail" data-id="${ticket.id}">Mở phiếu #${ticket.code}</button>
         </div>
       </div>`);
@@ -3307,8 +3472,9 @@
       src ? `--- NỘI DUNG TRANG NGUỒN (đã đọc hộ, dùng đúng dữ kiện trong đây) ---\n${src.text}\n--- HẾT NGUỒN ---\n` : "",
       `Trả về: (1) tóm tắt nguồn, (2) danh sách thực thể/chủ đề con kèm lý do chọn hoặc loại`,
       `theo đúng 3 câu hỏi sàng lọc trong skill.`,
-    ].filter(Boolean).join("\n")));
+    ].filter(Boolean).join("\n")), { signal: stopCtrl.signal });
     pipeLog(out1 ? "✅" : "⚠️", out1 ? "S1 xong — đã ghi báo cáo, chờ duyệt" : "S1 lỗi — xem báo cáo trong công việc");
+    if (stopCtrl.signal.aborted) return dungGiuaChung(ticket, "dừng ở S1");
 
     // ---- S2: kiến trúc SEO ----
     const k2 = addAgentTask(ticket.id, "S2 · Kiến trúc SEO & ma trận liên kết", CLUSTER_AGENTS.seo);
@@ -3333,8 +3499,9 @@
       `tu_khoa_phu/tu_khoa_lsi/meta vào khối JSON (viết chúng ở phần văn xuôi phía trên).`,
       `Khối JSON dài dòng sẽ bị cắt và cả blueprint mất tác dụng.`,
       `{"pillar":{"tieu_de":"...","tu_khoa_chinh":"..."},"cluster":[{"ma_bai":"C-01","tieu_de":"...","tu_khoa_chinh":"..."}]}`,
-    ].join("\n")));
+    ].join("\n")), { signal: stopCtrl.signal });
     pipeLog(out2 ? "✅" : "⚠️", out2 ? "S2 xong — đã ghi báo cáo, chờ duyệt" : "S2 lỗi — xem báo cáo trong công việc");
+    if (stopCtrl.signal.aborted) return dungGiuaChung(ticket, "dừng ở S2");
 
     // ---- S3 + S4: vòng lặp từng bài ----
     const bai = parseBlueprint(out2);
@@ -3351,6 +3518,7 @@
 
     pipeLog("📝", `Blueprint có ${bai.length} bài — bắt đầu vòng lặp viết`);
     for (const b of bai) {
+      if (stopCtrl.signal.aborted) return dungGiuaChung(ticket, `dừng trước khi viết ${b.ma_bai}`);
       const kw = addAgentTask(ticket.id, `S3 · Viết bài ${b.ma_bai} — ${b.tieu_de}`.slice(0, 120), CLUSTER_AGENTS.writer);
       save(); render();
       pipeLog("✍️", `${b.ma_bai} — đang viết…`);
@@ -3364,8 +3532,9 @@
         `CHỈ trả về nội dung bài viết: bắt đầu bằng frontmatter YAML theo đúng template,`,
         `rồi tới thân bài. Không in dòng trạng thái kiểu "▶ Đang viết…", không lời dẫn,`,
         `không giải thích quy trình — những thứ đó thuộc về hệ thống, không thuộc về file bài.`,
-      ].join("\n")));
+      ].join("\n")), { signal: stopCtrl.signal });
       pipeLog(outW ? "✅" : "⚠️", `${b.ma_bai} ${outW ? "viết xong" : "lỗi"} — đã ghi báo cáo`);
+      if (stopCtrl.signal.aborted) return dungGiuaChung(ticket, `dừng ở S3 (${b.ma_bai})`);
 
       /* Chặn bài hỏng NGAY tại đây, trước khi tiêu credit ảnh cho nó. */
       const loiBai = outW ? loiCuaBai(outW) : "agent không trả về nội dung";
@@ -3406,8 +3575,9 @@
         ``,
         `Định dạng trả về: mỗi prompt một dòng, đánh số "1." "2." "3.", không thêm lời dẫn.`,
         ``, `BÀI VIẾT:`, (outW || "(chưa có nội dung bài)").slice(0, 8000),
-      ].join("\n")));
+      ].join("\n")), { signal: stopCtrl.signal });
       pipeLog(outP ? "✅" : "⚠️", `${b.ma_bai} prompt ảnh ${outP ? "xong" : "lỗi"} — đã ghi báo cáo`);
+      if (stopCtrl.signal.aborted) return dungGiuaChung(ticket, `dừng ở S4 (${b.ma_bai})`);
 
       /* Sinh ảnh THẬT — tốn credit, chỉ chạy khi người dùng bật rõ ở hộp thoại. */
       let anh = [];
@@ -3417,7 +3587,7 @@
           pipeLog("⚠️", `${b.ma_bai} không bóc được prompt nào từ kết quả S4 — bỏ qua sinh ảnh, KHÔNG tự bịa prompt`);
         } else {
           pipeLog("🎨", `${b.ma_bai} — đang sinh ${prompts.length} ảnh (${prompts.length * CREDIT_MOI_ANH} credit)…`);
-          const kq = await goiProxy("/api/tripx/images", { cluster: clusterId, ma_bai: b.ma_bai, prompts });
+          const kq = await goiProxy("/api/tripx/images", { cluster: clusterId, ma_bai: b.ma_bai, prompts }, undefined, stopCtrl.signal);
           anh = (kq && kq.anh) || [];
           tongCredit += (kq && kq.credit_da_dung) || 0;
           const ok = anh.filter((a) => a.ok).length;
@@ -3428,11 +3598,14 @@
             anh.map((a) => `- ${a.vi_tri}: ${a.ok ? a.url_tripx : "LỖI — " + a.loi}`).join("\n"), CLUSTER_AGENTS.visual);
         }
       }
+      if (stopCtrl.signal.aborted) return dungGiuaChung(ticket, `dừng sau khi sinh ảnh ${b.ma_bai}`);
 
       // Ghi đè bài vừa lưu để đính kèm prompt + ảnh — bài đã an toàn từ bước trên rồi
       if (outW && outP) {
         const luu2 = await saveArticleToStore({ ...hoSo, noi_dung: outW, prompt_anh: [outP], anh });
         if (luu2.saved) { kp.artifact = { cluster: clusterId, ma_bai: b.ma_bai, file: luu2.file }; save(); }
+        // Gắn thẳng ảnh vào task để modal "Xem kết quả" đọc được ngay, không cần gọi lại server
+        if (anh.length) kp.anhDaSinh = anh;
         pipeLog(luu2.saved ? "💾" : "⚠️", luu2.saved
           ? `${b.ma_bai} đã đính prompt${anh.length ? " + ảnh" : ""} vào bài đã lưu`
           : `${b.ma_bai} không đính được vào kho (${luu2.error}) — vẫn còn trong báo cáo S4`);
@@ -3445,7 +3618,7 @@
         pipeLog("🚀", `${b.ma_bai} — đang đăng lên tripx.vn…`);
         const kq = await goiProxy("/api/tripx/publish", {
           cluster: clusterId, ma_bai: b.ma_bai, markdown: outW, anh, publish: XUAT_BAN_NGAY,
-        });
+        }, undefined, stopCtrl.signal);
         if (kq && kq.slug) {
           kd.status = "Hoàn tất"; kd.progress = 100;
           kd.artifact = { cluster: clusterId, ma_bai: b.ma_bai, tripx: kq.url || kq.slug };
@@ -3466,9 +3639,11 @@
         }
         save(); render();
       }
+      if (stopCtrl.signal.aborted) return dungGiuaChung(ticket, `dừng sau khi xong ${b.ma_bai}`);
     }
 
     // ---- Đóng phiếu ----
+    delete CLUSTER_STOP[ticket.id]; // chạy xong tự nhiên — nút Dừng không còn tác dụng, dọn registry
     const ks = ticketTasks(ticket.id);
     const loi = ks.filter((k) => k.run && k.run.status === "failed").length;
     // QT1: phiếu KHÔNG còn tự đóng theo "không có lỗi". Chạy xong mà mọi mục dừng ở
@@ -3493,6 +3668,7 @@
       : `Hoàn tất phiếu #${ticket.code} — ${ks.length} công việc đều có báo cáo`);
     if (typeof addFeed === "function") addFeed(`Phiếu <b>#${ticket.code}</b> Content Cluster kết thúc — ${ks.length} công việc, ${loi} lỗi.`, loi ? "f-rule" : "f-done");
     say(loi ? `Phiếu #${ticket.code}: có ${loi} mục lỗi` : `Phiếu #${ticket.code} hoàn tất ✓`);
+    { const btn = document.getElementById("wk_cluster_stop_btn"); if (btn) btn.remove(); }
     return ticket;
   }
 
@@ -3517,12 +3693,16 @@
     const daDang = [];
 
     PIPE_LOG.length = 0;
+    const stopCtrl = new AbortController();
+    CLUSTER_STOP[t.id] = stopCtrl;
     openModal(modalHead("🔁", `Chạy tiếp cluster ${clusterId} — phiếu #${t.code}`, esc(t.title.slice(0, 120))) + `
       <div class="hr-intake-form">
-        <div class="wk-note">Chỉ làm những bài còn thiếu. Bài đã đăng được giữ nguyên, không sinh lại ảnh.</div>
+        <div class="wk-note">Chỉ làm những bài còn thiếu. Bài đã đăng được giữ nguyên, không sinh lại ảnh.
+        Chạy liền mạch — không dừng chờ duyệt giữa chừng.</div>
         <div id="wk_pipe_log" class="wk-steps" style="max-height:340px;overflow-y:auto"></div>
         <div class="bf-actions" style="margin-top:1rem">
-          <button class="btn btn-ghost btn-sm" type="button" data-act="modal-close">Đóng</button>
+          <button class="btn btn-ghost btn-sm" type="button" data-act="modal-close">Đóng (vẫn chạy nền)</button>
+          <button class="btn btn-danger btn-sm" type="button" id="wk_cluster_stop_btn" data-act="cluster-stop" data-id="${t.id}">⏹ Dừng</button>
           <button class="btn btn-primary btn-sm" type="button" data-act="go" data-view="ticketDetail" data-id="${t.id}">Mở phiếu #${t.code}</button>
         </div>
       </div>`);
@@ -3533,6 +3713,7 @@
     const bai = parseBlueprint((s2 && s2.run && s2.run.output) || "");
     if (!bai.length) {
       pipeLog("⛔", "Không đọc lại được blueprint từ báo cáo S2 — không thể chạy tiếp mà không bịa danh sách bài.");
+      delete CLUSTER_STOP[t.id];
       return t;
     }
 
@@ -3548,9 +3729,10 @@
 
     const canLam = bai.filter((b) => !(daCo[b.ma_bai] && daCo[b.ma_bai].tripx && daCo[b.ma_bai].tripx.published));
     pipeLog("📋", `Blueprint ${bai.length} bài · đã đăng ${bai.length - canLam.length} · còn phải làm ${canLam.length}`);
-    if (!canLam.length) { pipeLog("🏁", "Cluster đã đủ bài, không còn gì để làm."); return t; }
+    if (!canLam.length) { pipeLog("🏁", "Cluster đã đủ bài, không còn gì để làm."); delete CLUSTER_STOP[t.id]; return t; }
 
     for (const b of canLam) {
+      if (stopCtrl.signal.aborted) return dungGiuaChung(t, `dừng trước khi làm ${b.ma_bai}`);
       const cu = daCo[b.ma_bai];
       const hoSo = { cluster: clusterId, ma_bai: b.ma_bai, tieu_de: b.tieu_de,
         loai: b.ma_bai === "P-00" ? "pillar" : "cluster", tu_khoa_chinh: b.tu_khoa,
@@ -3579,8 +3761,9 @@
           `Các bài khác trong cluster (đừng giẫm góc nhìn): ${bai.map((x) => x.tieu_de).join(" · ")}`,
           ``,
           `CHỈ trả về nội dung bài viết: bắt đầu bằng front-matter theo đúng template, rồi tới thân bài.`,
-        ].join("\n")));
+        ].join("\n")), { signal: stopCtrl.signal });
         pipeLog(outW ? "✅" : "⚠️", `${b.ma_bai} ${outW ? "viết xong" : "lỗi"}`);
+        if (stopCtrl.signal.aborted) return dungGiuaChung(t, `dừng ở S3 (${b.ma_bai})`);
         const loiBai = outW ? loiCuaBai(outW) : "agent không trả về nội dung";
         if (loiBai) {
           kw.progress = 0;
@@ -3611,19 +3794,22 @@
           `Ảnh là cảnh thật, KHÔNG có chữ/số/bảng biểu.`,
           `Định dạng: mỗi prompt một dòng, đánh số "1." "2." "3.", không lời dẫn.`,
           ``, `BÀI VIẾT:`, outW.slice(0, 8000),
-        ].join("\n")));
+        ].join("\n")), { signal: stopCtrl.signal });
+        if (stopCtrl.signal.aborted) return dungGiuaChung(t, `dừng ở S4 (${b.ma_bai})`);
         const prompts = tachPrompt(outP || "", 1 + SO_ANH_THAN);
         if (!prompts.length) {
           pipeLog("⚠️", `${b.ma_bai} không bóc được prompt — bỏ qua sinh ảnh`);
         } else {
           pipeLog("🎨", `${b.ma_bai} — đang sinh ${prompts.length} ảnh (${prompts.length * CREDIT_MOI_ANH} credit)…`);
-          const kq = await goiProxy("/api/tripx/images", { cluster: clusterId, ma_bai: b.ma_bai, prompts });
+          const kq = await goiProxy("/api/tripx/images", { cluster: clusterId, ma_bai: b.ma_bai, prompts }, undefined, stopCtrl.signal);
           anh = (kq && kq.anh) || [];
           tongCredit += (kq && kq.credit_da_dung) || 0;
           const ok = anh.filter((a) => a.ok).length;
           pipeLog(ok === prompts.length ? "✅" : "⚠️", `${b.ma_bai}: ${ok}/${prompts.length} ảnh xong`);
           themBaoCao(kp, `Đã sinh ${ok}/${prompts.length} ảnh, tốn ${(kq && kq.credit_da_dung) || 0} credit.`, CLUSTER_AGENTS.visual);
         }
+        if (stopCtrl.signal.aborted) return dungGiuaChung(t, `dừng sau khi sinh ảnh ${b.ma_bai}`);
+        if (anh.length) kp.anhDaSinh = anh;
         await saveArticleToStore({ ...hoSo, noi_dung: outW, prompt_anh: outP ? [outP] : [], anh });
       }
 
@@ -3632,7 +3818,7 @@
         const kd = addAgentTask(t.id, `S5 · Đăng bài ${b.ma_bai} lên tripx.vn`, CLUSTER_AGENTS.publisher, "Cao");
         save(); render();
         pipeLog("🚀", `${b.ma_bai} — đang đăng…`);
-        const kq = await goiProxy("/api/tripx/publish", { cluster: clusterId, ma_bai: b.ma_bai, markdown: outW, anh, publish: XUAT_BAN_NGAY });
+        const kq = await goiProxy("/api/tripx/publish", { cluster: clusterId, ma_bai: b.ma_bai, markdown: outW, anh, publish: XUAT_BAN_NGAY }, undefined, stopCtrl.signal);
         if (kq && kq.slug) {
           kd.status = "Hoàn tất"; kd.progress = 100;
           kd.artifact = { cluster: clusterId, ma_bai: b.ma_bai, tripx: kq.url || kq.slug };
@@ -3648,8 +3834,10 @@
         }
         save(); render();
       }
+      if (stopCtrl.signal.aborted) return dungGiuaChung(t, `dừng sau khi xong ${b.ma_bai}`);
     }
 
+    delete CLUSTER_STOP[t.id];
     const ksSau = ticketTasks(t.id);
     const loiSau = ksSau.filter((k) => k.run && k.run.status === "failed").length;
     capNhatTrangThaiPhieu(t);
@@ -3657,6 +3845,7 @@
       + (loiSau ? ` Còn ${ksSau.filter(dangVuong).length} việc vướng chờ Orches điều phối.` : "");
     save(); render();
     pipeLog("🏁", `Chạy tiếp xong: thêm ${daDang.length} bài · ${tongCredit.toLocaleString("vi-VN")} credit`);
+    { const btn = document.getElementById("wk_cluster_stop_btn"); if (btn) btn.remove(); }
     return t;
   }
 
@@ -3720,8 +3909,17 @@
       case "vuong-dieuphoi-save": dieuPhoiLai(d.id, val("wk_dp_exec"), val("wk_dp_note")); break;
       case "vuong-dong": mDongCoLyDo(d.id); break;
       case "vuong-dong-save": dongViecCoLyDo(d.id, val("wk_dong_ly")); break;
+      case "xem-ketqua": mXemKetQua(d.id); break;
       case "orches-xuly": orchesXuLyVuongMac(d.id); break;
       case "orches-xuly-tatca": orchesXuLyTatCa(); break;
+      case "cluster-stop": {
+        const ctrl = CLUSTER_STOP[d.id];
+        if (!ctrl) { say("Vòng lặp này đã dừng hoặc chạy xong rồi"); break; }
+        ctrl.abort();
+        el.disabled = true; el.textContent = "Đang dừng…";
+        say("Đã gửi lệnh dừng — chờ chặng đang chạy phản hồi xong");
+        break;
+      }
       case "dong-phieu": dongPhieu(d.id); break;
       case "task-chat": mTaskChat(d.id); break;
       case "chat-send": sendChat(d.id); break;
@@ -3738,6 +3936,7 @@
           soAnhThan: Number(val("wk_cl_soanh") || 2),
           dangBai: tick("wk_cl_dang"),
           xuatBanNgay: tick("wk_cl_public"),
+          soBai: Number(val("wk_cl_sobai") || 0),
         });
         break;
       }

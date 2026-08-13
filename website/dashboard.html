@@ -4,9 +4,13 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>AI OS Dashboard — Quản lý đội AI Agent theo phòng ban</title>
-<script src="js/theme.js"></script>
-<link rel="stylesheet" href="css/style.css" />
-<link rel="stylesheet" href="css/work.css" />
+<!-- ?v= là cache-buster thủ công — không có bước build nào tự sinh hash, nên phải TỰ BUMP
+     số này mỗi khi sửa app.js/work.js/style.css/work.css và muốn trình duyệt người dùng
+     chắc chắn tải bản mới. Thiếu cache-buster từng khiến site live "đã deploy nhưng vẫn
+     cũ" ngay trên trình duyệt của chính người kiểm tra, dù server đã trả đúng file mới. -->
+<script src="js/theme.js?v=20260813a"></script>
+<link rel="stylesheet" href="css/style.css?v=20260813a" />
+<link rel="stylesheet" href="css/work.css?v=20260813a" />
 </head>
 <body>
 
@@ -33,7 +37,7 @@
   <!-- SIDEBAR -->
   <aside class="dash-sidebar" id="sidebar">
     <h4>Điều hành công việc</h4>
-    <button class="side-link" data-work="control"><span class="sic">🛰️</span> Phòng điều hành</button>
+    <button class="side-link" data-work="control"><span class="sic">🛰️</span> Phòng điều hành<span class="cnt cnt-running" data-work-cnt="running" title="Số Agent đang chạy nền — vẫn chạy dù bạn đang xem màn nào, kể cả sau khi đóng modal"></span></button>
     <button class="side-link" data-work="projects"><span class="sic">📁</span> Dự án<span class="cnt" data-work-cnt="projects"></span></button>
     <button class="side-link" data-work="tickets"><span class="sic">🎫</span> Phiếu yêu cầu<span class="cnt" data-work-cnt="tickets"></span></button>
     <button class="side-link" data-work="tasks"><span class="sic">✅</span> Công việc<span class="cnt" data-work-cnt="tasks"></span></button>
@@ -75,7 +79,7 @@
           <span>Nhận lệnh bằng ngôn ngữ tự nhiên · Phân tích ý định · Giao đúng Agent phụ trách</span>
         </div>
         <div class="orches-badges">
-          <span class="badge model">Gemini 3 Pro (High)</span>
+          <span class="badge model">DeepSeek V4 Flash</span>
           <span class="badge mode">Planning Mode</span>
         </div>
       </div>
@@ -360,7 +364,7 @@
 
 <div class="toast" id="toast"></div>
 
-<script src="js/app.js"></script>
-<script src="js/work.js"></script>
+<script src="js/app.js?v=20260813a"></script>
+<script src="js/work.js?v=20260813a"></script>
 </body>
 </html>

@@ -120,6 +120,10 @@ img, svg { display: block; max-width: 100%; }
 .btn-ghost { border: 1px solid var(--line); color: var(--text); }
 .btn-ghost:hover { background: rgba(var(--overlay-rgb),.08); }
 .btn-sm { padding: .42rem .85rem; font-size: .82rem; }
+/* Nút "Dừng" vòng lặp cluster — đỏ, tách hẳn khỏi Đóng/Mở phiếu để không bấm nhầm */
+.btn-danger { border: 1px solid rgba(248,113,113,.5); color: var(--danger); background: rgba(248,113,113,.08); }
+.btn-danger:hover { background: rgba(248,113,113,.16); }
+.btn-danger:disabled { opacity: .55; cursor: wait; }
 
 /* ---------- Hero ---------- */
 .hero { padding: 5.5rem 0 4rem; display: grid; grid-template-columns: 1.15fr .85fr; gap: 3rem; align-items: center; }
@@ -343,6 +347,9 @@ section.block { padding: 4.5rem 0; }
 }
 .side-link:hover, .side-link.active { background: rgba(91,124,250,.14); color: var(--text); }
 .side-link .cnt { margin-left: auto; font-size: .72rem; background: rgba(var(--overlay-rgb),.14); border-radius: 999px; padding: .1rem .5rem; }
+/* "Đang chạy" — rỗng thì không chiếm chỗ (không tạo viên tròn trống gây nhiễu) */
+.side-link .cnt-running:empty { display: none; }
+.side-link .cnt-running { background: rgba(251,191,36,.16); color: #fbbf24; animation: wk-pulse-anim 1.6s ease-in-out infinite; }
 .side-link .sic { width: 26px; height: 26px; border-radius: 8px; display: grid; place-items: center; font-size: .85rem; background: rgba(var(--overlay-rgb),.1); flex-shrink: 0; }
 
 /* Main */
