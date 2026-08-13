@@ -60,6 +60,12 @@ function sendJson(res, status, obj) {
     "Access-Control-Allow-Origin": res.__corsOrigin || ALLOWED_ORIGINS[0],
     "Access-Control-Allow-Headers": "Content-Type",
     "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+    // Chrome Private Network Access: trang HTTPS công khai (bản deploy workers.ai-os.vn)
+    // gọi vào localhost của máy người xem là gọi vào "mạng riêng" theo định nghĩa của
+    // Chrome — thiếu header này thì browser tự chặn ở tầng client TRƯỚC KHI JS thấy được
+    // response, hiện ra là "Failed to fetch" / net::ERR_BLOCKED_BY_CLIENT, trông y hệt
+    // lỗi mạng dù server đã trả lời đúng. Xem developer.chrome.com/blog/private-network-access-preflight
+    "Access-Control-Allow-Private-Network": "true",
   });
   res.end(body);
 }
@@ -269,6 +275,10 @@ const server = http.createServer(async (req, res) => {
       "Access-Control-Allow-Origin": res.__corsOrigin,
       "Access-Control-Allow-Headers": "Content-Type",
       "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+      // Đây là chỗ QUYẾT ĐỊNH của Private Network Access — Chrome đọc header này ngay
+      // trên phản hồi preflight (OPTIONS), thiếu ở đây là chặn trước khi có cơ hội gửi
+      // request thật, dù response thường (sendJson) có header đúng cũng không cứu được.
+      "Access-Control-Allow-Private-Network": "true",
     });
     return res.end();
   }
@@ -466,6 +476,7 @@ const server = http.createServer(async (req, res) => {
         "Content-Type": mime,
         "Content-Disposition": `attachment; filename*=UTF-8''${encodeURIComponent(filename)}`,
         "Access-Control-Allow-Origin": res.__corsOrigin,
+        "Access-Control-Allow-Private-Network": "true",
       });
       return fs.createReadStream(absPath).pipe(res);
     }
