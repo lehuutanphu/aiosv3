@@ -1,8 +1,8 @@
 # AI OS Admin Portal — Tài liệu mô tả & thiết kế (bản production)
 
-> **Phiên bản:** v1.2 — **đã chốt toàn bộ**: D1–D9, Q1–Q7, 4 quyết định về Console và 7 yêu cầu bổ sung (xem [§0.2](#02-quyết-định-đã-chốt)). Không còn câu hỏi mở chặn Giai đoạn 0.
+> **Phiên bản:** v1.3 — **đã chốt toàn bộ**: D1–D9, Q1–Q7, 4 quyết định về Console, 7 yêu cầu bổ sung, và các điểm chung với tài liệu Workspace (xem [§0.2](#02-quyết-định-đã-chốt)). Không còn câu hỏi mở chặn Giai đoạn 0.
 > **Phạm vi:** thiết kế, chưa viết code.
-> **Lịch sử:** v0.1 là bản khảo sát và đề xuất. v1.0 bỏ Hermes và Mem0, thêm subdomain theo tenant, cơ cấu tổ chức phức hợp theo ngành dọc, Kho KWSR, thanh toán và ví token, email của tenant, và đưa 11 hạng mục bổ sung vào phạm vi. v1.1 chốt Q1–Q7: **PostgreSQL thay Firebase**, thêm lược đồ CSDL ([§7.7](#77-lưu-trữ-trên-postgresql)) và cấu hình server ([§3.1](#31-thành-phần-chạy-trên-server-riêng)). v1.2 thêm đặc tả đầy đủ **Console SuperAdmin** ([§22](#22-console-superadmin-consoleai-osvn)) và sơ đồ màn hình quản trị tenant ([§23](#23-sơ-đồ-màn-hình-quản-trị-tenant-tenantabcai-osvn)).
+> **Lịch sử:** v0.1 là bản khảo sát và đề xuất. v1.0 bỏ Hermes và Mem0, thêm subdomain theo tenant, cơ cấu tổ chức phức hợp theo ngành dọc, Kho KWSR, thanh toán và ví token, email của tenant, và đưa 11 hạng mục bổ sung vào phạm vi. v1.1 chốt Q1–Q7: **PostgreSQL thay Firebase**, thêm lược đồ CSDL ([§7.7](#77-lưu-trữ-trên-postgresql)) và cấu hình server ([§3.1](#31-thành-phần-chạy-trên-server-riêng)). v1.2 thêm đặc tả đầy đủ **Console SuperAdmin** ([§22](#22-console-superadmin-consoleai-osvn)) và sơ đồ màn hình quản trị tenant ([§23](#23-sơ-đồ-màn-hình-quản-trị-tenant-tenantabcai-osvn)). v1.3 đồng bộ với tài liệu thứ hai [`USER_WORKSPACE_DESIGN.md`](USER_WORKSPACE_DESIGN.md): quyền ra lệnh Orchestrator, chính sách nhận việc của Worker, cờ tài liệu Mật, quyền xem hội thoại, Workspace ở `/`.
 
 ---
 
@@ -41,6 +41,7 @@
 | C2 | Thông báo cho khách | **Luôn gửi email** cho Admin tenant khi bắt đầu và kết thúc phiên hỗ trợ |
 | C3 | Vai nhân viên hệ thống | v1 **một vai `superadmin`**, chừa cột `platform_role` để tách 4 vai sau (§22.10) |
 | C4 | Thao tác SuperAdmin bị chặn | Giữ nguyên danh sách chặn (§22.8). Với mật khẩu, SuperAdmin **chỉ gửi link đặt lại** cho Admin tenant |
+| U1–U10 | Không gian làm việc của người dùng | Chi tiết ở [`USER_WORKSPACE_DESIGN.md`](USER_WORKSPACE_DESIGN.md) §0.2. Phần ảnh hưởng tới tài liệu này: **chính sách nhận việc** Mở / Theo bộ phận / Hạn chế cho từng Worker (§9.4); **quyền ra lệnh Orchestrator** cấp riêng từng người (§5); **cờ Mật** cho tài liệu Knowledge (§9.3, §15); **chỉ `tenant_admin` xem được hội thoại** của người dùng, có nhật ký; **phiên hỗ trợ không đọc hội thoại** (§22.8) |
 
 ### 0.3 Yêu cầu bổ sung đã đưa vào
 
@@ -289,7 +290,7 @@ Trong luồng này người dùng tự chọn mật khẩu nên không bắt đ�
 | `tenant_admin` | Tenant | Toàn tenant | **Toàn quyền cấu hình** (D1): Worker, Kho KWSR, người dùng, cơ cấu tổ chức, kết nối, email, thanh toán, nạp token. Mỗi tenant luôn có ít nhất 1 Admin |
 | `unit_manager` | Tenant | Một đơn vị và các đơn vị con | Quản lý Worker và người dùng trong nhánh đơn vị của mình (ví dụ Giám đốc chi nhánh) |
 | `function_head` | Tenant | Một ngành dọc, từ đơn vị được gán trở xuống | Ví dụ Kế toán trưởng Tổng công ty: đặt Rule và phát hành mục Kho cho ngành Kế toán của mọi chi nhánh và cửa hàng |
-| `member` | Tenant | Worker được cấp | Dùng Worker; kết nối hộp thư cá nhân của mình (§14) |
+| `member` | Tenant | Theo mức quan hệ với từng Worker | Làm việc ở Workspace: chat, giao việc, gửi yêu cầu theo 3 mức Trực tiếp / Qua yêu cầu / Chỉ xem (tài liệu Workspace §5); kết nối hộp thư cá nhân của mình (§14) |
 | `viewer` | Tenant | Chỉ xem | Xem báo cáo và sơ đồ |
 
 **Ma trận quyền** (✔ có · ◐ trong phạm vi được gán · ✖ không)
@@ -308,7 +309,18 @@ Trong luồng này người dùng tự chọn mật khẩu nên không bắt đ�
 | Hộp thư cá nhân của mình | — | ✔ | ✔ | ✔ | ✔ |
 | Người dùng | ✔ | ✔ | ◐ trong nhánh | ✖ | ✖ |
 | Nhật ký kiểm toán | ✔ | ✔ | ◐ | ◐ | ✖ |
+| Cấp quyền ra lệnh Orchestrator, quyền tạo dự án | ✔ | ✔ | ✖ | ✖ | ✖ |
+| Đọc hội thoại của người dùng (có ghi nhật ký) | ✖ | ✔ | ✖ | ✖ | ✖ |
 | Mức sử dụng | ✔ | ✔ | ◐ | ◐ | ✖ |
+
+**Quyền bổ sung cấp riêng từng người** (không gắn với vai trò; chi tiết ở tài liệu Workspace §6, §12):
+
+| Quyền | Ý nghĩa | Mặc định |
+|---|---|---|
+| `canCommandOrchestrator` | Ra lệnh cho Orchestrator. Việc giao qua Orchestrator chạy ở mức **Mở** (bỏ qua chính sách nhận việc, được dùng tài liệu Mật), nhưng **Rule vẫn áp dụng đầy đủ**. Thường chỉ cấp cho **CEO, Phó TGĐ** | Chỉ Admin đầu tiên của tenant được cấp sẵn khi khởi tạo |
+| `canCreateProject` | Tạo dự án trong Workspace (ngoài các vai quản lý vốn đã có quyền này) | Không |
+
+Quản trị › Người dùng có bộ lọc **"Đang có quyền ra lệnh Orchestrator"** để luôn biết ai đang giữ quyền này. Mọi lần cấp hoặc thu hồi đều ghi nhật ký.
 
 **Quy tắc an toàn:**
 - Không ai tự nâng quyền của mình.
@@ -327,7 +339,7 @@ Trong luồng này người dùng tự chọn mật khẩu nên không bắt đ�
  ├─ tenant disabled     → không cho đăng nhập: "Tài khoản đã bị vô hiệu hoá. Vui lòng liên hệ AI OS." (§22.7)
  ├─ tenant suspended    → cho đăng nhập, chỉ đọc, hiện banner "Gói đã hết hạn — gia hạn để tiếp tục"
  ├─ user locked         → thông báo chung + gợi ý liên hệ Admin
- └─ đúng → tạo phiên → mustChangePassword ? /doi-mat-khau : (admin/manager → /admin, còn lại → /dashboard)
+ └─ đúng → tạo phiên → mustChangePassword ? /doi-mat-khau : Workspace `/` (hoặc /admin nếu đó là khu vực người này dùng gần nhất)
 ```
 
 | Luồng | Chi tiết |
@@ -464,6 +476,7 @@ Ràng buộc duy nhất: `tenants.slug`; `users.email` (toàn hệ thống, ch�
   "deptId": "d_…", "ownerUserId": "usr_…", "accessUserIds": [],
   "runtime": { "integrationId": "i_…", "model": "deepseek/deepseek-v4-flash",
                "mode": "Planning", "maxTokens": 16000, "temperature": 0.4 },
+  "intakePolicy": "department",                // open | department | restricted — chính sách nhận việc (tài liệu Workspace §5.3)
   "systemPrompt": "…", "status": "draft",     // draft | active | paused | archived
   "budget": { "dailyCredit": 50000, "onExceed": "pause" },
   "integrationIds": [], "mailboxGrants": [], "maturity": 0, "stage": "Học việc" }
@@ -474,6 +487,7 @@ Ràng buộc duy nhất: `tenants.slug`; `users.email` (toàn hệ thống, ch�
   "title": "…", "tags": ["công nợ"], "functionIds": ["f_ketoan"],
   "ownerUnitId": "u_hq", "visibility": "function_line",   // tenant | unit_subtree | function_line
   "distribution": "suggested",                 // suggested | mandatory  (§8.3, §9.3)
+  "confidential": false,                       // chỉ với knowledge: tài liệu Mật (§9.3)
   "currentVersion": 3, "status": "published",  // draft | published | deprecated
   "sourceSystemItemId": null }                 // nếu nhập từ Kho hệ thống
 // library_versions — nội dung theo phiên bản
@@ -595,6 +609,7 @@ CREATE TABLE users (id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   email citext NOT NULL UNIQUE,                        -- D9: duy nhất toàn hệ thống
   username citext NOT NULL, name text, title text, role text NOT NULL,
   platform_role text,                                  -- chỉ cho superadmin: v1 luôn 'owner' (§22.10)
+  can_command_orchestrator boolean NOT NULL DEFAULT false, can_create_project boolean NOT NULL DEFAULT false,
   dept_id uuid, scope_unit_id uuid, scope_function_id uuid, status text NOT NULL,
   password_hash text, must_change_password boolean NOT NULL DEFAULT false,
   email_verified_at timestamptz, mfa jsonb, failed_logins int NOT NULL DEFAULT 0,
@@ -643,6 +658,7 @@ CREATE TABLE departments (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), tenant_
 -- ===== Worker & Kho KWSR =====
 CREATE TABLE workers (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), tenant_id uuid NOT NULL REFERENCES tenants(id),
   kind text NOT NULL DEFAULT 'worker', name text NOT NULL, icon text, role text, dept_id uuid REFERENCES departments(id),
+  intake_policy text NOT NULL DEFAULT 'department' CHECK (intake_policy IN ('open','department','restricted')),
   owner_user_id uuid REFERENCES users(id), runtime jsonb NOT NULL, system_prompt text, status text NOT NULL,
   budget jsonb, maturity int DEFAULT 0, stage text);
 CREATE UNIQUE INDEX one_orchestrator_per_tenant ON workers(tenant_id) WHERE kind = 'orchestrator';
@@ -651,6 +667,7 @@ CREATE TABLE worker_access (worker_id uuid REFERENCES workers(id) ON DELETE CASC
 CREATE TABLE library_items (id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   tenant_id uuid REFERENCES tenants(id),              -- NULL = Kho hệ thống
   type text NOT NULL CHECK (type IN ('knowledge','workflow','skill','rule')), title text NOT NULL,
+  confidential boolean NOT NULL DEFAULT false CHECK (NOT confidential OR type = 'knowledge'),
   tags text[], function_ids uuid[], owner_unit_id uuid, visibility text NOT NULL, distribution text NOT NULL,
   current_version int NOT NULL DEFAULT 1, status text NOT NULL, source_system_item_id uuid);
 CREATE TABLE library_versions (item_id uuid REFERENCES library_items(id) ON DELETE CASCADE, version int,
@@ -851,6 +868,11 @@ Giới hạn khi tinh chỉnh:
 
 **Hạn mức:** dung lượng Knowledge tính **một lần cho mỗi tài liệu trong Kho**, dù 10 Worker cùng dùng. Đây là lợi ích chi phí trực tiếp của mô hình Kho.
 
+**Tài liệu Mật.** Mục **Knowledge** có thêm cờ **"Mật"** (biểu tượng 🔒 trong Kho và trên Binding).
+- Tài liệu Mật chỉ được đưa vào tìm kiếm khi Worker làm việc cho **người thuộc bộ phận của Worker**, quản lý cấp trên trong phạm vi, `tenant_admin`, hoặc việc đến từ **Orchestrator**. Các trường hợp còn lại bị lọc ngay ở truy vấn Qdrant (§15).
+- **Workflow, Skill, Rule không có cờ Mật** và luôn áp dụng đầy đủ cho mọi người, để quy trình không bị hở.
+- Quy tắc đầy đủ và cách xử lý khi một quy trình cần tài liệu Mật mà người yêu cầu không có quyền: tài liệu Workspace §11.
+
 ### 9.4 Worker: tạo, sửa, xoá (D3: chỉ qua giao diện)
 
 - Worker **chỉ được tạo qua trình hướng dẫn** trong Admin Portal.
@@ -861,7 +883,7 @@ Giới hạn khi tinh chỉnh:
 
 | Bước | Nội dung |
 |---|---|
-| 1. Vị trí & danh tính | Chọn **đơn vị → ngành** (ra bộ phận), tên, icon, vai trò, **người chịu trách nhiệm** (bắt buộc). Hiện thanh hạn mức "7/10 Worker" |
+| 1. Vị trí & danh tính | Chọn **đơn vị → ngành** (ra bộ phận), tên, icon, vai trò, **người chịu trách nhiệm** (bắt buộc), **chính sách nhận việc**: Mở / Theo bộ phận (mặc định) / Hạn chế, kèm danh sách người được cấp riêng (tài liệu Workspace §5.3). Hiện thanh hạn mức "7/10 Worker" |
 | 2. Bộ não | Kết nối mô hình (Platform hoặc BYOK), model (lọc theo gói), Planning/Fast, `maxTokens`, ngân sách ngày. Gợi ý model theo ngành |
 | 3. Chọn từ Kho KWSR | 4 cột K/W/S/R. **Bắt buộc** (khoá, đến từ ngành dọc hoặc đơn vị) · **Gợi ý** (tick sẵn) · tìm thêm trong Kho. Mỗi mục có nút **Tinh chỉnh** để mở trình soạn ngay trong bước này. Có thể "＋ Tạo mục riêng" |
 | 4. Xem lại | Tóm tắt; **danh sách Rule hiệu lực** (kế thừa + riêng); chi phí ước tính mỗi ngày; nút **Thử 1 câu** trước khi tạo. Worker tạo ra ở trạng thái `draft`, bấm **Kích hoạt** mới chạy |
@@ -1142,8 +1164,8 @@ Upload (≤20MB, kiểm magic bytes, chặn file thực thi) → Lưu file (tena
 
 **Thiết kế Qdrant:**
 - **Một collection** `aios_knowledge`. Dùng chế độ multitenancy của Qdrant: payload index `tenant_id` với `is_tenant: true`.
-- Payload mỗi điểm: `tenant_id, item_id, version, worker_id (null nếu mục Kho dùng chung), tier, function_ids`.
-- Truy vấn của Worker **luôn có** bộ lọc `tenant_id = X` **và** `item_id ∈ {các mục Knowledge Worker đang gắn, đúng phiên bản}`. Bộ lọc này đặt cứng trong `knowledgeStore.search()`; handler không tự dựng được truy vấn.
+- Payload mỗi điểm: `tenant_id, item_id, version, worker_id (null nếu mục Kho dùng chung), tier, function_ids, confidential`.
+- Truy vấn của Worker **luôn có** bộ lọc `tenant_id = X` **và** `item_id ∈ {các mục Knowledge Worker đang gắn, đúng phiên bản}`. Khi công việc **không** được phép dùng tài liệu Mật (`confidential_allowed = false`, tài liệu Workspace §9.1, §11.2), bộ lọc thêm `confidential = false`. Bộ lọc này đặt cứng trong `knowledgeStore.search()`; handler không tự dựng được truy vấn.
 - Phiên bản mới của tài liệu được index song song; xong mới chuyển con trỏ và xoá vector của bản cũ (không có khoảng trống "đang không biết gì").
 - Tài liệu tầng 4 (Lưu trữ) mặc định **không** đưa vào truy vấn thường, trừ khi người dùng hỏi về lịch sử.
 - **Vận hành:** Qdrant chạy Docker trên server riêng, bật API key, **không mở cổng ra Internet** (chỉ mạng nội bộ Docker); snapshot hằng ngày (B11).
@@ -1201,6 +1223,7 @@ Lỗi trả về thống nhất `{ "error": { "code", "message", "details" } }`.
 | **Rule kế thừa** | `policy-rules` CRUD · `GET /workers/:id/effective-rules` · `POST /workers/:id/rule-overrides` (khi `allowLocalOverride`) |
 | **Worker** | `POST /workers/wizard/start` (cấp `wizardToken`) · `POST /workers` (bắt buộc `wizardToken`) · `GET/PATCH/DELETE /workers/:id` · `POST /workers/:id/{activate,pause,archive,restore,duplicate,test}` · `GET/POST/PATCH/DELETE /workers/:id/bindings[/:bid]` · `POST /workers/:id/bindings/:bid/{upgrade,merge}` · `GET /workers/:id/export` · `POST /workers/import` |
 | **Kết nối** | `GET /integrations/catalog` · `integrations` CRUD · `POST /integrations/:id/test` · `GET /integrations/oauth/:provider/{start,callback}` · `PUT /workers/:id/integrations` |
+| **Người dùng (bổ sung)** | `PATCH /users/:id/permissions` (`canCommandOrchestrator`, `canCreateProject`) · `GET /users/:id/conversations` · `GET /users/:id/conversations/:cid` (chỉ `tenant_admin`, ghi nhật ký `conversation.viewed`) · API của Workspace: tài liệu Workspace §17 |
 | **Email tenant** | `mailboxes` CRUD (dùng chung: Admin; cá nhân: chính chủ) · `GET /mailboxes/oauth/:provider/{start,callback}` · `PUT /workers/:id/mailbox-grants` · `GET /mailboxes/:id/send-log` |
 | **Phê duyệt / Thông báo / Audit** | `GET /approvals` · `POST /approvals/:id/{approve,reject}` · `GET/PATCH /notifications/preferences` · `GET /audit` · `GET /audit/export` |
 | **Runtime (dashboard)** | `POST /workers/:id/chat` · `POST /orchestrator/command` — thay cho `/api/agents/:id/{chat,knowledge}` hiện tại |
@@ -1485,7 +1508,7 @@ console.ai-os.vn                                      tenantabc.ai-os.vn
 | Banner | Đỏ, cố định đầu trang, không đóng được: "🛟 Bạn đang hỗ trợ **Công ty TNHH ABC** với tư cách Admin · **Chỉ xem** · còn 24:13 · [Bật chế độ sửa] [Thoát]" |
 | Chế độ **Chỉ xem** (mặc định) | Mọi request ghi (POST/PUT/PATCH/DELETE) bị middleware từ chối, trừ hai việc: bật chế độ sửa và kết thúc phiên. Được xem mọi màn của Admin tenant, kể cả nội dung KWSR và dữ liệu nghiệp vụ, trừ các mục trong danh sách luôn bị chặn |
 | **Bật chế độ sửa** | Hộp xác nhận + bổ sung lý do. Ghi `support.write_enabled` vào nhật ký. Không tắt lại được trong cùng phiên (để nhật ký rõ ràng: mọi thao tác sau mốc đó đều thuộc chế độ sửa) |
-| **Luôn bị chặn**, ở mọi chế độ | Xem hoặc thay khoá API, token OAuth (két chỉ hiện dạng che, kể cả với SuperAdmin) · Đặt mật khẩu, đổi email hoặc đổi vai trò của user · Thêm hoặc xoá Admin của tenant · Xoá dữ liệu (Worker vĩnh viễn, mục Kho, tài liệu, đơn vị) · Xuất toàn bộ dữ liệu · Thanh toán, nạp token, đổi gói (làm ở Console) · **Đọc hộp thư cá nhân** · Gửi email từ bất kỳ hộp thư nào của tenant · Tạo hoặc sửa phiên hỗ trợ khác |
+| **Luôn bị chặn**, ở mọi chế độ | Xem hoặc thay khoá API, token OAuth (két chỉ hiện dạng che, kể cả với SuperAdmin) · Đặt mật khẩu, đổi email hoặc đổi vai trò của user · Thêm hoặc xoá Admin của tenant · Xoá dữ liệu (Worker vĩnh viễn, mục Kho, tài liệu, đơn vị) · Xuất toàn bộ dữ liệu · Thanh toán, nạp token, đổi gói (làm ở Console) · **Đọc hộp thư cá nhân** · Gửi email từ bất kỳ hộp thư nào của tenant · **Đọc nội dung hội thoại của người dùng** (chỉ `tenant_admin` của chính công ty đó được đọc) · Cấp quyền ra lệnh Orchestrator · Tạo hoặc sửa phiên hỗ trợ khác |
 | Cách chặn | Mỗi route khai báo cờ `supportBlocked: true` ngay trong định nghĩa route. Middleware từ chối theo cờ này, không dựa vào giao diện ẩn nút |
 | Chi phí | Mọi lượt gọi model trong phiên hỗ trợ (ví dụ chat thử với Worker) **không trừ Ví của khách**. `usage_daily` ghi `billed_to = platform` |
 | Tenant `disabled` | Vẫn vào được nhưng **chỉ xem**, không bật được chế độ sửa (để điều tra) |
@@ -1581,12 +1604,12 @@ Do Admin của tenant tự quản trị. Đặt cạnh Console (§22) để th�
 ```
 tenantabc.ai-os.vn
 ├─ /login · /quen-mat-khau · /doi-mat-khau · /moi/:token (nhận lời mời)
-├─ /dashboard          Màn làm việc hiện có: Orchestrator, Worker, công việc, báo cáo, lead…
+├─ /                   Workspace: Hôm nay, Orchestrator, danh bạ Worker, hội thoại, công việc, yêu cầu… (tài liệu Workspace §4)
 ├─ /tai-khoan          Hồ sơ cá nhân, đổi mật khẩu, MFA (GĐ 4), hộp thư cá nhân (§14), thông báo (B10)
 └─ /admin
     ├─ Tổng quan               hạn mức, cảnh báo, việc chờ duyệt, sức khoẻ (B5)
     ├─ Cơ cấu tổ chức          đơn vị · ngành dọc · bộ phận · 3 chế độ sơ đồ          §8
-    ├─ Người dùng              thêm · mời · khoá · vô hiệu hoá · phân vai               §5, §6
+    ├─ Người dùng              thêm · mời · khoá · vô hiệu hoá · phân vai · quyền Orchestrator · xem hội thoại (có nhật ký)   §5, §6
     ├─ Worker                  danh sách · trình tạo 4 bước · chi tiết 9 tab          §9.4
     ├─ Kho KWSR                Knowledge · Workflow · Skill · Rule · nhập từ Kho hệ thống   §9
     ├─ Rule toàn công ty       Global Rule                                             B3
@@ -1613,7 +1636,7 @@ tenantabc.ai-os.vn
 | Phê duyệt | ✔ | ◐ | ◐ | ✖ |
 | Mức sử dụng · Nhật ký | ✔ | ◐ | ◐ | ✖ |
 
-`member` và `viewer` không có mục `/admin`, chỉ có `/dashboard` và `/tai-khoan`.
+`member` và `viewer` không có mục `/admin`, chỉ có Workspace (`/`) và `/tai-khoan`. Riêng mục "xem hội thoại" trong Người dùng chỉ `tenant_admin` thấy.
 
 ---
 
