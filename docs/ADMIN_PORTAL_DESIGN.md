@@ -1,8 +1,8 @@
 # AI OS Admin Portal — Tài liệu mô tả & thiết kế (bản production)
 
-> **Phiên bản:** v1.0 — đã chốt D1–D9 và 7 yêu cầu bổ sung (xem [§0.2](#02-quyết-định-đã-chốt)).
-> **Phạm vi:** thiết kế, chưa viết code. Còn **7 câu hỏi nhỏ** ở [§20](#20-câu-hỏi-còn-mở) cần chốt trước Giai đoạn 0. Riêng Q1 (chọn cơ sở dữ liệu) ảnh hưởng toàn bộ phần lưu trữ.
-> **Lịch sử:** v0.1 là bản khảo sát và đề xuất. v1.0 bỏ Hermes và Mem0, thêm subdomain theo tenant, cơ cấu tổ chức phức hợp theo ngành dọc, Kho KWSR, thanh toán và ví token, email của tenant, và đưa 11 hạng mục bổ sung vào phạm vi.
+> **Phiên bản:** v1.1 — **đã chốt toàn bộ**: D1–D9, Q1–Q7 và 7 yêu cầu bổ sung (xem [§0.2](#02-quyết-định-đã-chốt)). Không còn câu hỏi mở chặn Giai đoạn 0.
+> **Phạm vi:** thiết kế, chưa viết code.
+> **Lịch sử:** v0.1 là bản khảo sát và đề xuất. v1.0 bỏ Hermes và Mem0, thêm subdomain theo tenant, cơ cấu tổ chức phức hợp theo ngành dọc, Kho KWSR, thanh toán và ví token, email của tenant, và đưa 11 hạng mục bổ sung vào phạm vi. v1.1 chốt Q1–Q7: **PostgreSQL thay Firebase**, thêm lược đồ CSDL ([§7.7](#77-lưu-trữ-trên-postgresql)) và cấu hình server ([§3.1](#31-thành-phần-chạy-trên-server-riêng)).
 
 ---
 
@@ -29,6 +29,14 @@
 | D8 | Kho vector | **Qdrant** tự vận hành (thay Mem0) |
 | D9 | Danh tính người dùng | Đăng ký và xác thực bằng email. v1: email là duy nhất toàn hệ thống, mỗi người thuộc một tenant |
 | — | Dữ liệu cá nhân | **Tạm chưa đề cập.** Thiết kế chừa sẵn chỗ để bổ sung khi cần |
+| Q1 | Cơ sở dữ liệu | **PostgreSQL** tự chạy trên server riêng. **Bỏ Firebase** (Firestore và Cloud Storage) |
+| Q2 | Cổng thanh toán | **PayOS (VietQR)** trước, kèm xác nhận chuyển khoản thủ công; VNPay ở bước sau |
+| Q3 | Hoá đơn | Giai đoạn 3 xuất **phiếu thu PDF**; hoá đơn điện tử tích hợp sau, khi chốt nhà cung cấp |
+| Q4 | Đơn vị credit | **1 credit = 1 VNĐ**; giá bán token = giá nhà cung cấp × hệ số (mặc định 1,3) do SuperAdmin chỉnh |
+| Q5 | Embedding | Model đa ngôn ngữ **tự chạy** cùng server (**BGE-M3**, 1024 chiều) |
+| Q6 | Kết nối mô hình mặc định | **Platform** (khoá của hệ thống, trừ Ví). BYOK là tuỳ chọn từ gói Standard |
+| Q7 | Tên host | `console.ai-os.vn` (SuperAdmin), `ai-os.vn/dang-ky` (đăng ký) |
+| — | Hạn mức thêm mới | **Số đơn vị** 1/3/20 và **số hộp thư** 1/5/30 cho Starter/Standard/Business (theo đề xuất ở §10) |
 
 ### 0.3 Yêu cầu bổ sung đã đưa vào
 
@@ -77,7 +85,7 @@
 | Mô hình KWSR và giao diện sửa 4 tầng | `website/js/app.js` (`SECTION_META`, `renderAgentInfo`) | Thành trình soạn mục Kho KWSR và tab KWSR của Worker |
 | Sơ đồ tổ chức | `app.js` (`orgChartHTML`) | Nền cho 3 chế độ xem sơ đồ ở §8.5 |
 | Quy tắc "1 Agent = 1 nhân sự chịu trách nhiệm" | `work.js` (`agentOwners`) | Thành `worker.ownerUserId` |
-| Ghi bản sao đĩa, chỉ ghi bản ghi đổi, hoãn nhịp | `server/db.js` | Giữ nguyên tinh thần; lớp lưu trữ đổi theo Q1 |
+| Ghi bản sao đĩa, chỉ ghi bản ghi đổi, hoãn nhịp | `server/db.js` | **Viết lại trên PostgreSQL** (§7.7). Giữ nguyên tắc "lỗi lưu trữ phụ không làm hỏng luồng làm việc" |
 | Gọi OpenRouter | `server/openrouter.js` (`callChatModel`) | Thành runtime chuẩn của Worker |
 | Sinh ảnh Genful và đọc số dư credit | `server/genful.js` (`sinhAnh`, `soDuCredit`) | Provider ảnh; `soDuCredit` dùng cho màn số dư kết nối (§12) |
 | Bộ SKILL.md có sẵn | `marketing/skills/*`, `hr/skills/*`, `sales/skills/*` | Nạp vào **Kho hệ thống** làm mẫu ngành |
@@ -99,8 +107,9 @@
 | G11 | `server.js` định tuyến bằng chuỗi `if` dài, không middleware. | Thêm khoảng 60 endpoint sẽ dễ sót kiểm quyền. | `router.js` mỏng có middleware |
 | G12 | Dữ liệu mẫu hư cấu trong `work.js` (`seed()`). | Không được lẫn vào production. | Thành script seed cho tenant demo |
 | G13 | **Không có cấu trúc tổ chức nhiều cấp**: `DEPARTMENTS` là danh sách phẳng 6 phòng. | Không biểu diễn được Tổng công ty, Chi nhánh, Cửa hàng. | Unit × Function (§8) |
+| G14 | **Lưu trữ dựa trên Firebase** (`firebase.js`, `db.js`, `firestore.rules`): không có ràng buộc duy nhất, không có giao dịch nhiều bảng cho tiền, trần 20.000 lượt ghi mỗi ngày. | Không đáp ứng được thanh toán, ledger và cây tổ chức. | PostgreSQL (Q1, §7.7); gỡ Firebase (§2.3) |
 
-### 2.3 Danh mục gỡ Hermes / Mem0
+### 2.3 Danh mục gỡ Hermes / Mem0 / Firebase
 
 Gỡ ở **đầu Giai đoạn 0**, trong một commit riêng để dễ đối chiếu. Một lưu ý về hành vi: hiện 9 Agent không có `backend` (sales-1, mkt-2, hr-1, fin-1, fin-2, legal-1, cskh-1, cskh-2, mkt-6) trả lời **giả lập (MOCK)** miễn phí. Sau khi gỡ Hermes, các Agent này sẽ gọi **mô hình thật qua OpenRouter và phát sinh chi phí**. Vì vậy cần có ngân sách ngày (§12.4) đi kèm, hoặc tạm để `status: paused` cho tới khi được cấu hình.
 
@@ -116,6 +125,16 @@ Gỡ ở **đầu Giai đoạn 0**, trong một commit riêng để dễ đối 
 | `HERMES_INTEGRATION.md` | Xoá (lịch sử vẫn còn trong git) |
 | `hr/README.md`, `marketing/README.md`, `sales/README.md` | Bỏ mục "Cách C (Hermes)" |
 | `TaiLieu_ThietKe_AI_OS.md` | Giữ nguyên (tài liệu phân tích ý tưởng gốc), thêm ghi chú trỏ sang tài liệu này |
+| `server/firebase.js` | Xoá. Thay bằng `server/core/pg.js` (pool kết nối PostgreSQL) |
+| `server/db.js` | Viết lại trên PostgreSQL: `loadWork/saveWork`, `saveArticle`, `saveMedia`, `saveAgents`… giữ chữ ký hàm để `server.js` đổi ít nhất |
+| `server/db.js` (`syncLeads`, `syncRequisition`, `uploadHrFile`) và nơi gọi trong `hr.js`, `sales.js` | Bỏ đường đẩy lên Firestore/Storage; ghi vào bảng và kho file theo tenant |
+| `server/package.json` | Bỏ `firebase-admin`; thêm `pg` (gói ngoài duy nhất cho CSDL, không dùng ORM) |
+| `firebase.json`, `firestore.rules`, `firestore.indexes.json`, `storage.rules`, `FIREBASE_SETUP.md` | Xoá |
+| `server/.env.example` | Bỏ `FIREBASE_*`, `SYNC_PII`; thêm `DATABASE_URL`, `OBJECT_STORE_DIR`, `EMBEDDING_URL` |
+| `.gitignore` | Bỏ các dòng `serviceAccount*.json` (giữ thêm một thời gian nếu máy dev còn file cũ) |
+| `website/js/work.js` | Đổi huy hiệu "☁ Đã đồng bộ Firebase" thành trạng thái lưu của server |
+
+**Dữ liệu đang có trên Firestore** (nếu bạn đã bật `FIREBASE_ENABLED`) được chuyển một lần bằng `scripts/import-firestore.js`: đọc bằng service account hiện có, ghi vào tenant demo. Chạy xong mới gỡ Firebase.
 
 Kênh Discord trước đây đi qua Hermes Gateway. Nếu vẫn cần, Discord sẽ là một **Integration kênh nhắn tin** gốc ở Giai đoạn 4.
 
@@ -140,9 +159,10 @@ graph TD
       VAULT[vault AES-256-GCM]
       JOB[hàng đợi tác vụ nền<br/>index tài liệu, đồng bộ mail, nhắc gia hạn]
     end
-    DB[(CSDL chính — Q1)]
+    DB[(PostgreSQL)]
     QD[(Qdrant)]
-    OBJ[(Lưu trữ file)]
+    OBJ[(Kho file — volume)]
+    EMB[Embedding BGE-M3]
     LLM[OpenRouter · Anthropic · OpenAI · Gemini · Genful]
     PAY[Cổng thanh toán]
     MAILP[Resend / SMTP — email hệ thống]
@@ -152,7 +172,7 @@ graph TD
     ADM --> DB & OBJ & VAULT
     RUN --> DB & QD & VAULT & LLM & MAILT
     BILL --> DB & PAY
-    JOB --> QD & OBJ & MAILT & MAILP
+    JOB --> QD & OBJ & MAILT & MAILP & EMB & DB
     AUTH --> MAILP
     PAY -- webhook --> RP
 ```
@@ -165,7 +185,21 @@ graph TD
 4. **Hạn mức, số dư và quyền kiểm ở server.** Giao diện chỉ làm mờ nút.
 5. **Bí mật không rời server.** Khi trả về luôn che dạng `sk-…a1b2`.
 6. **Frontend giữ phong cách hiện tại:** HTML + JS thuần, không bước build.
-7. **Đóng gói chạy bằng Docker Compose** trên server riêng: `caddy`, `aios-server`, `qdrant`, CSDL (nếu chọn Postgres ở Q1), và hàng đợi tác vụ trong tiến trình (v1).
+7. **Đóng gói chạy bằng Docker Compose** trên server riêng (§3.1). Hàng đợi tác vụ nền chạy **ngay trên PostgreSQL** (`SELECT … FOR UPDATE SKIP LOCKED`), không cần thêm Redis.
+
+### 3.1 Thành phần chạy trên server riêng
+
+| Dịch vụ (Docker Compose) | Vai trò | Mạng |
+|---|---|---|
+| `caddy` | Reverse proxy, TLS wildcard `*.{BASE_DOMAIN}`, chuyển request theo Host | Mở cổng 80/443 ra Internet — **dịch vụ duy nhất mở ra ngoài** |
+| `aios-server` | Node: API, trang tĩnh, runtime Worker, tác vụ nền | Nội bộ |
+| `postgres` (16+) | CSDL chính | Nội bộ, **không** mở cổng ra ngoài |
+| `qdrant` | Kho vector | Nội bộ, bật API key |
+| `embeddings` | Phục vụ BGE-M3 qua HTTP (ví dụ image Text Embeddings Inference) | Nội bộ |
+| Volume `objects/` | Kho file: tài liệu Knowledge, ảnh, CV, hoá đơn PDF (`tenants/{id}/…`) | Đọc/ghi qua `objectStore` — đổi sang S3-compatible (MinIO…) sau chỉ cần thay lớp này |
+| Cron sao lưu | `pg_dump` hằng ngày, snapshot Qdrant, nén thư mục `objects/`, đẩy sang máy hoặc dịch vụ khác | — |
+
+**Cấu hình server tối thiểu đề xuất** cho giai đoạn đầu (vài chục tenant): **4 vCPU, 16 GB RAM, 200 GB SSD**. BGE-M3 chạy CPU chiếm khoảng 3–4 GB RAM; khi nạp nhiều tài liệu cùng lúc, index sẽ chậm hơn nhưng không chặn Worker trả lời. Nâng cấp khi số tenant hoặc lượng tài liệu tăng: tách `embeddings` sang máy có GPU, hoặc tách `postgres` ra máy riêng.
 
 ---
 
@@ -315,7 +349,7 @@ Trong luồng này người dùng tự chọn mật khẩu nên không bắt đ�
 
 ## 7. Mô hình dữ liệu (mức logic)
 
-Mô hình viết dạng **bảng / thực thể**, không phụ thuộc CSDL cụ thể (xem Q1). Mọi bảng thuộc tenant đều có `tenantId` (nằm trong khoá hoặc index) và các trường `createdAt/By`, `updatedAt/By`.
+Các mục 7.1–7.5 mô tả thực thể ở mức logic (viết dạng JSON cho dễ đọc). Cách lưu cụ thể trên **PostgreSQL** ở [§7.7](#77-lưu-trữ-trên-postgresql): tên cột dùng `snake_case`, các trường lồng nhau như `limits`, `runtime`, `content` lưu dạng `jsonb`. Mọi bảng thuộc tenant đều có `tenant_id` và các cột `created_at/by`, `updated_at/by`.
 
 ### 7.1 Sơ đồ quan hệ
 
@@ -492,6 +526,160 @@ Mục chỉ dùng cho riêng một Worker vẫn nằm trong Kho, với `visibili
 | `HERMES_KEY_*`, `MEM0_API_KEY` | → | **bỏ** |
 
 Script `scripts/migrate-default-tenant.js` tạo tenant `ankhang` (tenant demo) để Dashboard hiện có chạy tiếp.
+
+---
+
+### 7.7 Lưu trữ trên PostgreSQL
+
+**Nguyên tắc**
+
+| Hạng mục | Quyết định |
+|---|---|
+| Phiên bản | PostgreSQL 16+, extension `citext`, `pgcrypto` (sinh `gen_random_uuid()`) |
+| Mô hình tenant | **Một CSDL, một schema dùng chung**, mọi bảng thuộc tenant có cột `tenant_id uuid not null`; index bắt đầu bằng `tenant_id` |
+| Truy cập từ Node | Gói `pg` (node-postgres), **SQL thuần, không ORM**. Câu lệnh luôn dùng tham số (`$1`), không bao giờ nối chuỗi |
+| Migration | File SQL đánh số trong `server/db/migrations/`, chạy bằng `server/db/migrate.js`, ghi vết vào `schema_migrations`. Chỉ thêm file mới, không sửa file đã chạy |
+| Dữ liệu linh hoạt | `jsonb` cho `plans.limits`, `workers.runtime`, `library_versions.content`, `integrations.config`, `audit_logs.diff` |
+| Thời gian | `timestamptz`, lưu UTC, hiển thị theo `tenants.settings.timezone` |
+| Tiền | `bigint` (đơn vị credit = VNĐ), **không dùng số thực** |
+
+**Lớp chắn thứ hai: Row-Level Security (RLS).** Repository (§3) là lớp chắn thứ nhất. RLS thêm một lớp nữa ở chính CSDL, để một truy vấn lỡ quên điều kiện `tenant_id` vẫn không đọc được dữ liệu tenant khác.
+
+```sql
+-- Ứng dụng kết nối bằng role KHÔNG phải chủ bảng, KHÔNG có BYPASSRLS
+CREATE ROLE aios_app LOGIN;          -- phục vụ request của tenant
+CREATE ROLE aios_console LOGIN;      -- phục vụ Console SuperAdmin + tác vụ hệ thống
+-- Mỗi bảng thuộc tenant:
+ALTER TABLE workers ENABLE ROW LEVEL SECURITY;
+ALTER TABLE workers FORCE ROW LEVEL SECURITY;
+CREATE POLICY tenant_isolation ON workers TO aios_app
+  USING (tenant_id = current_setting('app.tenant_id')::uuid)
+  WITH CHECK (tenant_id = current_setting('app.tenant_id')::uuid);
+CREATE POLICY console_all ON workers TO aios_console USING (true) WITH CHECK (true);
+```
+
+Mỗi request của tenant chạy trong một giao dịch, mở đầu bằng `SELECT set_config('app.tenant_id', $1, true)`. Tham số `true` nghĩa là chỉ có hiệu lực trong giao dịch đó, nên kết nối trả về pool không mang theo tenant cũ. Thiếu biến này thì `current_setting` báo lỗi và truy vấn thất bại, tức là **mặc định từ chối**.
+
+Một số bước phải chạy **trước khi** biết tenant, hoặc phải nhìn xuyên tenant. Mỗi bước đi qua một hàm hẹp, không mở quyền rộng:
+
+| Bước | Cách xử lý |
+|---|---|
+| Đổi Host thành tenant | Hàm `resolve_tenant(slug)` dạng `SECURITY DEFINER`, chỉ trả `id` và `status` |
+| Kiểm email trùng toàn hệ thống khi thêm user | Dựa vào ràng buộc `UNIQUE` của CSDL; lỗi trùng được đổi thành thông báo chung, không lộ email đó thuộc tenant nào |
+| Đăng ký tenant mới, webhook thanh toán, tác vụ nền | Chạy bằng role `aios_console` trong module riêng, có audit |
+
+**Lược đồ các bảng chính** (rút gọn; khi viết migration sẽ thêm đủ cột theo §7.2–7.5):
+
+```sql
+-- ===== Platform =====
+CREATE TABLE plans (id text PRIMARY KEY, name text NOT NULL, prices jsonb NOT NULL,
+  trial_days int NOT NULL DEFAULT 0, included_credits_per_cycle bigint NOT NULL DEFAULT 0,
+  limits jsonb NOT NULL, active boolean NOT NULL DEFAULT true, sort_order int);
+
+CREATE TABLE tenants (id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  slug citext NOT NULL UNIQUE CHECK (slug ~ '^[a-z0-9]([a-z0-9-]{1,28})[a-z0-9]$'),
+  display_name text NOT NULL, status text NOT NULL,   -- trialing|active|past_due|suspended|cancelled
+  limit_overrides jsonb NOT NULL DEFAULT '{}', branding jsonb, settings jsonb NOT NULL DEFAULT '{}',
+  created_at timestamptz NOT NULL DEFAULT now());
+CREATE TABLE slug_reservations (slug citext PRIMARY KEY, reason text, until timestamptz NOT NULL);
+
+CREATE TABLE users (id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id uuid REFERENCES tenants(id),              -- NULL = superadmin
+  email citext NOT NULL UNIQUE,                        -- D9: duy nhất toàn hệ thống
+  username citext NOT NULL, name text, title text, role text NOT NULL,
+  dept_id uuid, scope_unit_id uuid, scope_function_id uuid, status text NOT NULL,
+  password_hash text, must_change_password boolean NOT NULL DEFAULT false,
+  email_verified_at timestamptz, mfa jsonb, failed_logins int NOT NULL DEFAULT 0,
+  locked_until timestamptz, last_login_at timestamptz,
+  UNIQUE (tenant_id, username));
+CREATE TABLE sessions (token_hash bytea PRIMARY KEY, user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  tenant_id uuid, host text NOT NULL, expires_at timestamptz NOT NULL, idle_expires_at timestamptz NOT NULL,
+  ip inet, user_agent text, impersonated_by uuid);
+
+-- ===== Thương mại =====
+CREATE TABLE subscriptions (tenant_id uuid PRIMARY KEY REFERENCES tenants(id), plan_id text NOT NULL REFERENCES plans(id),
+  cycle text NOT NULL, status text NOT NULL, current_period_start timestamptz, current_period_end timestamptz,
+  grace_ends_at timestamptz, pending_change jsonb);
+CREATE TABLE wallets (tenant_id uuid PRIMARY KEY REFERENCES tenants(id), balance bigint NOT NULL DEFAULT 0,
+  low_balance_threshold bigint, auto_pause_at_zero boolean NOT NULL DEFAULT true);
+CREATE TABLE credit_ledger (id bigserial PRIMARY KEY, tenant_id uuid NOT NULL REFERENCES tenants(id),
+  type text NOT NULL CHECK (type IN ('grant_plan','purchase','consume','refund','adjust','expire')),
+  amount bigint NOT NULL, balance_after bigint NOT NULL, bucket text NOT NULL, expires_at timestamptz,
+  ref_kind text, ref_id text, note text, at timestamptz NOT NULL DEFAULT now(), by_user uuid);
+-- Ledger chỉ thêm: thu hồi quyền UPDATE/DELETE với aios_app và aios_console
+REVOKE UPDATE, DELETE ON credit_ledger FROM aios_app, aios_console;
+CREATE TABLE payment_orders (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), tenant_id uuid NOT NULL REFERENCES tenants(id),
+  gateway text NOT NULL, order_code bigint NOT NULL, kind text NOT NULL, items jsonb NOT NULL,
+  amount bigint NOT NULL CHECK (amount > 0), currency text NOT NULL DEFAULT 'VND', status text NOT NULL,
+  gateway_ref text, paid_at timestamptz, expires_at timestamptz, created_by uuid,
+  UNIQUE (gateway, order_code));                      -- chống xử lý trùng
+CREATE TABLE payment_webhook_events (gateway text, event_id text, received_at timestamptz DEFAULT now(),
+  payload jsonb, PRIMARY KEY (gateway, event_id));   -- webhook lặp lại → ON CONFLICT DO NOTHING
+CREATE TABLE model_pricing (model text PRIMARY KEY, credit_per_1m_in bigint, credit_per_1m_out bigint,
+  credit_per_image bigint, markup numeric(4,2) NOT NULL DEFAULT 1.30, active boolean DEFAULT true);
+
+-- ===== Tổ chức =====
+CREATE TABLE units (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), tenant_id uuid NOT NULL REFERENCES tenants(id),
+  name text NOT NULL, type text NOT NULL CHECK (type IN ('hq','branch','store','other')),
+  parent_id uuid REFERENCES units(id), code text, head_user_id uuid, sort_order int);
+CREATE UNIQUE INDEX one_hq_per_tenant ON units(tenant_id) WHERE type = 'hq';
+CREATE TABLE functions (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), tenant_id uuid NOT NULL REFERENCES tenants(id),
+  name text NOT NULL, icon text, sort_order int, UNIQUE (tenant_id, name));
+CREATE TABLE departments (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), tenant_id uuid NOT NULL REFERENCES tenants(id),
+  unit_id uuid NOT NULL REFERENCES units(id), function_id uuid NOT NULL REFERENCES functions(id),
+  name text, head_user_id uuid, UNIQUE (unit_id, function_id));
+
+-- ===== Worker & Kho KWSR =====
+CREATE TABLE workers (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), tenant_id uuid NOT NULL REFERENCES tenants(id),
+  kind text NOT NULL DEFAULT 'worker', name text NOT NULL, icon text, role text, dept_id uuid REFERENCES departments(id),
+  owner_user_id uuid REFERENCES users(id), runtime jsonb NOT NULL, system_prompt text, status text NOT NULL,
+  budget jsonb, maturity int DEFAULT 0, stage text);
+CREATE UNIQUE INDEX one_orchestrator_per_tenant ON workers(tenant_id) WHERE kind = 'orchestrator';
+CREATE TABLE worker_access (worker_id uuid REFERENCES workers(id) ON DELETE CASCADE, user_id uuid REFERENCES users(id),
+  tenant_id uuid NOT NULL, PRIMARY KEY (worker_id, user_id));
+CREATE TABLE library_items (id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id uuid REFERENCES tenants(id),              -- NULL = Kho hệ thống
+  type text NOT NULL CHECK (type IN ('knowledge','workflow','skill','rule')), title text NOT NULL,
+  tags text[], function_ids uuid[], owner_unit_id uuid, visibility text NOT NULL, distribution text NOT NULL,
+  current_version int NOT NULL DEFAULT 1, status text NOT NULL, source_system_item_id uuid);
+CREATE TABLE library_versions (item_id uuid REFERENCES library_items(id) ON DELETE CASCADE, version int,
+  tenant_id uuid, content jsonb NOT NULL, change_note text, at timestamptz DEFAULT now(), by_user uuid,
+  PRIMARY KEY (item_id, version));
+CREATE TABLE bindings (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), tenant_id uuid NOT NULL,
+  worker_id uuid NOT NULL REFERENCES workers(id) ON DELETE CASCADE, item_id uuid NOT NULL REFERENCES library_items(id),
+  mode text NOT NULL, follow_latest boolean, pinned_version int, base_version int, local_content jsonb,
+  origin text NOT NULL, enabled boolean NOT NULL DEFAULT true, UNIQUE (worker_id, item_id));
+CREATE TABLE policy_rules (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), tenant_id uuid NOT NULL,
+  item_id uuid NOT NULL REFERENCES library_items(id), scope text NOT NULL, unit_id uuid, function_id uuid,
+  inherit_down boolean NOT NULL DEFAULT true);
+
+-- ===== Kết nối, email, đo đếm, audit, hàng đợi =====
+CREATE TABLE integrations (...);  CREATE TABLE worker_integrations (...);
+CREATE TABLE mailboxes (...);     CREATE TABLE mailbox_grants (...);
+CREATE TABLE usage_daily (tenant_id uuid, day date, worker_id uuid, model text, integration_id uuid,
+  tokens_in bigint DEFAULT 0, tokens_out bigint DEFAULT 0, images int DEFAULT 0, calls int DEFAULT 0,
+  errors int DEFAULT 0, credit bigint DEFAULT 0, provider_cost_estimate numeric,
+  PRIMARY KEY (tenant_id, day, worker_id, model, integration_id));   -- cộng dồn bằng ON CONFLICT DO UPDATE
+CREATE TABLE audit_logs (id bigserial, tenant_id uuid, at timestamptz NOT NULL DEFAULT now(), actor_id uuid,
+  actor_role text, ip inet, action text NOT NULL, target_type text, target_id text, diff jsonb,
+  via_impersonation boolean DEFAULT false) PARTITION BY RANGE (at);   -- phân vùng theo tháng, xoá theo auditRetentionDays
+CREATE TABLE jobs (id bigserial PRIMARY KEY, tenant_id uuid, kind text NOT NULL, payload jsonb,
+  run_at timestamptz NOT NULL DEFAULT now(), attempts int DEFAULT 0, status text NOT NULL DEFAULT 'queued',
+  last_error text, locked_until timestamptz);
+```
+
+**Các thao tác quan trọng được bảo vệ ở tầng CSDL:**
+
+| Thao tác | Cách làm |
+|---|---|
+| Trừ hoặc cộng credit | Một giao dịch: `SELECT … FROM wallets WHERE tenant_id=$1 FOR UPDATE` → `INSERT credit_ledger` → `UPDATE wallets SET balance` |
+| Xử lý webhook thanh toán | Một giao dịch: `INSERT payment_webhook_events … ON CONFLICT DO NOTHING` (đã có thì dừng) → khoá `payment_orders` bằng `FOR UPDATE` → kiểm số tiền → áp dụng |
+| Tạo Worker hoặc user trong hạn mức | Một giao dịch: khoá dòng `subscriptions` của tenant bằng `FOR UPDATE` → đếm → chèn. Hai request song song phải chờ nhau, không vượt hạn mức |
+| Tính Rule hiệu lực | Truy vấn đệ quy `WITH RECURSIVE` lấy chuỗi đơn vị tổ tiên (sâu tối đa 6) rồi nối với `policy_rules` |
+| Chuyển đơn vị sang cha khác | Trigger kiểm tra không tạo vòng lặp và cha hợp lệ theo loại (§8.2) |
+| Tác vụ nền | `UPDATE jobs SET status='running' … WHERE id = (SELECT id FROM jobs WHERE status='queued' AND run_at<=now() ORDER BY run_at FOR UPDATE SKIP LOCKED LIMIT 1) RETURNING *` |
+
+**Sao lưu (B11):** `pg_dump -Fc` hằng ngày, giữ 30 ngày, đẩy ra máy hoặc dịch vụ khác. Bật lưu trữ WAL để khôi phục về một thời điểm (PITR) ở Giai đoạn 4.
 
 ---
 
@@ -751,7 +939,7 @@ Tác vụ đối soát mỗi giờ: hỏi lại cổng các order pending quá 1
 // invoices
 { "id": "inv_…", "orderId": "po_…", "number": "AIOS-2026-000123", "pdfPath": "…",
   "buyer": { "companyName": "…", "taxCode": "…", "address": "…", "email": "…" },
-  "eInvoice": { "provider": null, "lookupCode": null } }   // Q3
+  "eInvoice": { "provider": null, "lookupCode": null } }   // v1: phiếu thu PDF; hoá đơn điện tử tích hợp sau (Q3)
 ```
 
 **Cổng thanh toán** dùng lớp `PaymentGateway` (`createOrder`, `verifyWebhook`, `queryOrder`, `refund`) để thêm cổng không phải sửa nghiệp vụ.
@@ -759,7 +947,7 @@ Tác vụ đối soát mỗi giờ: hỏi lại cổng các order pending quá 1
 - **Cổng thứ hai:** VNPay (thẻ nội địa và quốc tế).
 - **Dự phòng:** **xác nhận chuyển khoản thủ công** bởi SuperAdmin (có audit) cho khách trả theo hợp đồng.
 
-Chốt cổng ở Q2.
+Đã chốt (Q2): **PayOS** + xác nhận thủ công ở Giai đoạn 3; VNPay sau.
 
 ### 11.3 Vòng đời thuê bao và nhắc gia hạn
 
@@ -785,7 +973,8 @@ Mỗi **kết nối mô hình** có một trong hai chế độ:
 
 **Ví credit:**
 
-- **Đơn vị:** 1 credit = 1 VNĐ (đề xuất, để khách dễ đọc; chốt ở Q4). Giao diện luôn hiện cả số token và số tiền.
+- **Đơn vị (Q4):** 1 credit = 1 VNĐ. Giá bán token = giá nhà cung cấp × hệ số (mặc định 1,3, SuperAdmin chỉnh theo từng model trong `model_pricing`). Giao diện luôn hiện cả số token và số tiền.
+- **Mặc định khi tạo tenant (Q6):** tenant mới được gắn sẵn kết nối mô hình **Platform**, nên tạo Worker và dùng được ngay. BYOK là tuỳ chọn từ gói Standard.
 - **Hai nguồn credit (bucket):** `plan` là credit tặng theo chu kỳ, **không cộng dồn** sang chu kỳ sau. `purchased` là credit nạp, **hết hạn sau 12 tháng**. Khi trừ, dùng bucket `plan` trước, sau đó `purchased` theo thứ tự sắp hết hạn trước.
 - **Gói nạp:** ví dụ 200.000 / 500.000 / 2.000.000 VNĐ, hoặc số tuỳ chọn ≥ 100.000.
 - **Trừ tiền không tốn lượt ghi:**
@@ -862,7 +1051,7 @@ Lỗi `402` hoặc `insufficient credit` từ nhà cung cấp được nhận di
 |---|---|---|---|---|
 | Mô hình ngôn ngữ | OpenRouter · Anthropic · OpenAI · Google Gemini | API key | OpenRouter: có (cần kiểm) · các nhà cung cấp khác: nhập tay | `.env` `OPENROUTER_API_KEY` |
 | Sinh ảnh | Genful | Token | Có (`soDuCredit`) | `genful.config.json` |
-| Nhúng vector (embedding) | Theo Q5 | API key / nội bộ | — | — |
+| Nhúng vector (embedding) | BGE-M3 tự chạy (Q5) — kết nối **của Platform**, tenant không thấy | Nội bộ | — | — |
 | Xuất bản nội dung | TripX SEO-CMS · WordPress · Shopify | Token / OAuth | — | `tripx-webpost/config.json` |
 | Kênh nhắn tin | Telegram · Zalo OA · Facebook Page/Messenger · Discord · Slack | Bot token / OAuth | — | (Discord trước qua Hermes — bỏ) |
 | Google Workspace | Drive · Sheets · Calendar | OAuth | — | — |
@@ -936,7 +1125,7 @@ Ghi chú: ứng dụng OAuth Google dùng các quyền Gmail nhạy cảm sẽ p
 Upload (≤20MB, kiểm magic bytes, chặn file thực thi) → Lưu file (tenants/{t}/library/{itemId}/v{n})
  → library_versions.indexStatus = processing
  → Trích text (PDF / DOCX / XLSX giữ cấu trúc sheet; PDF scan → OCR / model vision)
- → Chia đoạn (~800 token, chồng 100) → Nhúng vector (Q5) → upsert Qdrant
+ → Chia đoạn (~800 token, chồng 100) → Nhúng vector BGE-M3 (1024 chiều, dịch vụ `embeddings`) → upsert Qdrant
  → indexed | failed (lý do + nút Thử lại)
 ```
 
@@ -1012,12 +1201,12 @@ Các endpoint nghiệp vụ hiện có (`/api/db/*`, `/api/hr/*`, `/api/sales/*`
 ## 18. Cấu trúc thư mục đề xuất
 
 ```
-docker-compose.yml          caddy · aios-server · qdrant · (postgres nếu Q1)
+docker-compose.yml          caddy · aios-server · postgres · qdrant · embeddings (§3.1)
 Caddyfile                   wildcard *.{BASE_DOMAIN}, console, public
 server/
   server.js                 khởi động + gắn router (bỏ nhánh Hermes)
   router.js                 router mỏng có middleware, không gói ngoài
-  core/  auth.js  tenancy.js (Repository, effectiveLimits, enforce)  vault.js  audit.js  mailer.js  jobs.js
+  core/  pg.js  auth.js  tenancy.js (Repository, effectiveLimits, enforce)  vault.js  audit.js  mailer.js  jobs.js  object-store.js
   billing/  wallet.js  ledger.js  metering.js  subscriptions.js  gateways/{payos,vnpay,manual}.js
   org/      units.js  functions.js  departments.js  rules-engine.js (tính Rule hiệu lực)
   library/  items.js  versions.js  bindings.js  knowledge-store.js (Qdrant)  extract/  embed.js
@@ -1025,8 +1214,10 @@ server/
   integrations/  catalog/  providers/{openrouter,anthropic,genful,tripx,…}.js  balances.js
   mail/     mailboxes.js  providers/{gmail,graph,imap}.js  send-guard.js
   api/      console/*.js  tenant/*.js  public/*.js
-  db.js · hr.js · sales.js · marketing.js · tripx.js · genful.js · openrouter.js   (giữ, chuyển dần vào tenant)
-scripts/   create-superadmin.js  migrate-default-tenant.js  seed-system-library.js
+  db.js (viết lại trên PostgreSQL) · hr.js · sales.js · marketing.js · tripx.js · genful.js · openrouter.js   (giữ, chuyển dần vào tenant)
+server/db/migrations/      0001_core.sql, 0002_org.sql … (SQL thuần, đánh số, chạy theo thứ tự)
+server/db/migrate.js       chạy migration chưa áp dụng, ghi vào bảng schema_migrations
+scripts/   create-superadmin.js  migrate-default-tenant.js  import-firestore.js  seed-system-library.js
 website/
   index.html … (trang giới thiệu, thêm trang giá + đăng ký)
   console/   SuperAdmin
@@ -1043,25 +1234,29 @@ Mỗi giai đoạn kết thúc ở trạng thái **chạy được và kiểm th
 
 | GĐ | Nội dung | Kết quả kiểm chứng được |
 |---|---|---|
-| **0 — Nền móng** | Gỡ Hermes/Mem0 (§2.3). Chốt CSDL (Q1). Docker Compose + Caddy wildcard. `router.js`, `auth.js`, `tenancy.js` (Host→tenant, Repository), `vault.js`, `audit.js` (B1). Console: đăng nhập SuperAdmin + MFA, **tạo tenant** (§4.3a), đăng nhập tenant theo subdomain. Bắt buộc phiên cho mọi route cũ. Sao lưu hằng ngày (B11) | Không đăng nhập thì mọi API trả 401. Phiên tenant A gọi sang B bị chặn (test tự động trên mọi route). Tạo `tenantabc` xong đăng nhập được ở `tenantabc.<domain>` |
+| **0 — Nền móng** | Gỡ Hermes/Mem0 (§2.3). Docker Compose (§3.1) + Caddy wildcard. **PostgreSQL + migration + RLS** (§7.7); viết lại `db.js`, chuyển dữ liệu Firestore cũ rồi gỡ Firebase. `router.js`, `auth.js`, `tenancy.js` (Host→tenant, Repository), `vault.js`, `audit.js` (B1). Console: đăng nhập SuperAdmin + MFA, **tạo tenant** (§4.3a), đăng nhập tenant theo subdomain. Bắt buộc phiên cho mọi route cũ. Sao lưu hằng ngày (B11) | Không đăng nhập thì mọi API trả 401. Phiên tenant A gọi sang B bị chặn (test tự động trên mọi route), **kể cả khi cố tình bỏ điều kiện `tenant_id` trong một truy vấn thử (RLS chặn)**. Tạo `tenantabc` xong đăng nhập được ở `tenantabc.<domain>` |
 | **1 — Tổ chức, người dùng, Worker** | Gói & hạn mức. Unit / Function / Department + 3 chế độ sơ đồ. Người dùng (mời / mật khẩu khởi tạo). **Bộ máy Rule kế thừa** + Global Rule (B3). Trình tạo Worker (bản đầu: Rule + chọn model). Orchestrator tự tạo. Vào xem tenant (B9). Thương hiệu. Di trú tenant demo | Rule Kế toán đặt ở Tổng công ty xuất hiện ở Worker Kế toán chi nhánh, không gỡ được. Worker thứ 11 ở gói 10 bị chặn, kể cả khi gửi song song. Dashboard cũ chạy bằng dữ liệu từ CSDL |
 | **2 — Kho KWSR & tri thức** | Kho tenant + Kho hệ thống (nạp SKILL.md sẵn có), phiên bản, so sánh, binding theo kho / tinh chỉnh, phân phối theo ngành dọc. Qdrant + pipeline Knowledge thật. Kết nối API dạng API key + két bí mật. Runtime ghép prompt. Mẫu Worker (B4). Nút "Thử" | Nạp PDF vào Kho, gắn cho 2 Worker: cả hai trả lời đúng, Worker thứ 3 không biết; dung lượng chỉ tính một lần. Kho ra bản mới thì Worker "theo kho" tự cập nhật, Worker "tinh chỉnh" hiện badge khác biệt |
-| **3 — Thanh toán & sử dụng** | Đo token, `model_pricing`, Ví + ledger, nạp token, ngân sách và tự dừng (B2). Số dư nhà cung cấp (§12.3). Cổng thanh toán (Q2): mua, gia hạn, đổi gói, hoá đơn. Nhắc gia hạn, ân hạn, tạm khoá. Tự đăng ký (§4.3b). Sức khoẻ (B5). Thông báo (B10) | Thanh toán thử trên sandbox: webhook lặp lại không cộng tiền hai lần. Hết credit thì Worker Platform dừng còn Worker BYOK vẫn chạy. Số dư OpenRouter thấp thì có cảnh báo kèm số ngày còn lại |
+| **3 — Thanh toán & sử dụng** | Đo token, `model_pricing`, Ví + ledger, nạp token, ngân sách và tự dừng (B2). Số dư nhà cung cấp (§12.3). Cổng **PayOS** + xác nhận thủ công: mua, gia hạn, đổi gói, phiếu thu PDF. Nhắc gia hạn, ân hạn, tạm khoá. Tự đăng ký (§4.3b). Sức khoẻ (B5). Thông báo (B10) | Thanh toán thử trên sandbox: webhook lặp lại không cộng tiền hai lần. Hết credit thì Worker Platform dừng còn Worker BYOK vẫn chạy. Số dư OpenRouter thấp thì có cảnh báo kèm số ngày còn lại |
 | **4 — Email & vận hành nâng cao** | Hộp thư tenant (Gmail, Microsoft 365, IMAP) + chốt chặn gửi. Phê duyệt (B6). Xuất/nhập Worker (B7). Xuất & xoá dữ liệu tenant (B8). Khôi phục theo tenant (B11). OAuth kênh nhắn tin, quảng cáo. MFA cho Admin tenant. Tên miền riêng | Worker soạn nháp vào Gmail thật. Gửi tới domain ngoài danh sách bị chặn bằng mã, có audit. Gửi trực tiếp thì phải qua hộp Chờ duyệt |
 
 ---
 
-## 20. Câu hỏi còn mở
+## 20. Việc cần chuẩn bị song song (ngoài code)
 
-| # | Câu hỏi | Đề xuất của tôi | Vì sao cần chốt |
-|---|---|---|---|
-| **Q1** | **CSDL chính:** giữ Firestore (như `db.js` hiện tại) hay chuyển **PostgreSQL** tự chạy trên server riêng? | **PostgreSQL.** Lý do: (1) đã tự vận hành server và Qdrant thì Postgres cùng chạy Docker không tốn thêm hạ tầng; (2) **ràng buộc duy nhất** cho slug, email, username (Firestore không có, phải tự giả lập); (3) **giao dịch ACID cho tiền** (ledger, thanh toán); (4) truy vấn đệ quy cây đơn vị cho Rule kế thừa; (5) không bị trần 20.000 lượt ghi mỗi ngày. Đánh đổi: phải viết lại `db.js` và di trú dữ liệu Firestore (nếu đã có) | Ảnh hưởng toàn bộ Giai đoạn 0 |
-| **Q2** | Cổng thanh toán triển khai trước | **PayOS (VietQR)** + xác nhận chuyển khoản thủ công; VNPay ở bước sau | Phải đăng ký tài khoản merchant (mất vài ngày) |
-| **Q3** | Hoá đơn **điện tử** (VAT) có cần ngay không, và dùng nhà cung cấp nào (MISA meInvoice, Viettel S-Invoice…)? | Giai đoạn 3 xuất **phiếu thu PDF**; hoá đơn điện tử tích hợp sau, khi chốt nhà cung cấp | Nghĩa vụ thuế khi bán cho doanh nghiệp |
-| **Q4** | Đơn vị credit và mức lãi trên giá token | **1 credit = 1 VNĐ**; giá bán = giá nhà cung cấp × hệ số (ví dụ 1,3) do SuperAdmin chỉnh | Quyết định doanh thu từ token |
-| **Q5** | Mô hình **embedding** cho Qdrant (tiếng Việt) | Một model đa ngôn ngữ **tự chạy** cùng server (ví dụ họ BGE-M3) để dữ liệu không ra ngoài và không tốn phí mỗi lượt; hoặc API embedding nếu server không đủ RAM hoặc GPU | Đổi model sau này phải index lại toàn bộ |
-| **Q6** | Mặc định khi tạo tenant: kết nối mô hình chế độ **Platform** hay **BYOK**? | **Platform** (khách dùng được ngay, trả theo Ví); BYOK là tuỳ chọn từ gói Standard | Ảnh hưởng luồng tạo Worker đầu tiên và doanh thu |
-| **Q7** | Hai tên host `console.` và đường dẫn trang đăng ký | `console.ai-os.vn` và `ai-os.vn/dang-ky` | Cần cho DNS và chứng chỉ ở Giai đoạn 0 |
+Không còn câu hỏi thiết kế nào chặn tiến độ. Các việc dưới đây cần bạn (hoặc bộ phận vận hành) làm song song vì phụ thuộc bên thứ ba và mất thời gian chờ:
+
+| Việc | Cần cho | Ghi chú |
+|---|---|---|
+| Thuê server riêng (tối thiểu 4 vCPU / 16 GB RAM / 200 GB SSD), cài Docker | GĐ 0 | §3.1 |
+| DNS: bản ghi wildcard `*.ai-os.vn`, `console.ai-os.vn`, `ai-os.vn` trỏ về server; cấp API token của nhà quản lý DNS cho Caddy (xác minh DNS-01) | GĐ 0 | Nếu đổi tên miền lúc go-live chỉ cần đổi `BASE_DOMAIN` |
+| Chỗ lưu bản sao lưu bên ngoài server (máy khác hoặc dịch vụ lưu trữ) | GĐ 0 | B11 |
+| Tài khoản Resend (hoặc SMTP), xác minh domain gửi thư (SPF, DKIM, DMARC) | GĐ 0 | Email mời, OTP, quên mật khẩu |
+| Khoá OpenRouter **của Platform** (cho chế độ Platform) và nạp tiền | GĐ 2 | Q6 |
+| Đăng ký merchant **PayOS**, lấy khoá sandbox | GĐ 3 | Q2 |
+| Bảng giá gói (tháng/năm), credit tặng mỗi gói, hệ số giá token | GĐ 3 | Nhập trên Console, không cần sửa code |
+| Thông tin bên bán cho phiếu thu (tên công ty, MST, địa chỉ) | GĐ 3 | Q3 |
+| Đăng ký ứng dụng OAuth Google (và xin xác minh quyền Gmail) và Microsoft | GĐ 4 | Thủ tục xác minh của Google có thể mất vài tuần, nên bắt đầu sớm |
 
 ---
 
@@ -1069,16 +1264,17 @@ Mỗi giai đoạn kết thúc ở trạng thái **chạy được và kiểm th
 
 | Rủi ro | Mức | Giảm thiểu |
 |---|---|---|
-| Rò dữ liệu chéo tenant (sót bộ lọc ở một truy vấn CSDL hoặc Qdrant) | **Rất cao** | Chỉ truy cập qua `Repository(tenantId)` và `knowledgeStore.search()`; lint cấm import driver CSDL hoặc Qdrant ở nơi khác; test tự động quét mọi route bằng phiên tenant khác |
+| Rò dữ liệu chéo tenant (sót bộ lọc ở một truy vấn CSDL hoặc Qdrant) | **Rất cao** | Hai lớp: `Repository(tenantId)` + **RLS của PostgreSQL** (§7.7); `knowledgeStore.search()` là cửa duy nhất vào Qdrant; lint cấm import `pg`/Qdrant ở nơi khác; test tự động quét mọi route bằng phiên tenant khác |
+| Chuyển từ Firebase sang PostgreSQL làm mất dữ liệu cũ | Trung bình | `import-firestore.js` chạy và đối chiếu số bản ghi trước khi gỡ Firebase; giữ service account cũ tới khi xác nhận xong |
 | Sai lệch tiền (cộng trùng khi webhook lặp, trừ thiếu credit) | **Cao** | Idempotency theo `orderCode`; ledger chỉ thêm; đối soát hằng giờ; kiểm chữ ký; trang return không kích hoạt gì |
 | Rule kế thừa tính sai, Worker chạy thiếu chốt chặn | Cao | `rules-engine.js` là hàm thuần, có bộ test bảng cho cây 3 cấp; màn Rule hiệu lực cho người kiểm bằng mắt; xem trước khác biệt khi chuyển đơn vị |
 | Worker gửi email sai người hoặc lộ dữ liệu | Cao | Gửi mặc định tắt; chặn domain bằng mã; Phê duyệt; trần mỗi ngày; audit |
 | Lộ khoá API hoặc token OAuth của khách | Cao | Két mã hoá, che khi trả về, không log, xoay khoá chủ; Qdrant và CSDL không mở ra Internet |
 | Chi phí tăng vọt khi gỡ MOCK (§2.3) | Trung bình | Worker di trú để `paused` + ngân sách ngày trước khi bật |
-| Server riêng là điểm hỏng duy nhất | Trung bình | Sao lưu hằng ngày ra nơi khác; diễn tập khôi phục; giám sát uptime; tài liệu runbook |
+| Server riêng là điểm hỏng duy nhất (server, PostgreSQL, Qdrant cùng một máy) | Trung bình | Sao lưu hằng ngày ra nơi khác; diễn tập khôi phục mỗi quý; giám sát uptime và dung lượng đĩa; runbook; tách CSDL ra máy riêng khi tải tăng |
 | Chờ duyệt ứng dụng OAuth Gmail kéo dài | Trung bình | Bắt đầu thủ tục sớm; có IMAP/SMTP làm phương án tạm |
 | Phạm vi lớn | Trung bình | Chia 5 giai đoạn, mỗi giai đoạn tự đứng được; không bắt đầu giai đoạn sau khi giai đoạn trước chưa qua tiêu chí nghiệm thu |
 
 ---
 
-*Tài liệu dựa trên khảo sát mã nguồn tại commit `c89a426`. Sau khi bạn chốt Q1–Q7, bắt đầu Giai đoạn 0 bằng commit gỡ Hermes/Mem0.*
+*Tài liệu dựa trên khảo sát mã nguồn tại commit `c89a426`. Bước tiếp theo: Giai đoạn 0, mở đầu bằng commit gỡ Hermes/Mem0.*
