@@ -1,6 +1,6 @@
 # AI OS Workspace — Tài liệu mô tả & thiết kế Không gian làm việc của người dùng
 
-> **Phiên bản:** v1.0 — đã chốt U1–U10 (xem [§0.2](#02-quyết-định-đã-chốt)).
+> **Phiên bản:** v1.1 — đã chốt U1–U11 (xem [§0.2](#02-quyết-định-đã-chốt)). So với v1.0 (sau đợt review): thêm **U11** (Worker không nhận lệnh từ Orchestrator); U3 chuyển thành **gỡ** module demo; sửa thứ tự trong `relation()` (viewer đứng đầu); sửa RLS của nội dung riêng tư ở §16 và tách `feedback_shares`; cờ Mật lọc theo tập `item_id` lấy từ PostgreSQL; chia lại lộ trình thành 0a/0b/1a/1b ở §18.
 > **Phạm vi:** thiết kế, chưa viết code. Đây là **tài liệu thứ hai**, đi cặp với [`ADMIN_PORTAL_DESIGN.md`](ADMIN_PORTAL_DESIGN.md) (gọi tắt **tài liệu Admin**). Phần nào tài liệu Admin đã đặc tả thì ở đây chỉ dẫn chiếu, không viết lại.
 > **Nguồn giao diện:** dashboard hiện có tại `website/dashboard.html`, `website/js/app.js`, `website/js/work.js` (bản đang chạy ở workers.ai-os.vn), khảo sát tại commit `c89a426`.
 
@@ -22,14 +22,15 @@
 |---|---|---|
 | U1 | Cấu trúc | Cùng host `tenantabc.ai-os.vn`: Workspace ở `/`, Quản trị ở `/admin`. Người dùng thường không thấy Quản trị |
 | U2 | Quản lý công việc | **Tính năng lõi cho mọi tenant**: Dự án, Phiếu yêu cầu, Công việc, Điều phối, Báo cáo, Phòng điều hành |
-| U3 | Module demo | Các module nghiệp vụ trong bản demo **không thuộc phạm vi** tài liệu này |
+| U3 | Module demo | Các module nghiệp vụ trong bản demo (HR, Sales, Marketing, TripX…) **bị gỡ khỏi bản production** (tài liệu Admin R1, §2.3). Workspace không có module nghiệp vụ riêng: mọi việc đi qua Công việc và Worker |
 | U4 | Portal khách hàng | **Bỏ hẳn** khỏi cả hai tài liệu |
 | U5 | Riêng tư hội thoại | Hội thoại của ai người đó xem. **Quản lý không xem được.** Chỉ `tenant_admin` xem được, và mỗi lần xem đều **ghi nhật ký**. **Phiên hỗ trợ của SuperAdmin không đọc được hội thoại** |
 | U6 | Thấy Worker | **Phương án C**: thấy tất cả Worker đang hoạt động; giao việc theo 3 mức quan hệ |
 | U7 | Chính sách nhận việc | Admin đặt cho từng Worker: **Mở / Theo bộ phận / Hạn chế** (mặc định Theo bộ phận) |
-| U8 | Orchestrator | Việc giao qua Orchestrator **luôn chạy ở mức "Mở"**, bỏ qua chính sách nhận việc. Đổi lại, **chỉ người được cấp quyền mới ra lệnh được cho Orchestrator** (thường là CEO, Phó TGĐ). Rule vẫn áp dụng đầy đủ |
+| U8 | Orchestrator | Việc giao qua Orchestrator **luôn chạy ở mức "Mở"**, bỏ qua chính sách nhận việc. Đổi lại, **chỉ người được cấp quyền mới ra lệnh được cho Orchestrator** (thường là CEO, Phó TGĐ). Rule vẫn áp dụng đầy đủ. Ngoại lệ duy nhất là Worker nhạy cảm đặt «không nhận lệnh từ Orchestrator» (U11) |
 | U9 | Yêu cầu từ phòng khác | **Tự nhận và báo** cho người phụ trách Worker |
 | U10 | Tài liệu Mật | Cờ **"Mật"** chỉ áp cho tài liệu **Knowledge**: chỉ bộ phận sở hữu Worker và Orchestrator được dùng. **Workflow, Skill, Rule luôn áp dụng đầy đủ** cho mọi người, để quy trình không bị hở. Quản lý cấp trên trong phạm vi được dùng trực tiếp |
+| U11 | Worker nhạy cảm | Mỗi Worker có tuỳ chọn **«Không nhận lệnh từ Orchestrator»** (`accept_from_orchestrator`, mặc định vẫn nhận). Worker đặt tắt thì Orchestrator **không giao được**, kể cả cho người có quyền ra lệnh; người dùng vẫn giao qua các đường ②③④ theo mức quan hệ bình thường (§6.2) |
 
 ---
 
@@ -199,6 +200,7 @@ Hệ thống tính mức quan hệ `relation(U, W)` theo thứ tự, gặp đi�
 
 ```
 relation(U, W):
+  0. U là viewer                                                    → CHỈ XEM   (trần mức, áp trước mọi nhánh khác)
   1. U là tenant_admin                                              → TRỰC TIẾP
   2. U nằm trong danh sách được cấp riêng của W (accessUserIds)     → TRỰC TIẾP
   3. W.chínhSách = Mở                                               → TRỰC TIẾP
@@ -217,7 +219,7 @@ Với chính sách **Hạn chế**, quản lý cấp trên **không** tự có q
 
 Thêm hai quy tắc:
 - **Thành viên dự án** được giao việc trực tiếp cho Worker **đã tham gia dự án đó**, trong phạm vi dự án (§8.4). Quy tắc này không đổi mức quan hệ ở danh bạ.
-- `viewer` luôn tối đa là **Chỉ xem**.
+- `viewer` được xử lý ở bước 0 nên không nhánh nào phía sau nâng được mức của họ, kể cả khi họ có trong `accessUserIds`.
 
 ### 5.4 Hồ sơ Worker (chỉ đọc)
 
@@ -235,6 +237,7 @@ Tri thức         12 tài liệu (3 🔒 Mật)                           (ch�
 
 - **Không hiện** nội dung Knowledge, nội dung Skill hay model đang dùng.
 - Tên các Rule có hiện, để người dùng hiểu vì sao Worker từ chối một việc.
+- Worker đã đặt «Không nhận lệnh từ Orchestrator» (U11) thì hồ sơ hiện dòng **«Việc từ Orchestrator: không nhận»**, để người có quyền ra lệnh biết vì sao không thấy Worker này trong kế hoạch.
 - Với mức **Qua yêu cầu**, nút Chat được thay bằng **[✉ Gửi yêu cầu]**. Với mức **Chỉ xem**, chỉ có nút **[Liên hệ người phụ trách]**.
 
 ---
@@ -260,8 +263,16 @@ Lệnh từ người điều hành cao nhất phải chạy được xuyên các
 | Phê duyệt (tài liệu Admin B6) | ✔ Vẫn áp dụng: email gửi khách vẫn phải qua người duyệt |
 | Ngân sách ngày của Worker, Ví credit | ✔ Vẫn áp dụng |
 | Trạng thái Worker | Worker `paused` không nhận việc. Orchestrator báo rõ trong kế hoạch |
+| **Worker đặt «Không nhận lệnh từ Orchestrator»** (U11) | ✖ **Không giao được.** Orchestrator loại Worker này khỏi kế hoạch và nói rõ «Worker X không nhận lệnh từ Orchestrator; hãy giao trực tiếp hoặc gửi yêu cầu». Gọi API cố giao thì `taskPolicy.create` từ chối với mã `ORCHESTRATOR_NOT_ACCEPTED`. Trong trình sửa kế hoạch, người ra lệnh không chọn được Worker này |
 
 Do Orchestrator mạnh như vậy, **người phụ trách Worker luôn được báo** khi Worker của mình nhận việc từ Orchestrator.
+
+**Worker nhạy cảm (U11).** Một số Worker không nên bị gọi qua đường tắt này dù người ra lệnh là CEO: Worker lương, kiểm toán, pháp chế nội bộ…
+
+- **Ai đặt:** `tenant_admin`, hoặc `unit_manager`/`function_head` với Worker trong phạm vi của mình. Đặt trong trình tạo Worker (bước 1, tài liệu Admin §9.4) hoặc tab Thông tin của Worker. Mọi lần đổi ghi nhật ký.
+- **Gợi ý, không tự bật:** khi Admin chọn chính sách nhận việc «Hạn chế», trình tạo gợi ý bật tuỳ chọn này nhưng để Admin quyết định. Quản trị › Worker có bộ lọc «Không nhận lệnh từ Orchestrator».
+- **Phạm vi tác dụng:** chỉ chặn đường ① (Orchestrator). Người dùng vẫn giao cho Worker này qua chat, dự án hoặc yêu cầu theo mức quan hệ của họ (§5), nên việc đó chịu chính sách nhận việc và cờ Mật như bình thường.
+- **Đổi tuỳ chọn giữa chừng:** chỉ ảnh hưởng việc tạo sau đó. Với kế hoạch Orchestrator đã xác nhận nhưng chưa tạo hết việc, các việc còn lại giao cho Worker này bị từ chối và vào Điều phối của người ra lệnh.
 
 ### 6.3 Luồng ra lệnh
 
@@ -286,7 +297,7 @@ Do Orchestrator mạnh như vậy, **người phụ trách Worker luôn được
 | Sửa kế hoạch | Đổi Worker, đổi hạn, bỏ bớt việc, sửa đầu bài từng việc, thêm phụ thuộc |
 | Người nghiệm thu | Mặc định là người ra lệnh; có thể giao cho người khác (ví dụ trưởng phòng Marketing) ngay trong kế hoạch |
 | Gắn dự án | Tuỳ chọn. Có gắn thì thành viên dự án thấy các việc này |
-| Không có Worker phù hợp | Orchestrator nói rõ và đề xuất: giao cho **người** (chọn nhân sự), hoặc báo Admin tạo Worker mới. **Không tự bịa ra Worker** |
+| Không có Worker phù hợp | Orchestrator nói rõ và đề xuất: giao cho **người** (chọn nhân sự), hoặc báo Admin tạo Worker mới. **Không tự bịa ra Worker**. Worker duy nhất phù hợp mà không nhận lệnh từ Orchestrator (U11) cũng tính là không có Worker phù hợp; Orchestrator nêu tên Worker đó và gợi ý giao trực tiếp hoặc gửi yêu cầu |
 | Việc bị vướng | Vào Điều phối (§8.6); người xử lý là **người ra lệnh** và người phụ trách Worker |
 | Ai thấy các việc này | Người ra lệnh, người nghiệm thu, người phụ trách từng Worker, thành viên dự án (nếu gắn), `tenant_admin` |
 
@@ -416,12 +427,12 @@ Giữ nguyên tinh thần của bản demo: **không việc nào được nằm 
 
 | Đường | Ai dùng được | Mức áp dụng | Tài liệu Mật |
 |---|---|---|---|
-| **① Orchestrator** | Người có quyền ra lệnh (§6.1) | Luôn **Mở** (bỏ qua chính sách nhận việc) | ✔ |
+| **① Orchestrator** | Người có quyền ra lệnh (§6.1) | Luôn **Mở** (bỏ qua chính sách nhận việc), **trừ Worker «không nhận lệnh từ Orchestrator»** (U11) | ✔ |
 | **② Chat → Tạo công việc** | Người ở mức Trực tiếp | Trực tiếp | Theo §11.2 |
 | **③ Trong dự án** | Thành viên dự án, với Worker đã tham gia dự án | Trực tiếp trong phạm vi dự án | ✖ trừ khi người phụ trách bật cho dự án |
 | **④ Gửi yêu cầu** | Người ở mức Qua yêu cầu | Tự nhận và báo (U9) | ✖ |
 
-**Kiểm quyền ở một chỗ.** Mọi đường đều gọi cùng một hàm `taskPolicy.create(requester, worker, origin, project?)`. Hàm này trả về: được tạo hay không, chạy ngay hay qua yêu cầu, và có được dùng tài liệu Mật hay không. Kết quả được **ghi cứng vào công việc lúc tạo** (`run_mode`, `confidential_allowed`); runtime đọc từ công việc, không tự suy lại. Nhờ vậy không đường nào lách được đường khác, và Admin đổi chính sách sau đó thì chỉ ảnh hưởng việc mới.
+**Kiểm quyền ở một chỗ.** Mọi đường đều gọi cùng một hàm `taskPolicy.create(requester, worker, origin, project?)`. Hàm này trả về: được tạo hay không, chạy ngay hay qua yêu cầu, và có được dùng tài liệu Mật hay không. Khi không được tạo, hàm trả mã từ chối (ví dụ `ORCHESTRATOR_NOT_ACCEPTED`, `RELATION_VIEW_ONLY`). Kết quả được **ghi cứng vào công việc lúc tạo** (`run_mode`, `confidential_allowed`); runtime đọc từ công việc, không tự suy lại. Nhờ vậy không đường nào lách được đường khác, và Admin đổi chính sách sau đó thì chỉ ảnh hưởng việc mới.
 
 ### 9.2 Gửi yêu cầu tới Worker phòng khác (đường ④)
 
@@ -489,7 +500,7 @@ Khi Worker W làm việc, tài liệu Mật của W **chỉ được đưa vào 
 
 Không thuộc trường hợp nào ở trên thì **không dùng**. Riêng người **được cấp riêng** (`accessUserIds`) ngoài bộ phận vẫn chat trực tiếp được, nhưng **không** dùng được tài liệu Mật.
 
-**Thực thi ở tầng truy vấn:** bộ lọc Qdrant (tài liệu Admin §15) thêm điều kiện `confidential = false` khi việc không được phép dùng tài liệu Mật. Prompt không bao giờ chứa nội dung bị lọc, nên Worker không thể "lỡ lời".
+**Thực thi ở tầng truy vấn:** tập `item_id` đưa vào truy vấn Qdrant (tài liệu Admin §15) được tính từ PostgreSQL và **loại các mục `confidential = true`** khi việc không được phép dùng tài liệu Mật. Cờ chỉ có một nguồn là `library_items.confidential`, không sao chép vào Qdrant, nên bật hay tắt cờ có hiệu lực ngay ở lượt truy vấn kế tiếp. Prompt không bao giờ chứa nội dung bị loại, nên Worker không thể "lỡ lời".
 
 ### 11.3 Khi quy trình cần tài liệu Mật mà người yêu cầu không có quyền
 
@@ -605,13 +616,14 @@ Cấu hình **cái gì cần duyệt** và **ai duyệt** nằm ở Quản trị
 
 ## 16. Mô hình dữ liệu bổ sung (PostgreSQL)
 
-Theo quy ước của tài liệu Admin §7.7: mọi bảng có `tenant_id`, bật Row-Level Security, SQL thuần. Các cột thêm vào bảng đã có trong tài liệu Admin:
+Theo quy ước của tài liệu Admin §7.7: mọi bảng có `tenant_id` (khoá ngoại tới `tenants`), bật Row-Level Security, SQL thuần. Các cột dưới đây **đã nằm sẵn** trong lệnh `CREATE TABLE` của tài liệu Admin §7.7; nêu lại ở đây để thấy Workspace cần gì, **không** làm thành migration riêng:
 
 ```sql
 ALTER TABLE users     ADD COLUMN can_command_orchestrator boolean NOT NULL DEFAULT false,
                       ADD COLUMN can_create_project boolean NOT NULL DEFAULT false;
 ALTER TABLE workers   ADD COLUMN intake_policy text NOT NULL DEFAULT 'department'
-                        CHECK (intake_policy IN ('open','department','restricted'));
+                        CHECK (intake_policy IN ('open','department','restricted')),
+                      ADD COLUMN accept_from_orchestrator boolean NOT NULL DEFAULT true;   -- U11
 ALTER TABLE library_items ADD COLUMN confidential boolean NOT NULL DEFAULT false;  -- chỉ có nghĩa với type='knowledge'
 ```
 
@@ -619,47 +631,78 @@ Bảng mới:
 
 ```sql
 -- ===== Hội thoại =====
-CREATE TABLE conversations (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), tenant_id uuid NOT NULL,
+CREATE TABLE conversations (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), tenant_id uuid NOT NULL REFERENCES tenants(id),
   user_id uuid NOT NULL REFERENCES users(id), worker_id uuid NOT NULL REFERENCES workers(id),
   title text, archived_at timestamptz, deleted_at timestamptz,          -- xoá hẳn sau 30 ngày
   created_at timestamptz NOT NULL DEFAULT now(), last_message_at timestamptz);
-CREATE TABLE messages (id bigserial PRIMARY KEY, tenant_id uuid NOT NULL,
+CREATE TABLE messages (id bigserial PRIMARY KEY, tenant_id uuid NOT NULL REFERENCES tenants(id),
   conversation_id uuid NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+  user_id uuid NOT NULL REFERENCES users(id),     -- chủ hội thoại, chép từ conversations để RLS không cần join
   role text NOT NULL CHECK (role IN ('user','worker')), content text NOT NULL,
   attachments jsonb, sources jsonb,            -- [{itemId, version, title, confidential}]
   workflow_command text, tokens_in int, tokens_out int, credit bigint,
   created_at timestamptz NOT NULL DEFAULT now());
 CREATE TABLE message_feedback (message_id bigint PRIMARY KEY REFERENCES messages(id) ON DELETE CASCADE,
-  tenant_id uuid NOT NULL, user_id uuid NOT NULL, rating smallint NOT NULL CHECK (rating IN (-1, 1)),
-  comment text, shared_excerpt jsonb,          -- đoạn hỏi + trả lời gửi cho người phụ trách khi 👎
+  tenant_id uuid NOT NULL REFERENCES tenants(id), user_id uuid NOT NULL REFERENCES users(id),     -- người bấm = chủ hội thoại
+  rating smallint NOT NULL CHECK (rating IN (-1, 1)), comment text,
   created_at timestamptz NOT NULL DEFAULT now());
--- RLS riêng cho hội thoại: chủ hội thoại HOẶC tenant_admin; phiên hỗ trợ bị chặn ở middleware
-CREATE POLICY conversation_owner ON conversations TO aios_app
+-- Góp ý 👎 gửi người phụ trách là một bản SAO đoạn hỏi + trả lời mà người dùng chủ động chia sẻ.
+-- Tách bảng riêng để người phụ trách đọc được đúng đoạn đó mà không cần quyền đọc hội thoại.
+CREATE TABLE feedback_shares (id bigserial PRIMARY KEY, tenant_id uuid NOT NULL REFERENCES tenants(id),
+  from_user_id uuid NOT NULL REFERENCES users(id), worker_id uuid NOT NULL REFERENCES workers(id),
+  to_user_id uuid NOT NULL REFERENCES users(id),     -- người phụ trách Worker, chụp lại lúc gửi
+  excerpt jsonb NOT NULL, comment text, status text NOT NULL DEFAULT 'new',     -- new | handled
+  created_at timestamptz NOT NULL DEFAULT now());    -- sống độc lập với hội thoại gốc; xoá sau khi xử lý hoặc tối đa 180 ngày
+
+-- ===== RLS cho nội dung riêng tư (quy tắc chung: tài liệu Admin §7.7) =====
+-- Nhóm: conversations, messages, message_feedback, feedback_shares.
+-- KHÔNG tạo console_all, và REVOKE ALL FROM aios_console. tenant_admin chỉ ĐỌC (policy SELECT), không ghi.
+DO $$ DECLARE t text; BEGIN
+  FOREACH t IN ARRAY ARRAY['conversations','messages','message_feedback'] LOOP
+    EXECUTE format('ALTER TABLE %I ENABLE ROW LEVEL SECURITY', t);
+    EXECUTE format('ALTER TABLE %I FORCE ROW LEVEL SECURITY', t);
+    EXECUTE format($p$CREATE POLICY priv_read ON %I FOR SELECT TO aios_app
+      USING (tenant_id = current_setting('app.tenant_id')::uuid
+         AND (user_id = current_setting('app.user_id')::uuid OR current_setting('app.is_tenant_admin') = 'true'))$p$, t);
+    EXECUTE format($p$CREATE POLICY priv_write ON %I FOR ALL TO aios_app
+      USING      (tenant_id = current_setting('app.tenant_id')::uuid AND user_id = current_setting('app.user_id')::uuid)
+      WITH CHECK (tenant_id = current_setting('app.tenant_id')::uuid AND user_id = current_setting('app.user_id')::uuid)$p$, t);
+  END LOOP;
+END $$;
+ALTER TABLE feedback_shares ENABLE ROW LEVEL SECURITY;  ALTER TABLE feedback_shares FORCE ROW LEVEL SECURITY;
+CREATE POLICY share_read ON feedback_shares FOR SELECT TO aios_app
   USING (tenant_id = current_setting('app.tenant_id')::uuid
-     AND (user_id = current_setting('app.user_id')::uuid OR current_setting('app.is_tenant_admin') = 'true'));
+     AND (to_user_id = current_setting('app.user_id')::uuid OR from_user_id = current_setting('app.user_id')::uuid));
+CREATE POLICY share_insert ON feedback_shares FOR INSERT TO aios_app
+  WITH CHECK (tenant_id = current_setting('app.tenant_id')::uuid AND from_user_id = current_setting('app.user_id')::uuid);
+CREATE POLICY share_handle ON feedback_shares FOR UPDATE TO aios_app          -- người phụ trách đổi status
+  USING      (tenant_id = current_setting('app.tenant_id')::uuid AND to_user_id = current_setting('app.user_id')::uuid)
+  WITH CHECK (tenant_id = current_setting('app.tenant_id')::uuid AND to_user_id = current_setting('app.user_id')::uuid);
+REVOKE ALL ON conversations, messages, message_feedback, feedback_shares FROM aios_console;
 
 -- ===== Quản lý công việc =====
-CREATE TABLE projects (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), tenant_id uuid NOT NULL,
+CREATE TABLE projects (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), tenant_id uuid NOT NULL REFERENCES tenants(id),
   name text NOT NULL, description text, unit_id uuid NOT NULL REFERENCES units(id),
   pm_user_id uuid NOT NULL REFERENCES users(id), partner text,
   start_date date, deadline date, status text NOT NULL, created_by uuid);
 CREATE TABLE project_members (project_id uuid REFERENCES projects(id) ON DELETE CASCADE, user_id uuid REFERENCES users(id),
-  tenant_id uuid NOT NULL, PRIMARY KEY (project_id, user_id));
+  tenant_id uuid NOT NULL REFERENCES tenants(id), PRIMARY KEY (project_id, user_id));
 CREATE TABLE project_workers (project_id uuid REFERENCES projects(id) ON DELETE CASCADE, worker_id uuid REFERENCES workers(id),
-  tenant_id uuid NOT NULL, status text NOT NULL DEFAULT 'joined',        -- joined | withdrawn
+  tenant_id uuid NOT NULL REFERENCES tenants(id), status text NOT NULL DEFAULT 'joined',        -- joined | withdrawn
   allow_confidential boolean NOT NULL DEFAULT false, invited_by uuid, withdrawn_reason text,
   PRIMARY KEY (project_id, worker_id));
-CREATE TABLE tickets (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), tenant_id uuid NOT NULL,
+CREATE TABLE tickets (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), tenant_id uuid NOT NULL REFERENCES tenants(id),
   code bigint NOT NULL, project_id uuid NOT NULL REFERENCES projects(id), title text NOT NULL, type text,
   status text NOT NULL, priority text, deadline date, description text, UNIQUE (tenant_id, code));
-CREATE TABLE ticket_assignees (ticket_id uuid REFERENCES tickets(id) ON DELETE CASCADE, user_id uuid, tenant_id uuid NOT NULL,
+CREATE TABLE ticket_assignees (ticket_id uuid REFERENCES tickets(id) ON DELETE CASCADE, user_id uuid REFERENCES users(id), tenant_id uuid NOT NULL REFERENCES tenants(id),
   PRIMARY KEY (ticket_id, user_id));
-CREATE TABLE tasks (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), tenant_id uuid NOT NULL,
+CREATE TABLE tasks (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), tenant_id uuid NOT NULL REFERENCES tenants(id),
   title text NOT NULL, brief text,
   project_id uuid REFERENCES projects(id), ticket_id uuid REFERENCES tickets(id),   -- cả hai NULL = việc lẻ
-  executor_type text NOT NULL CHECK (executor_type IN ('human','worker')), executor_id uuid NOT NULL,
-  requester_id uuid NOT NULL, acceptor_id uuid NOT NULL,          -- người yêu cầu, người nghiệm thu
-  worker_owner_id uuid,                                           -- chụp lại lúc tạo nếu executor là Worker
+  executor_user_id uuid REFERENCES users(id), executor_worker_id uuid REFERENCES workers(id),
+  CHECK ((executor_user_id IS NULL) <> (executor_worker_id IS NULL)),    -- đúng một trong hai
+  requester_id uuid NOT NULL REFERENCES users(id), acceptor_id uuid NOT NULL REFERENCES users(id),   -- người yêu cầu, người nghiệm thu
+  worker_owner_id uuid REFERENCES users(id),                      -- chụp lại lúc tạo nếu người thực hiện là Worker
   origin text NOT NULL CHECK (origin IN ('orchestrator','chat','project','request','manual')),
   orchestrator_plan_id uuid, source_conversation_id uuid,
   run_mode text NOT NULL,                     -- direct | request | orchestrator | project | dept_override
@@ -669,32 +712,41 @@ CREATE TABLE tasks (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), tenant_id uui
   cost_dept_id uuid NOT NULL,                 -- bộ phận chịu chi phí = bộ phận người yêu cầu
   created_at timestamptz NOT NULL DEFAULT now(), closed_at timestamptz, close_reason text);
 CREATE TABLE task_dependencies (task_id uuid REFERENCES tasks(id) ON DELETE CASCADE,
-  depends_on uuid REFERENCES tasks(id) ON DELETE CASCADE, tenant_id uuid NOT NULL, PRIMARY KEY (task_id, depends_on));
-CREATE TABLE task_reports (id bigserial PRIMARY KEY, tenant_id uuid NOT NULL, task_id uuid NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+  depends_on uuid REFERENCES tasks(id) ON DELETE CASCADE, tenant_id uuid NOT NULL REFERENCES tenants(id), PRIMARY KEY (task_id, depends_on));
+CREATE TABLE task_reports (id bigserial PRIMARY KEY, tenant_id uuid NOT NULL REFERENCES tenants(id), task_id uuid NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
   at timestamptz NOT NULL DEFAULT now(), progress int, note text, minutes int,
   by_type text NOT NULL, by_user uuid, by_worker uuid);
-CREATE TABLE task_outputs (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), tenant_id uuid NOT NULL,
+CREATE TABLE task_outputs (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), tenant_id uuid NOT NULL REFERENCES tenants(id),
   task_id uuid NOT NULL REFERENCES tasks(id) ON DELETE CASCADE, version int NOT NULL, kind text NOT NULL,
   title text, content text, object_path text, mime text, size_bytes bigint,
   held_for_review boolean NOT NULL DEFAULT false,   -- kết quả "chạy lại với quyền bộ phận" chờ người phụ trách duyệt chuyển
   created_at timestamptz NOT NULL DEFAULT now());
 
 -- ===== Orchestrator =====
-CREATE TABLE orchestrator_plans (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), tenant_id uuid NOT NULL,
-  commander_id uuid NOT NULL, command text NOT NULL, plan jsonb NOT NULL,
+CREATE TABLE orchestrator_plans (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), tenant_id uuid NOT NULL REFERENCES tenants(id),
+  commander_id uuid NOT NULL REFERENCES users(id), command text NOT NULL, plan jsonb NOT NULL,
   status text NOT NULL,                       -- proposed | confirmed | cancelled | done
   project_id uuid, acceptor_id uuid, summary_report text,
   created_at timestamptz NOT NULL DEFAULT now(), confirmed_at timestamptz);
 
+-- ===== Nối với động cơ chạy (tài liệu Admin §9.5, §7.7) =====
+ALTER TABLE worker_runs ADD CONSTRAINT worker_runs_task_fk FOREIGN KEY (task_id) REFERENCES tasks(id),
+                        ADD CONSTRAINT worker_runs_conv_fk FOREIGN KEY (conversation_id) REFERENCES conversations(id);
+
 -- ===== Thông báo =====
-CREATE TABLE notifications (id bigserial PRIMARY KEY, tenant_id uuid NOT NULL, user_id uuid NOT NULL,
+CREATE TABLE notifications (id bigserial PRIMARY KEY, tenant_id uuid NOT NULL REFERENCES tenants(id), user_id uuid NOT NULL,
   kind text NOT NULL, title text NOT NULL, link text, ref jsonb, read_at timestamptz,
   created_at timestamptz NOT NULL DEFAULT now());
-CREATE TABLE notification_prefs (user_id uuid, kind text, tenant_id uuid NOT NULL,
+CREATE TABLE notification_prefs (user_id uuid, kind text, tenant_id uuid NOT NULL REFERENCES tenants(id),
   in_app boolean NOT NULL DEFAULT true, email boolean NOT NULL DEFAULT false, PRIMARY KEY (user_id, kind));
 ```
 
-Mỗi request của tenant đặt thêm `app.user_id` và `app.is_tenant_admin` cùng lúc với `app.tenant_id` (tài liệu Admin §7.7), để RLS của hội thoại hoạt động. **Phiên hỗ trợ của SuperAdmin** luôn đặt `app.is_tenant_admin = 'false'` và bị middleware chặn ở mọi route hội thoại.
+Mỗi request của tenant đặt `app.user_id` và `app.is_tenant_admin` cùng lúc với `app.tenant_id` (tài liệu Admin §7.7).
+
+- **`app.is_tenant_admin` mặc định `'false'` ở mọi route, kể cả khi người gọi là `tenant_admin`.** Chỉ hai handler được đặt `'true'`: `GET /users/:id/conversations` và `GET /users/:id/conversations/:cid`, và hai handler này ghi nhật ký `conversation.viewed`. Nhờ vậy một route khác lỡ truy vấn sai cũng không để Admin thấy hội thoại của người khác.
+- **Phiên hỗ trợ của SuperAdmin** luôn `'false'` và bị middleware chặn ở mọi route hội thoại (`supportBlocked`, tài liệu Admin §22.8).
+- **Tác vụ nền** (xoá hẳn hội thoại sau 30 ngày, xoá dữ liệu tenant khi hết hợp đồng) chạy qua hàm `SECURITY DEFINER` hẹp (tài liệu Admin §7.7), không dùng role có quyền đọc bảng.
+- **Xuất dữ liệu tenant** (B8) chỉ đưa hội thoại vào khi Admin tick chọn; dùng đúng handler có đặt `'true'` và ghi `conversation.exported`.
 
 ---
 
@@ -709,9 +761,9 @@ Nằm dưới `tenantabc.{BASE_DOMAIN}/api/v1/`, theo quy ước tài liệu Adm
 | **Hội thoại** | `GET/POST /conversations` · `GET/PATCH/DELETE /conversations/:id` · `POST /conversations/:id/restore` · `GET /conversations/:id/messages` · `POST /conversations/:id/messages` (trả về luồng SSE) · `POST /conversations/:id/stop` · `POST /messages/:id/feedback` · `POST /conversations/:id/to-task` |
 | **Orchestrator** | `POST /orchestrator/plans` (lệnh → kế hoạch) · `PATCH /orchestrator/plans/:id` (sửa) · `POST /orchestrator/plans/:id/{confirm,cancel}` · `GET /orchestrator/plans?status` · `GET /orchestrator/plans/:id` |
 | **Dự án & phiếu** | `projects` CRUD · `PUT /projects/:id/members` · `POST /projects/:id/workers` (mời) · `DELETE /projects/:id/workers/:wid` (rút, người phụ trách) · `PATCH /projects/:id/workers/:wid` (bật tài liệu Mật) · `tickets` CRUD |
-| **Công việc** | `GET /tasks?view=mine|requested|my-workers|scope&status&project&q` · `POST /tasks` (qua `taskPolicy.create`) · `GET/PATCH /tasks/:id` · `POST /tasks/:id/{start,submit,accept,rework,pause,cancel,reassign,rerun,rerun-with-dept-authority,release-held-output}` · `GET/POST /tasks/:id/reports` · `GET /tasks/:id/outputs` · `POST /tasks/:id/outputs/:oid/propose-to-library` |
+| **Công việc** | `GET /tasks?view=mine\|requested\|my-workers\|scope&status&project&q` · `POST /tasks` (qua `taskPolicy.create`) · `GET/PATCH /tasks/:id` · `POST /tasks/:id/{start,submit,accept,rework,pause,cancel,reassign,rerun,rerun-with-dept-authority,release-held-output}` · `GET/POST /tasks/:id/reports` · `GET /tasks/:id/outputs` · `POST /tasks/:id/outputs/:oid/propose-to-library` |
 | **Điều phối** | `GET /coordination?reason` |
-| **Yêu cầu** | `GET /requests?box=sent|incoming` · `POST /requests` (tạo công việc `origin=request`) |
+| **Yêu cầu** | `GET /requests?box=sent\|incoming` · `POST /requests` (tạo công việc `origin=request`) |
 | **Phê duyệt** | `GET /approvals?box=mine` · `POST /approvals/:id/{approve,reject,edit-approve}` |
 | **Kết quả** | `GET /outputs?project&worker&type&q` · `GET /outputs/:id/download` |
 | **Báo cáo** | `GET /reports?user&worker&project&from&to` · `GET /reports/export.csv` · `GET /control-room` · `GET /workload` |
@@ -725,10 +777,12 @@ Nằm dưới `tenantabc.{BASE_DOMAIN}/api/v1/`, theo quy ước tài liệu Adm
 
 | GĐ | Workspace làm gì | Kết quả kiểm chứng được |
 |---|---|---|
-| **0** | Khung Workspace sau đăng nhập; chuyển khu vực Workspace ⇄ Quản trị; bỏ dữ liệu giả (`AMBIENT`, `AGENTS`, `seed()`), bỏ Portal khách hàng và Luồng nghiệp vụ | `member` đăng nhập thấy Workspace, **không** thấy nút Quản trị; gọi `/api/v1/admin/*` trả `403` |
-| **1** | Danh bạ Worker + mức quan hệ + chính sách nhận việc; hội thoại (chưa có trích dẫn Knowledge); quyền riêng tư hội thoại; Quản lý công việc chuyển sang PostgreSQL; `taskPolicy.create`; quyền ra lệnh Orchestrator + kế hoạch + xác nhận; Điều phối; trang Hôm nay | Bảng kiểm `relation()` đủ 6 nhánh. Quản lý gọi API đọc hội thoại của nhân viên nhận `403`; Admin đọc được và có dòng nhật ký. Người không có quyền không thấy Orchestrator; có quyền thì việc chạy ngay ở Worker "Hạn chế" và Rule vẫn chặn đúng |
-| **2** | Trích dẫn Knowledge; **lọc tài liệu Mật** ở Qdrant; "Chạy lại với quyền bộ phận" + giữ kết quả chờ duyệt chuyển; Yêu cầu sang phòng khác (tự nhận và báo); Worker tham gia dự án; kết quả bàn giao + đề xuất đưa vào Kho; góp ý 👍👎 | Yêu cầu từ Kinh doanh tới Worker Kế toán **không** trả về được số liệu trong tài liệu Mật (kiểm bằng câu hỏi trúng nội dung đó); sau khi người phụ trách chạy lại và duyệt chuyển thì người yêu cầu mới nhận được |
-| **3** | Chi phí theo bộ phận người yêu cầu; "Sử dụng của tôi"; trung tâm thông báo + email; báo cáo xuất CSV | Báo cáo chi phí cho thấy đúng phòng nào dùng Worker của phòng nào |
+| **0a** | Chưa có tính năng Workspace. Chỉ chuẩn bị middleware đặt `app.user_id` và `app.is_tenant_admin` (mặc định `'false'`) | — |
+| **0b** | Khung Workspace sau đăng nhập; chuyển khu vực Workspace ⇄ Quản trị; bỏ dữ liệu giả (`AMBIENT`, `AGENTS`, `seed()`), bỏ Portal khách hàng và Luồng nghiệp vụ | `member` đăng nhập thấy Workspace, **không** thấy nút Quản trị; gọi `/api/v1/admin/*` trả `403` |
+| **1a** | Chưa có tính năng Workspace (đang làm tổ chức, người dùng, Rule ở tài liệu Admin) | — |
+| **1b** | Danh bạ Worker + mức quan hệ + chính sách nhận việc + **tuỳ chọn không nhận lệnh từ Orchestrator (U11)**; hội thoại (chưa có trích dẫn Knowledge); quyền riêng tư hội thoại và các bảng RLS ở §16; Quản lý công việc chuyển sang PostgreSQL; `taskPolicy.create`; quyền ra lệnh Orchestrator + kế hoạch + xác nhận; Điều phối; trang Hôm nay | Bảng kiểm `relation()` đủ 7 nhánh (kể cả viewer). Quản lý gọi API đọc hội thoại của nhân viên nhận `403`; Admin đọc được và có dòng nhật ký; `aios_console` đọc `messages` nhận `permission denied`. Người không có quyền không thấy Orchestrator; có quyền thì việc chạy ngay ở Worker «Hạn chế» và Rule `hard` vẫn chặn đúng; Worker đặt U11 từ chối với `ORCHESTRATOR_NOT_ACCEPTED` |
+| **2** | Trích dẫn Knowledge; **lọc tài liệu Mật theo tập `item_id`** khi truy vấn Qdrant; «Chạy lại với quyền bộ phận» + giữ kết quả chờ duyệt chuyển; Yêu cầu sang phòng khác (tự nhận và báo); Worker tham gia dự án; kết quả bàn giao + đề xuất đưa vào Kho; góp ý 👍👎 (qua `feedback_shares`) | Yêu cầu từ Kinh doanh tới Worker Kế toán **không** trả về được số liệu trong tài liệu Mật (kiểm bằng câu hỏi trúng nội dung đó); sau khi người phụ trách chạy lại và duyệt chuyển thì người yêu cầu mới nhận được. Bật hoặc tắt cờ Mật có hiệu lực ngay ở lượt truy vấn kế tiếp |
+| **3** | Chi phí theo bộ phận người yêu cầu; «Sử dụng của tôi»; trung tâm thông báo + email; báo cáo xuất CSV | Báo cáo chi phí cho thấy đúng phòng nào dùng Worker của phòng nào |
 | **4** | Hộp Phê duyệt; hộp thư cá nhân; MFA người dùng | Email do Worker soạn chỉ được gửi sau khi người được chỉ định duyệt |
 
 ---
@@ -737,11 +791,11 @@ Nằm dưới `tenantabc.{BASE_DOMAIN}/api/v1/`, theo quy ước tài liệu Adm
 
 | Nhóm | Kiểm |
 |---|---|
-| **Mức quan hệ** | Kiểm bảng: 3 chính sách × (cùng bộ phận / quản lý trong phạm vi / được cấp riêng / người ngoài / admin / viewer) → đúng mức ở §5.3 |
-| **Không lách quyền** | Gọi `POST /tasks` trực tiếp tới Worker mức Qua yêu cầu thì thành yêu cầu, không chạy dạng trực tiếp. Gọi `POST /orchestrator/plans` khi không có quyền thì `403`. Gửi `run_mode` hay `confidential_allowed` từ client thì bị bỏ qua |
-| **Tài liệu Mật** | Mỗi đường giao việc × người có quyền / không có quyền → tài liệu Mật có hay không có trong kết quả tìm kiếm (kiểm ở tầng `knowledgeStore.search()`, không kiểm qua câu trả lời của model) |
+| **Mức quan hệ** | Kiểm bảng: 3 chính sách × (cùng bộ phận / quản lý trong phạm vi / được cấp riêng / người ngoài / admin / viewer) → đúng mức ở §5.3. Thêm ca viewer có trong `accessUserIds` → vẫn «Chỉ xem» |
+| **Không lách quyền** | Gọi `POST /tasks` trực tiếp tới Worker mức Qua yêu cầu thì thành yêu cầu, không chạy dạng trực tiếp. Gọi `POST /orchestrator/plans` khi không có quyền thì `403`. Gửi `run_mode` hay `confidential_allowed` từ client thì bị bỏ qua. Giao việc `origin = orchestrator` cho Worker «không nhận lệnh từ Orchestrator» thì bị từ chối `ORCHESTRATOR_NOT_ACCEPTED`; cùng Worker đó vẫn nhận việc từ chat, dự án, yêu cầu theo mức quan hệ |
+| **Tài liệu Mật** | Mỗi đường giao việc × người có quyền / không có quyền → tài liệu Mật có hay không có trong kết quả tìm kiếm (kiểm ở tầng `knowledgeStore.search()`, không kiểm qua câu trả lời của model). Bật rồi tắt cờ Mật, truy vấn ngay sau mỗi lần đổi → kết quả đổi theo |
 | **Rule luôn áp dụng** | Việc từ Orchestrator vào Worker có Rule `hard` thì vẫn bị chặn |
-| **Riêng tư hội thoại** | Chủ: ✔ · Admin: ✔ và có nhật ký · Quản lý: `403` · Người phụ trách Worker: `403` · Phiên hỗ trợ SuperAdmin: `403` · Truy vấn SQL thử bỏ điều kiện người dùng: RLS chặn |
+| **Riêng tư hội thoại** | Chủ: ✔ · Admin: ✔ và có nhật ký · Quản lý: `403` · Người phụ trách Worker: `403` · Phiên hỗ trợ SuperAdmin: `403` · Truy vấn SQL thử bỏ điều kiện người dùng, trên cả `conversations`, `messages`, `message_feedback`: RLS chặn · `tenant_admin` gọi route **không** phải handler đọc hội thoại: thấy 0 dòng của người khác · `aios_console` đọc 4 bảng nội dung riêng tư: `permission denied` · Người phụ trách Worker đọc được `feedback_shares` gửi cho mình nhưng không đọc được hội thoại gốc |
 | **Phạm vi dữ liệu** | Mỗi dòng của §12.2 có ít nhất một ca được thấy và một ca không được thấy |
 | **Trạng thái tenant** | `suspended`: không gửi tin nhắn, không tạo việc; vẫn xem được dữ liệu cũ |
 
@@ -752,7 +806,7 @@ Nằm dưới `tenantabc.{BASE_DOMAIN}/api/v1/`, theo quy ước tài liệu Adm
 | Rủi ro | Mức | Giảm thiểu |
 |---|---|---|
 | Lộ tài liệu Mật qua câu trả lời của Worker cho phòng khác | **Cao** | Lọc ngay ở truy vấn Qdrant, không dựa vào lời dặn trong prompt; cờ `confidential_allowed` ghi cứng trên công việc; kết quả "chạy với quyền bộ phận" phải qua người phụ trách duyệt chuyển |
-| Quyền ra lệnh Orchestrator bị cấp tràn lan, biến chính sách nhận việc thành vô nghĩa | Trung bình | Quyền cấp từng người, có nhật ký; Quản trị › Người dùng hiển thị rõ danh sách người đang có quyền; người phụ trách Worker luôn được báo khi có việc từ Orchestrator |
+| Quyền ra lệnh Orchestrator bị cấp tràn lan, biến chính sách nhận việc thành vô nghĩa | Trung bình | Quyền cấp từng người, có nhật ký; Quản trị › Người dùng hiển thị rõ danh sách người đang có quyền; người phụ trách Worker luôn được báo khi có việc từ Orchestrator; Worker nhạy cảm đặt «không nhận lệnh từ Orchestrator» (U11) |
 | Người dùng tưởng hội thoại hoàn toàn riêng tư | Trung bình | Ghi rõ trong màn chào lần đầu và ở chân khung chat: "Quản trị viên công ty có thể xem hội thoại khi cần; mọi lần xem đều được ghi lại" |
 | Việc của Worker bị bỏ quên ở trạng thái Chờ nghiệm thu | Trung bình | Nhắc sau 1 ngày; hiện trên trang Hôm nay và Phòng điều hành |
 | "Tự nhận và báo" làm Worker phòng khác quá tải | Trung bình | Ngân sách ngày của Worker vẫn áp dụng; người phụ trách tạm dừng hoặc trả lại được; báo cáo chi phí theo bộ phận người yêu cầu cho thấy ai đang dùng nhiều |
