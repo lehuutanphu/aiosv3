@@ -1,6 +1,6 @@
 # AI OS Workspace — Tài liệu mô tả & thiết kế Không gian làm việc của người dùng
 
-> **Phiên bản:** v1.1 — đã chốt U1–U11 (xem [§0.2](#02-quyết-định-đã-chốt)). So với v1.0 (sau đợt review): thêm **U11** (Worker không nhận lệnh từ Orchestrator); U3 chuyển thành **gỡ** module demo; sửa thứ tự trong `relation()` (viewer đứng đầu); sửa RLS của nội dung riêng tư ở §16 và tách `feedback_shares`; cờ Mật lọc theo tập `item_id` lấy từ PostgreSQL; chia lại lộ trình thành 0a/0b/1a/1b ở §18.
+> **Phiên bản:** v1.1 — đã chốt U1–U11 (xem [§0.2](#02-quyết-định-đã-chốt)). So với v1.0 (sau đợt review): đổi tên menu «Yêu cầu» thành «Yêu cầu liên phòng» (§4.1, §9); thêm **U11** (Worker không nhận lệnh từ Orchestrator); U3 chuyển thành **gỡ** module demo; sửa thứ tự trong `relation()` (viewer đứng đầu); sửa RLS của nội dung riêng tư ở §16 và tách `feedback_shares`; cờ Mật lọc theo tập `item_id` lấy từ PostgreSQL; chia lại lộ trình thành 0a/0b/1a/1b ở §18.
 > **Phạm vi:** thiết kế, chưa viết code. Đây là **tài liệu thứ hai**, đi cặp với [`ADMIN_PORTAL_DESIGN.md`](ADMIN_PORTAL_DESIGN.md) (gọi tắt **tài liệu Admin**). Phần nào tài liệu Admin đã đặc tả thì ở đây chỉ dẫn chiếu, không viết lại.
 > **Nguồn giao diện:** dashboard hiện có tại `website/dashboard.html`, `website/js/app.js`, `website/js/work.js` (bản đang chạy ở workers.ai-os.vn), khảo sát tại commit `c89a426`.
 
@@ -129,7 +129,7 @@ tenantabc.ai-os.vn
 │   ├─ Điều phối         việc đang vướng cần xử lý
 │   ├─ Nhân sự & Worker  khối lượng việc theo người, Worker người đó phụ trách
 │   └─ Báo cáo
-├─ /yeu-cau              Yêu cầu gửi đi · Yêu cầu tới Worker tôi phụ trách      §9
+├─ /yeu-cau              Yêu cầu liên phòng: Đã gửi · Tới Worker tôi phụ trách   §9
 ├─ /phe-duyet            Hộp chờ duyệt                                          §13
 ├─ /ket-qua              Kết quả bàn giao và tệp                                §10
 ├─ /so-do                Sơ đồ tổ chức (chỉ xem)                                §4.2
@@ -137,7 +137,7 @@ tenantabc.ai-os.vn
 └─ /tai-khoan            Hồ sơ · mật khẩu · phiên đăng nhập · hộp thư cá nhân · thông báo   §15
 ```
 
-Thanh bên trái của Workspace gồm: **Hôm nay · Orchestrator** (nếu có quyền) **· Worker · Hội thoại · Công việc · Yêu cầu · Phê duyệt · Kết quả · Sơ đồ**. Mỗi mục có bộ đếm việc cần xử lý.
+Thanh bên trái của Workspace gồm: **Hôm nay · Orchestrator** (nếu có quyền) **· Worker · Hội thoại · Công việc · Yêu cầu liên phòng · Phê duyệt · Kết quả · Sơ đồ**. Mỗi mục có bộ đếm việc cần xử lý.
 
 ### 4.2 Sơ đồ tổ chức (chỉ xem)
 
@@ -421,7 +421,7 @@ Giữ nguyên tinh thần của bản demo: **không việc nào được nằm 
 
 ---
 
-## 9. Bốn đường giao việc và Yêu cầu sang phòng khác
+## 9. Bốn đường giao việc và Yêu cầu liên phòng
 
 ### 9.1 Bốn đường, một quy tắc
 
@@ -448,14 +448,14 @@ Danh bạ › ⚖️ Legal Agent (Pháp lý – TCT) · Mức của bạn: ✉ Q
 ```
 
 1. Gửi xong thì tạo **Công việc** với `origin = request`. Worker **tự nhận ngay** (U9).
-2. **Người phụ trách Worker được báo** (thông báo + mục "Yêu cầu tới Worker tôi phụ trách" ở `/yeu-cau`). Người phụ trách có thể:
+2. **Người phụ trách Worker được báo** (thông báo + mục «Yêu cầu liên phòng › Tới Worker tôi phụ trách» ở `/yeu-cau`). Người phụ trách có thể:
    - Để Worker làm tiếp (mặc định, không cần thao tác).
    - **Tạm dừng** hoặc **Trả lại** kèm lý do. Người yêu cầu được báo.
    - **Đổi người thực hiện** (giao cho nhân sự của phòng mình).
 3. Worker làm xong thì kết quả về **người yêu cầu** để nghiệm thu.
 4. Chi phí tính cho **bộ phận của người yêu cầu**.
 
-Màn `/yeu-cau` có hai tab: **Tôi đã gửi** (trạng thái từng yêu cầu) và **Gửi tới Worker tôi phụ trách** (chỉ hiện với người phụ trách Worker).
+Màn **Yêu cầu liên phòng** (`/yeu-cau`) có hai tab: **Tôi đã gửi** (trạng thái từng yêu cầu) và **Gửi tới Worker tôi phụ trách** (chỉ hiện với người phụ trách Worker).
 
 ---
 
@@ -537,7 +537,7 @@ Như vậy quy trình **không bị đứt**, còn dữ liệu Mật chỉ ra kh
 | **Việc lẻ** (không gắn dự án) | Người yêu cầu; người thực hiện; người nghiệm thu; người phụ trách Worker; người ra lệnh (nếu từ Orchestrator); quản lý có bộ phận của **người yêu cầu** nằm trong phạm vi; `tenant_admin` |
 | **Việc của Worker tôi phụ trách** | Người phụ trách Worker thấy **đầu bài, trạng thái, kết quả** của mọi việc Worker đó làm, kể cả việc từ phòng khác, vì phải chịu trách nhiệm chất lượng |
 | **Báo cáo tiến độ, Kết quả bàn giao** | Theo công việc chứa nó |
-| **Yêu cầu** | Người gửi; người phụ trách Worker; `tenant_admin` |
+| **Yêu cầu liên phòng** | Người gửi; người phụ trách Worker; `tenant_admin` |
 | **Phê duyệt** | Người duyệt; người yêu cầu của công việc; `tenant_admin` |
 | **Số liệu sử dụng và chi phí** | Người dùng: của mình. Quản lý: trong phạm vi. Admin: toàn công ty. **Không có nội dung**, chỉ số liệu |
 | **Danh bạ Worker, Sơ đồ tổ chức** | Mọi người dùng |
@@ -763,7 +763,7 @@ Nằm dưới `tenantabc.{BASE_DOMAIN}/api/v1/`, theo quy ước tài liệu Adm
 | **Dự án & phiếu** | `projects` CRUD · `PUT /projects/:id/members` · `POST /projects/:id/workers` (mời) · `DELETE /projects/:id/workers/:wid` (rút, người phụ trách) · `PATCH /projects/:id/workers/:wid` (bật tài liệu Mật) · `tickets` CRUD |
 | **Công việc** | `GET /tasks?view=mine\|requested\|my-workers\|scope&status&project&q` · `POST /tasks` (qua `taskPolicy.create`) · `GET/PATCH /tasks/:id` · `POST /tasks/:id/{start,submit,accept,rework,pause,cancel,reassign,rerun,rerun-with-dept-authority,release-held-output}` · `GET/POST /tasks/:id/reports` · `GET /tasks/:id/outputs` · `POST /tasks/:id/outputs/:oid/propose-to-library` |
 | **Điều phối** | `GET /coordination?reason` |
-| **Yêu cầu** | `GET /requests?box=sent\|incoming` · `POST /requests` (tạo công việc `origin=request`) |
+| **Yêu cầu liên phòng** | `GET /requests?box=sent\|incoming` · `POST /requests` (tạo công việc `origin=request`) |
 | **Phê duyệt** | `GET /approvals?box=mine` · `POST /approvals/:id/{approve,reject,edit-approve}` |
 | **Kết quả** | `GET /outputs?project&worker&type&q` · `GET /outputs/:id/download` |
 | **Báo cáo** | `GET /reports?user&worker&project&from&to` · `GET /reports/export.csv` · `GET /control-room` · `GET /workload` |
