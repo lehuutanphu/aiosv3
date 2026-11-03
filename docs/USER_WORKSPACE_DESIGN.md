@@ -1,6 +1,7 @@
 # AI OS Workspace — Tài liệu mô tả & thiết kế Không gian làm việc của người dùng
 
-> **Phiên bản:** v1.0 — đã chốt U1–U10 (xem [§0.2](#02-quyết-định-đã-chốt)).
+> **Phiên bản:** v2.0 (02/11/2026) — đã chốt U1–U10 (xem [§0.2](#02-quyết-định-đã-chốt)) và **cập nhật toàn bộ theo bản thiết kế giao diện** (xem [§21](#21-cập-nhật-theo-thiết-kế-giao-diện-v20--112026)).
+> **Lịch sử:** v1.0 bản đặc tả để thiết kế. v2.0 đưa các điều chỉnh chức năng và logic phát hiện khi thiết kế giao diện vào tài liệu: thêm **Chat Social** (luôn có, quyền theo kênh do Admin cấp), luồng Orchestrator có ngữ cảnh và duyệt từng việc, đổi điều hướng (Dashboard, Yêu cầu liên phòng, gỡ Nhân sự & Worker), sơ đồ Người dùng ↔ Worker, trạng thái cấu hình được, quy tắc duyệt tập trung. Logic dùng chung Console · Admin · Workspace ở tài liệu Admin §24.0.
 > **Phạm vi:** thiết kế, chưa viết code. Đây là **tài liệu thứ hai**, đi cặp với [`ADMIN_PORTAL_DESIGN.md`](ADMIN_PORTAL_DESIGN.md) (gọi tắt **tài liệu Admin**). Phần nào tài liệu Admin đã đặc tả thì ở đây chỉ dẫn chiếu, không viết lại.
 > **Nguồn giao diện:** dashboard hiện có tại `website/dashboard.html`, `website/js/app.js`, `website/js/work.js` (bản đang chạy ở workers.ai-os.vn), khảo sát tại commit `c89a426`.
 
@@ -21,7 +22,7 @@
 | # | Chủ đề | Quyết định |
 |---|---|---|
 | U1 | Cấu trúc | Cùng host `tenantabc.ai-os.vn`: Workspace ở `/`, Quản trị ở `/admin`. Người dùng thường không thấy Quản trị |
-| U2 | Quản lý công việc | **Tính năng lõi cho mọi tenant**: Dự án, Phiếu yêu cầu, Công việc, Điều phối, Báo cáo, Phòng điều hành |
+| U2 | Quản lý công việc | **Tính năng lõi cho mọi tenant**: Dự án, Phiếu yêu cầu, Công việc, Điều phối, Báo cáo, **Dashboard** (trước gọi là Phòng điều hành) |
 | U3 | Module demo | Các module nghiệp vụ trong bản demo **không thuộc phạm vi** tài liệu này |
 | U4 | Portal khách hàng | **Bỏ hẳn** khỏi cả hai tài liệu |
 | U5 | Riêng tư hội thoại | Hội thoại của ai người đó xem. **Quản lý không xem được.** Chỉ `tenant_admin` xem được, và mỗi lần xem đều **ghi nhật ký**. **Phiên hỗ trợ của SuperAdmin không đọc được hội thoại** |
@@ -29,6 +30,8 @@
 | U7 | Chính sách nhận việc | Admin đặt cho từng Worker: **Mở / Theo bộ phận / Hạn chế** (mặc định Theo bộ phận) |
 | U8 | Orchestrator | Việc giao qua Orchestrator **luôn chạy ở mức "Mở"**, bỏ qua chính sách nhận việc. Đổi lại, **chỉ người được cấp quyền mới ra lệnh được cho Orchestrator** (thường là CEO, Phó TGĐ). Rule vẫn áp dụng đầy đủ |
 | U9 | Yêu cầu từ phòng khác | **Tự nhận và báo** cho người phụ trách Worker |
+| U11 | Chat Social | **Luôn có** cho mọi tenant, không tính hạn mức gói; quyền xem / trả lời theo kênh do Admin cấp (Admin §24.17). Hộp thư chung cho tin nhắn khách hàng từ Zalo OA, Facebook, Webchat, WhatsApp…; Worker tự trả lời, nhân viên **Dừng tay** để tự trả lời từng cuộc chat (§21.2) |
+| U12 | Điều hướng | Dashboard thay Phòng điều hành; "Yêu cầu" đổi thành **Yêu cầu liên phòng**; Dự án là tab trong Công việc; **bỏ hẳn Nhân sự & Worker**; trang chi tiết có nút về danh sách (§21.1) |
 | U10 | Tài liệu Mật | Cờ **"Mật"** chỉ áp cho tài liệu **Knowledge**: chỉ bộ phận sở hữu Worker và Orchestrator được dùng. **Workflow, Skill, Rule luôn áp dụng đầy đủ** cho mọi người, để quy trình không bị hở. Quản lý cấp trên trong phạm vi được dùng trực tiếp |
 
 ---
@@ -120,27 +123,27 @@ tenantabc.ai-os.vn
 │   └─ /worker/:id       Hồ sơ Worker (chỉ đọc) · Chat · Gửi yêu cầu
 ├─ /hoi-thoai            Hội thoại của tôi                                      §7
 │   └─ /hoi-thoai/:id
+├─ /chat-social         Tin nhắn khách hàng từ các kênh social · Worker tự trả lời · Dừng tay   §21.2
 ├─ /cong-viec            Quản lý công việc                                      §8
-│   ├─ Phòng điều hành   tổng quan trong phạm vi của tôi
+│   ├─ Dashboard         tổng quan trong phạm vi của tôi (trước: Phòng điều hành)
 │   ├─ Dự án             danh sách · chi tiết (thành viên, Worker tham gia, phiếu, tiến độ)
-│   ├─ Phiếu yêu cầu
+│   ├─ Phiếu yêu cầu     bấm mã phiếu sổ danh sách công việc · chi tiết phiếu
 │   ├─ Công việc         việc của tôi · việc tôi giao · việc của Worker tôi phụ trách
 │   ├─ Điều phối         việc đang vướng cần xử lý
-│   ├─ Nhân sự & Worker  khối lượng việc theo người, Worker người đó phụ trách
 │   └─ Báo cáo
-├─ /yeu-cau              Yêu cầu gửi đi · Yêu cầu tới Worker tôi phụ trách      §9
-├─ /phe-duyet            Hộp chờ duyệt                                          §13
+├─ /yeu-cau              Yêu cầu liên phòng: tôi đã gửi · gửi tới Worker tôi phụ trách   §9
+├─ /phe-duyet            Hộp chờ duyệt (theo Quy tắc duyệt của Admin)            §13, §21.8
 ├─ /ket-qua              Kết quả bàn giao và tệp                                §10
-├─ /so-do                Sơ đồ tổ chức (chỉ xem)                                §4.2
+├─ /so-do                Sơ đồ tổ chức (chỉ xem) · Người dùng ↔ Worker          §4.2, §21.6
 ├─ /thong-bao            Trung tâm thông báo                                    §14
 └─ /tai-khoan            Hồ sơ · mật khẩu · phiên đăng nhập · hộp thư cá nhân · thông báo   §15
 ```
 
-Thanh bên trái của Workspace gồm: **Hôm nay · Orchestrator** (nếu có quyền) **· Worker · Hội thoại · Công việc · Yêu cầu · Phê duyệt · Kết quả · Sơ đồ**. Mỗi mục có bộ đếm việc cần xử lý.
+Thanh bên trái của Workspace gồm: **Hôm nay · Orchestrator** (nếu có quyền) **· Worker · Hội thoại · Chat Social · Công việc · Yêu cầu liên phòng · Phê duyệt · Kết quả · Sơ đồ**, nhóm dưới **Thông báo · Tài khoản**. Mỗi mục có bộ đếm việc cần xử lý. Màn "Nhân sự & Worker" đã **bỏ hẳn** (§21.1).
 
 ### 4.2 Sơ đồ tổ chức (chỉ xem)
 
-Dùng lại 3 chế độ xem của tài liệu Admin §8.5 (theo đơn vị, theo ngành dọc, ma trận người ↔ Worker), nhưng **không có thao tác sửa**. Bấm vào một Worker thì mở hồ sơ Worker (§5.4). Mỗi Worker có nhãn mức quan hệ của người đang xem (✔ Trực tiếp / ✉ Qua yêu cầu / 👁 Chỉ xem).
+Dùng lại 3 chế độ xem của tài liệu Admin §8.5 (theo đơn vị, theo ngành dọc, **Người dùng ↔ Worker**), nhưng **không có thao tác sửa**. Chế độ Người dùng ↔ Worker không còn là ma trận; xem cách hiển thị và 4 mức quan hệ (👑 Phụ trách · ✔ Trực tiếp · ✉ Qua yêu cầu · 👁 Chỉ xem) ở §21.6. Bấm vào một Worker thì mở hồ sơ Worker (§5.4). Mỗi Worker có nhãn mức quan hệ của người đang xem (✔ Trực tiếp / ✉ Qua yêu cầu / 👁 Chỉ xem).
 
 ### 4.3 Trang "Hôm nay"
 
@@ -229,11 +232,13 @@ Làm được gì      Soạn email chăm sóc, đề xuất bán hàng, theo d�
 Lệnh có sẵn      /email-cham-soc — chuỗi email sau bán 3 chạm
                  /de-xuat-ban-hang — tạo đề xuất từ brief
 Quy tắc chính    · Mọi email gửi khách phải qua bước duyệt       (chỉ hiện tên Rule)
-Tri thức         12 tài liệu (3 🔒 Mật)                           (chỉ hiện số lượng)
-Đang làm         2 việc · hàng chờ 1
+Tri thức         12 tài liệu · 9 xem được tên · 3 🔒 Mật       (mở ra: tên + phiên bản + ngày của tài liệu không Mật)
+Đang làm         2 việc đang thực hiện · 1 trong hàng chờ       (mở ra: tên, nguồn, trạng thái, tiến độ)
 ```
 
-- **Không hiện** nội dung Knowledge, nội dung Skill hay model đang dùng.
+- **Không hiện** nội dung Knowledge, nội dung Skill hay model đang dùng. **Tên** tài liệu không Mật thì hiện; tài liệu Mật gộp một dòng, ẩn tên (§21.4).
+- "Đang làm" chỉ liệt kê việc người xem có quyền xem; việc khác chỉ hiện số lượng.
+- Đầu trang có nút "← Danh bạ Worker". Mở từ hội thoại thì hồ sơ hiện dạng modal chỉ đọc.
 - Tên các Rule có hiện, để người dùng hiểu vì sao Worker từ chối một việc.
 - Với mức **Qua yêu cầu**, nút Chat được thay bằng **[✉ Gửi yêu cầu]**. Với mức **Chỉ xem**, chỉ có nút **[Liên hệ người phụ trách]**.
 
@@ -265,27 +270,14 @@ Do Orchestrator mạnh như vậy, **người phụ trách Worker luôn được
 
 ### 6.3 Luồng ra lệnh
 
-```
-1. Người có quyền gõ lệnh tự nhiên:
-   "Chuẩn bị chương trình khuyến mãi tháng 12: nội dung fanpage, email khách cũ, rà điều khoản khuyến mãi"
-2. Orchestrator phân tích và TRÌNH KẾ HOẠCH (chưa chạy gì):
-   ┌──────────────────────────────────────────────────────────────────────────────┐
-   │ Kế hoạch — 3 việc · ước tính ~18.000 credit                                   │
-   │ 1. 📱 Social Agent (Marketing·TCT)   Viết 7 bài fanpage        hạn 05/12      │
-   │ 2. 💼 Sales Agent (Kinh doanh·HN)    Email cho 120 khách cũ   hạn 06/12  ✋ cần duyệt gửi │
-   │ 3. ⚖️ Legal Agent (Pháp lý·TCT)      Rà thể lệ khuyến mãi      hạn 04/12  → trước việc 2 │
-   │ Gắn vào dự án: [— Không —  ▾]     Người nghiệm thu: [Tôi ▾]                    │
-   │                                       [Sửa kế hoạch]  [Huỷ]  [✔ Xác nhận & giao] │
-   └──────────────────────────────────────────────────────────────────────────────┘
-3. Xác nhận → tạo 3 Công việc (nguồn = orchestrator), chạy theo thứ tự phụ thuộc
-4. Theo dõi tiến độ ngay trên màn Orchestrator; xong thì Orchestrator gửi BÁO CÁO TỔNG HỢP
-```
+> **Cập nhật v2.0:** luồng chốt ở **§21.3**. Tóm tắt: (1) gõ lệnh và **tuỳ chọn chọn ngữ cảnh** Dự án / Phiếu yêu cầu / Công việc liên quan; (2) bấm Giao việc **luôn** ra màn Kế hoạch (Worker nhận từng việc, hạn, credit, trạng thái); (3) đúng thì **Duyệt chạy toàn bộ**; việc nào chưa đúng thì **Dừng**, sửa ngay tại dòng rồi **Lưu & duyệt việc này** hoặc **Bỏ việc này**; các việc khác vẫn duyệt được; (4) tạo Công việc (nguồn `orchestrator`), gắn vào dự án / phiếu đã chọn; (5) theo dõi và nhận báo cáo tổng hợp.
 
 | Hạng mục | Quy định |
 |---|---|
-| Sửa kế hoạch | Đổi Worker, đổi hạn, bỏ bớt việc, sửa đầu bài từng việc, thêm phụ thuộc |
+| Sửa kế hoạch | **Sửa tại chỗ từng việc** (Dừng → form ngay dưới dòng): đổi Worker hoặc giao cho người, đối tượng, hạn, chạy sau việc nào, đầu bài; bỏ việc. Trình sửa đầy đủ (board 91) vẫn mở được |
 | Người nghiệm thu | Mặc định là người ra lệnh; có thể giao cho người khác (ví dụ trưởng phòng Marketing) ngay trong kế hoạch |
-| Gắn dự án | Tuỳ chọn. Có gắn thì thành viên dự án thấy các việc này |
+| Ngữ cảnh (dự án / phiếu / công việc liên quan) | Chọn **trước khi** giao việc, tuỳ chọn. Có chọn thì Orchestrator dùng làm căn cứ lập kế hoạch và việc mới tự gắn vào dự án / phiếu; thành viên dự án thấy các việc này |
+| Duyệt | **Duyệt chạy toàn bộ** hoặc **Duyệt N việc sẵn sàng** (bỏ qua việc đang dừng); trần ngân sách và chế độ báo cáo tổng hợp chọn ngay trong kế hoạch |
 | Không có Worker phù hợp | Orchestrator nói rõ và đề xuất: giao cho **người** (chọn nhân sự), hoặc báo Admin tạo Worker mới. **Không tự bịa ra Worker** |
 | Việc bị vướng | Vào Điều phối (§8.6); người xử lý là **người ra lệnh** và người phụ trách Worker |
 | Ai thấy các việc này | Người ra lệnh, người nghiệm thu, người phụ trách từng Worker, thành viên dự án (nếu gắn), `tenant_admin` |
@@ -341,7 +333,7 @@ Khi hội thoại được chuyển thành Công việc thì **đầu bài của
 
 ## 8. Quản lý công việc (lõi, U2)
 
-Giữ mô hình đang chạy trong `work.js`: **Dự án → Phiếu yêu cầu → Công việc → Báo cáo**. Tiến độ cuộn lên từ công việc tới phiếu tới dự án. Có thêm Điều phối và Phòng điều hành. Thay đổi so với bản demo: dữ liệu theo tenant trong PostgreSQL, nhân sự là `users` thật, Worker lấy từ CSDL, và quyền theo §12.
+Giữ mô hình đang chạy trong `work.js`: **Dự án → Phiếu yêu cầu → Công việc → Báo cáo**. Tiến độ cuộn lên từ công việc tới phiếu tới dự án. Có thêm Điều phối và Dashboard (trước gọi là Phòng điều hành). Thay đổi so với bản demo: dữ liệu theo tenant trong PostgreSQL, nhân sự là `users` thật, Worker lấy từ CSDL, và quyền theo §12.
 
 ### 8.1 Đối tượng
 
@@ -356,6 +348,8 @@ Giữ mô hình đang chạy trong `work.js`: **Dự án → Phiếu yêu cầu 
 **Nguồn của Công việc** (`origin`): `orchestrator` · `chat` · `project` · `request` · `manual`.
 
 ### 8.2 Trạng thái Công việc
+
+> **Cập nhật v2.0:** sơ đồ dưới là **bộ trạng thái mặc định**. Admin cấu hình được danh sách trạng thái, màu, nhóm (Mở · Đang làm · Chờ · Vướng · Kết thúc đạt / không đạt · nhóm tuỳ chỉnh) và các bước chuyển được phép cho Công việc, Phiếu yêu cầu, Dự án (tài liệu Admin §24.3). Workspace chỉ hiện nút chuyển hợp lệ; trạng thái "bắt buộc lý do" mở ô lý do.
 
 ```
 Mới ──► Đang thực hiện ──► Chờ nghiệm thu ──► Hoàn tất
@@ -383,12 +377,12 @@ Form Công việc có ô **"Người thực hiện"** gồm hai nhóm: 👤 Nhâ
 - Khi Worker đã tham gia, **mọi thành viên dự án** giao việc trực tiếp cho Worker, **trong phạm vi dự án đó**.
 - **Tài liệu Mật mặc định không dùng** cho việc trong dự án, trừ khi người phụ trách Worker bật **"Cho phép dùng tài liệu Mật trong dự án này"** (ghi nhật ký).
 
-### 8.5 Phòng điều hành, Nhân sự & Worker, Báo cáo
+### 8.5 Dashboard, Báo cáo
 
 | Màn | Nội dung | Phạm vi dữ liệu |
 |---|---|---|
-| **Phòng điều hành** | Dự án đang chạy, việc trễ hạn, việc thiếu báo cáo, Worker đang chạy, việc chờ nghiệm thu | Theo §12: người dùng thường thấy việc của mình; quản lý thấy phạm vi quản lý; Admin thấy toàn công ty |
-| **Nhân sự & Worker** | Khối lượng việc của từng người, các Worker người đó phụ trách | Như trên |
+| **Dashboard** (trước: Phòng điều hành) | Chỉ số và ngưỡng do Admin cấu hình (tài liệu Admin §24.3). Mặc định: dự án đang chạy, việc trễ hạn, việc thiếu báo cáo, Worker đang chạy, việc chờ nghiệm thu | Theo §12: người dùng thường thấy việc của mình; quản lý thấy phạm vi quản lý; Admin thấy toàn công ty |
+| ~~Nhân sự & Worker~~ | **Bỏ hẳn** (v2.0): không có màn, không có số liệu riêng. Quan hệ người ↔ Worker xem ở Sơ đồ (§21.6) | — |
 | **Báo cáo** | Dòng thời gian báo cáo tiến độ; lọc theo người, Worker, dự án, khoảng ngày; xuất CSV | Như trên |
 
 ### 8.6 Điều phối: việc đang vướng
@@ -410,7 +404,7 @@ Giữ nguyên tinh thần của bản demo: **không việc nào được nằm 
 
 ---
 
-## 9. Bốn đường giao việc và Yêu cầu sang phòng khác
+## 9. Bốn đường giao việc và Yêu cầu liên phòng
 
 ### 9.1 Bốn đường, một quy tắc
 
@@ -599,7 +593,7 @@ Cấu hình **cái gì cần duyệt** và **ai duyệt** nằm ở Quản trị
 | Hộp thư cá nhân | Kết nối, ngắt kết nối; cấp quyền đọc/soạn nháp/gửi cho Worker mình dùng trực tiếp (tài liệu Admin §14) |
 | Thông báo | Bật/tắt từng loại, từng kênh (§14) |
 | Giao diện | Sáng/tối (dùng lại `theme.js`), ngôn ngữ |
-| Sử dụng của tôi | Số lượt chat, việc, chi phí tháng này của chính mình |
+| Mức sử dụng (trước: "Mức sử dụng" (cá nhân)) | Số lượt chat, việc, chi phí tháng này của chính mình |
 
 ---
 
@@ -754,9 +748,189 @@ Nằm dưới `tenantabc.{BASE_DOMAIN}/api/v1/`, theo quy ước tài liệu Adm
 | Lộ tài liệu Mật qua câu trả lời của Worker cho phòng khác | **Cao** | Lọc ngay ở truy vấn Qdrant, không dựa vào lời dặn trong prompt; cờ `confidential_allowed` ghi cứng trên công việc; kết quả "chạy với quyền bộ phận" phải qua người phụ trách duyệt chuyển |
 | Quyền ra lệnh Orchestrator bị cấp tràn lan, biến chính sách nhận việc thành vô nghĩa | Trung bình | Quyền cấp từng người, có nhật ký; Quản trị › Người dùng hiển thị rõ danh sách người đang có quyền; người phụ trách Worker luôn được báo khi có việc từ Orchestrator |
 | Người dùng tưởng hội thoại hoàn toàn riêng tư | Trung bình | Ghi rõ trong màn chào lần đầu và ở chân khung chat: "Quản trị viên công ty có thể xem hội thoại khi cần; mọi lần xem đều được ghi lại" |
-| Việc của Worker bị bỏ quên ở trạng thái Chờ nghiệm thu | Trung bình | Nhắc sau 1 ngày; hiện trên trang Hôm nay và Phòng điều hành |
+| Việc của Worker bị bỏ quên ở trạng thái Chờ nghiệm thu | Trung bình | Nhắc sau 1 ngày; hiện trên trang Hôm nay và Dashboard |
 | "Tự nhận và báo" làm Worker phòng khác quá tải | Trung bình | Ngân sách ngày của Worker vẫn áp dụng; người phụ trách tạm dừng hoặc trả lại được; báo cáo chi phí theo bộ phận người yêu cầu cho thấy ai đang dùng nhiều |
 
 ---
 
-*Tài liệu đi cặp với `ADMIN_PORTAL_DESIGN.md`. Các thay đổi kéo theo ở tài liệu Admin (quyền ra lệnh Orchestrator, chính sách nhận việc, cờ Mật, đọc hội thoại, chặn phiên hỗ trợ đọc hội thoại, đường dẫn Workspace) được cập nhật cùng lúc.*
+## 21. Cập nhật theo thiết kế giao diện (v2.0 · 11/2026)
+
+> Chương này gom mọi điều chỉnh **chức năng và logic** của Workspace phát sinh trong lúc thiết kế giao diện (board 52–145 trên canvas). Chỗ nào ở các chương trước mâu thuẫn với chương này thì **chương này là bản chốt**; các chương trước đã được sửa tại chỗ ở những điểm chính. Logic dùng chung với Admin và Console (bộ phận, quan hệ người–Worker, Rule toàn công ty, quy tắc duyệt, trạng thái cấu hình được, kênh chat) xem **tài liệu Admin §24.0**.
+
+### 21.1 Điều hướng
+
+**Thanh bên trái (thứ tự chốt):** Hôm nay · Orchestrator (nếu có quyền) · Worker · Hội thoại · **Chat Social** (mới) · Công việc · **Yêu cầu liên phòng** · Phê duyệt · Kết quả · Sơ đồ — rồi nhóm dưới: Thông báo · Tài khoản.
+
+| Thay đổi | Chi tiết |
+|---|---|
+| "Yêu cầu" → **"Yêu cầu liên phòng"** | Phân biệt với *Phiếu yêu cầu*: **Yêu cầu liên phòng** = người dùng gửi việc tới Worker của **phòng khác** (đường ④, §9), Worker tự nhận và báo người phụ trách. **Phiếu yêu cầu** = phiếu trong một **dự án**, gom nhiều Công việc (tab trong Công việc). Hai thứ khác nhau, giữ hai tên khác nhau |
+| Tab Công việc | Thứ tự: **Dashboard** (đổi tên từ "Phòng điều hành") · **Dự án** · Phiếu yêu cầu · Công việc · Điều phối · Báo cáo. Dự án là tab, **không** là mục menu riêng |
+| "Nhân sự & Worker" | **Bỏ hẳn**: không tab, không mục menu, không màn riêng; board thiết kế đã xoá |
+| Nút quay lại | Mọi trang chi tiết có nút về danh sách: "← Danh bạ Worker" (hồ sơ Worker 3 mức và Gửi yêu cầu), "← Danh sách dự án", "← Danh sách công việc" |
+| Chat không chuyển trang | Bấm "Chat" ở Danh bạ / Hôm nay / Hồ sơ Worker mở **ngăn chat trượt từ phải, rộng 2/3 màn hình** (board 83), tiêu đề và ô nhập cố định, có "Mở toàn màn hình" |
+
+### 21.2 Chat Social (mục mới, board 140, 141)
+
+**Mục đích:** một hộp thư chung cho tin nhắn **khách hàng** từ các kênh social đã kết nối (Zalo OA, Facebook Messenger, Webchat, WhatsApp…). Worker được giao **tự trả lời**; nhân viên theo dõi và **Dừng tay** khi cần tự trả lời. Khác với *Hội thoại* (§7) là trò chuyện nội bộ giữa người dùng và Worker.
+
+**Bố cục 3 cột** + thanh chỉ số (đang mở, chưa đọc, Worker đang trả lời, nhân viên đang trả lời, thời gian phản hồi trung bình) + nút "⚙ Kênh kết nối" (mở **Admin › Chat Social**, chỉ người có quyền Quản lý kênh). Chat Social **luôn có** trên thanh menu của mọi người dùng; người chưa được cấp kênh nào thấy trạng thái trống kèm hướng dẫn liên hệ quản trị viên.
+
+| Cột | Nội dung |
+|---|---|
+| Trái — danh sách cuộc chat | Ô tìm (tên, SĐT, nội dung). **Ô chọn Kênh** (mặc định **Tất cả**, kèm số lượng từng kênh). **Ô chọn Trạng thái** (mặc định **Tất cả** · Chưa đọc · Worker đang trả lời · Nhân viên đang trả lời · Đã đóng). **Ô chọn Phụ trách** (tất cả · của tôi · từng người · từng Worker · chưa giao). Mỗi dòng: avatar + icon kênh, tên khách, tin cuối, thời gian, số chưa đọc, nhãn người đang phụ trách (🤖 Worker / 👤 nhân viên / Đã đóng) |
+| Giữa — khung chat | Đầu: tên khách, kênh, ô **Phụ trách** (đổi người / Worker), nút Đóng. **Thanh trạng thái phụ trách** (xem dưới). Tin nhắn: khách bên trái, Worker (nền tím, nhãn 🤖) và nhân viên (nền xanh lime, nhãn 👤) bên phải; ảnh / tệp hiển thị trực tiếp. Ô soạn: **gửi hình / tệp**, **⚡ trả lời nhanh** (gõ `/` để tìm mẫu), **🏷 gắn tag**, **😊 emoji**, Gửi |
+| Phải — khách hàng | SĐT, khu vực, đơn gần nhất, **tag** (＋ Tag), Worker phụ trách (kênh nó trả lời, số cuộc chat hôm nay, tỉ lệ tự xử lý), **quy tắc chuyển người** (vd. khách hỏi giá sỉ, khiếu nại, đổi trả) |
+
+**Hai trạng thái phụ trách một cuộc chat:**
+
+| Trạng thái | Hiển thị | Ô soạn | Chuyển |
+|---|---|---|---|
+| **Worker đang trả lời** | Thanh tím "CSKH Agent đang tự trả lời cuộc chat này", nút **✋ Dừng tay** | Khoá (gợi ý bấm Dừng tay) | Dừng tay → nhân viên |
+| **Nhân viên đang trả lời** | Thanh vàng "Bạn đang trả lời · Worker tạm dừng ở cuộc chat này và chỉ gợi ý", nút **🤖 Trả lại cho Worker**; dòng hệ thống "X đã dừng tay lúc HH:MM" | Mở; có ô **🤖 Gợi ý** của Worker (bấm "Dùng" để chèn) | Trả lại → Worker |
+
+**Quy định:**
+- Dừng tay chỉ áp cho **một cuộc chat**, không tắt Worker ở kênh. Ai dừng tay thì thành người phụ trách cuộc chat đó.
+- Worker **tự chuyển người** (và báo người phụ trách kênh) khi chạm quy tắc chuyển người, khi chạm Rule, hoặc khi hành động cần duyệt theo **Quy tắc duyệt** (vd. gửi ZNS hàng loạt).
+- Không trả lời trong N phút sau khi dừng tay → nhắc người đang phụ trách; quá ngưỡng → báo Điều phối.
+- Trả lời nhanh lấy từ danh mục mẫu của công ty (Admin quản lý); tag khách dùng chung danh mục tag khách hàng.
+- Rule, ngân sách ngày của Worker và Ví credit áp dụng đầy đủ cho phần Worker tự trả lời.
+- **Quyền xem cuộc chat khách hàng** do Admin cấp **theo từng kênh** ở Admin › Chat Social (Admin §24.17), 4 mức: Chỉ xem · Xem & trả lời · Gán phụ trách · Quản lý kênh. Người dùng chỉ thấy cuộc chat (và bộ lọc kênh) của kênh mình được cấp. Quy tắc riêng tư U5 của Hội thoại nội bộ không áp cho Chat Social. Kết nối và cấu hình kênh (trang Zalo OA / Fanpage / Webchat / WhatsApp, giờ Worker trả lời, điều kiện chuyển người, lời chào) cũng ở Admin › Chat Social.
+
+### 21.3 Orchestrator (board 52, 53, 91)
+
+Khung ra lệnh theo tone chung: icon 🧭, "Orchestrator — Điều phối trưởng", nhãn **Mô hình** và **Chế độ lập kế hoạch**, ô lệnh + nút **Giao việc ⏎**, chip **Gợi ý lệnh**, dòng **Lệnh vừa gửi**.
+
+**Luồng mới (thay §6.3):**
+
+```
+1. Gõ lệnh + (tuỳ chọn) chọn NGỮ CẢNH LIÊN QUAN:
+   [📁 Dự án ▾]  [🎫 Phiếu yêu cầu ▾]  [☑ Công việc liên quan ▾]   → hiện thành chip ✕
+2. Giao việc → LUÔN ra màn KẾ HOẠCH (chưa chạy gì), dù có chọn ngữ cảnh hay không
+   Ngữ cảnh: 📁 Khuyến mãi T12 · 🎫 PYC-0412 · ☑ Chốt bảng giá KM
+   ☑ #  Worker            Việc                         Hạn    Credit  Trạng thái        Thao tác
+   ☑ 1  📱 Social Agent    Viết 7 bài fanpage           05/12  ~6.000  ✔ Sẵn sàng        [✎ Sửa] [⏸ Dừng]
+   ☑ 2  💼 Sales Agent     Email 120 khách cũ ✋ duyệt   06/12  ~7.000  ⏸ Đã dừng · sửa   [▶ Chạy lại]
+        └ Sửa tại chỗ: Giao cho (Worker / người) · Đối tượng · Hạn · Chạy sau · Đầu bài
+          [Huỷ sửa] [Bỏ việc này] [✔ Lưu & duyệt việc này]
+   ☑ 3  ⚖️ Legal Agent     Rà thể lệ khuyến mãi          04/12  ~5.000  ✔ Sẵn sàng
+   Người nghiệm thu [▾]   Báo cáo tổng hợp [Khi xong tất cả ▾]   Trần ngân sách [18.000 credit ▾]
+   [Huỷ kế hoạch]   [Duyệt N việc sẵn sàng]   [✔ Duyệt chạy toàn bộ]
+3. Duyệt → tạo Công việc (nguồn = orchestrator), gắn vào dự án / phiếu đã chọn; chạy theo phụ thuộc
+4. Theo dõi trên màn Orchestrator (board 53); xong thì gửi BÁO CÁO TỔNG HỢP
+```
+
+| Hạng mục | Quy định |
+|---|---|
+| Ngữ cảnh | Không bắt buộc. Orchestrator đọc mục tiêu, tài liệu và tiến độ của dự án / phiếu / công việc đã chọn để chọn Worker và viết đầu bài; việc mới **tự gắn** vào dự án / phiếu đó. Chỉ chọn được mục người ra lệnh có quyền xem |
+| Duyệt chạy toàn bộ | Chạy mọi việc đang tick và ở trạng thái Sẵn sàng |
+| Dừng một việc | Việc chuyển "Đã dừng · đang sửa", mở form sửa ngay tại dòng; **các việc khác vẫn duyệt được** ("Duyệt N việc sẵn sàng"). Việc phụ thuộc vào việc đang dừng sẽ chờ |
+| Lưu & duyệt việc này | Duyệt riêng việc vừa sửa |
+| Bỏ việc này | Loại khỏi kế hoạch (ghi lý do vào nhật ký kế hoạch) |
+| Trần ngân sách | Áp cho cả kế hoạch; chạm trần thì dừng các việc chưa chạy và báo người ra lệnh |
+| Không có Worker phù hợp / vì sao chạy mức "Mở" | Giữ nguyên quy định §6.2 và §6.3; thông tin gói vào **ghi chú dưới bảng kế hoạch**, không còn khối riêng bên phải |
+
+### 21.4 Danh bạ & Hồ sơ Worker
+
+- **Danh bạ (board 54, 142):** nút **▦ Lưới / ☰ Danh sách**; dạng danh sách: Worker, bộ phận, người phụ trách, mức của tôi, trạng thái, việc đang làm, thao tác (Chat / Gửi yêu cầu / Xem hồ sơ).
+- **Hồ sơ Worker (thay khối ở §5.4):**
+  - **Tri thức:** danh sách mở ra được, "12 tài liệu · 9 xem được tên · 3 🔒 Mật": hiện **tên + phiên bản + ngày cập nhật** của tài liệu **không Mật**; tài liệu Mật gộp một dòng, ẩn tên. Không hiện nội dung.
+  - **Đang làm:** danh sách "N việc đang thực hiện · M trong hàng chờ": tên việc (bấm mở), nguồn và người giao (dự án / yêu cầu liên phòng / Orchestrator), trạng thái, tiến độ; việc trong hàng chờ ghi chờ sau việc nào. **Chỉ hiện việc người xem có quyền xem**; việc khác chỉ hiện số lượng.
+  - Mở từ hội thoại thì là **modal chỉ đọc** (board 84) với "Đóng" và "＋ Giao việc".
+
+### 21.5 Hội thoại
+
+| Thay đổi | Chi tiết |
+|---|---|
+| Khung chat cố định | Trang cao bằng màn hình; tiêu đề và ô nhập đứng yên; chỉ vùng tin nhắn cuộn; danh sách bên trái cuộn riêng |
+| Danh sách hội thoại | Tên Worker hiện dưới tên hội thoại |
+| ＋ Hội thoại mới | Modal **Chọn người trò chuyện** (board 86): ô tìm; **Worker** (mức Trực tiếp; Worker mức Qua yêu cầu hiện mờ kèm gợi ý "Gửi yêu cầu") và **Nhân sự nội bộ** (kèm trạng thái trực tuyến) |
+| Tạo công việc từ hội thoại | Modal ngay trên màn chat (board 85), không chuyển tab |
+| Icon Worker | Mở modal hồ sơ Worker (board 84) |
+| Trạng thái chat | Worker đang viết (có nút dừng); Worker tạm dừng (ô nhập khoá, hiện lý do và người phụ trách) |
+| 👎 Góp ý câu trả lời | Modal: lý do (sai thông tin / thiếu nguồn / không đúng quy trình / văn phong / khác) + góp ý; gửi tới người phụ trách Worker để cải thiện |
+| Quản lý hội thoại | Đổi tên · Lưu trữ (mở lại được) · Xoá |
+
+### 21.6 Sơ đồ tổ chức › Người dùng ↔ Worker (board 78, 143, 145)
+
+Thay ma trận (hàng = người, cột = Worker) vì không hiển thị được khi có 50+ Worker. Mục tiêu chính: **làm rõ ai quản lý Worker nào**.
+
+- **3 thẻ chú giải:** 👑 **Phụ trách (quản lý)** — người chịu trách nhiệm Worker: cấu hình, duyệt việc ra ngoài, nhận cảnh báo; **mỗi Worker đúng 1 người** · ✔ **Dùng trực tiếp** — chat và giao việc thẳng · ✉ **Qua yêu cầu / 👁 Chỉ xem**.
+- Nút chuyển **Theo người dùng / Theo Worker**; lọc bộ phận, loại quan hệ (vd. chỉ người phụ trách), ô tìm người hoặc Worker.
+- **Theo người dùng:** gom theo bộ phận (khối thu gọn được, "＋ n người khác"); mỗi dòng: người (vai trò) · **Worker họ phụ trách** (chip đen 👑) · Worker dùng trực tiếp · số Worker chỉ gửi yêu cầu được.
+- **Theo Worker:** mỗi dòng: Worker · bộ phận · **người phụ trách (quản lý)** · người dùng trực tiếp (avatar + số) · nhận yêu cầu từ phòng nào · ai chỉ xem; phân trang.
+- Workspace chỉ xem; sửa ở Admin › Sơ đồ tổ chức (Admin §24.10).
+
+### 21.7 Công việc, Dự án, Phiếu
+
+| Màn | Thay đổi |
+|---|---|
+| Dashboard | Đổi tên từ "Phòng điều hành". Chỉ số, ngưỡng (trễ hạn, thiếu báo cáo) và trạng thái **do Admin cấu hình** (Admin §24.3) |
+| Trạng thái (§8.2) | Danh sách trạng thái, màu, nhóm và chuyển trạng thái được phép đọc từ cấu hình Admin; Workspace chỉ hiện nút chuyển hợp lệ, trạng thái "bắt buộc lý do" mở ô lý do |
+| Phiếu yêu cầu | Bấm mã phiếu (▶) **sổ ngay** danh sách công việc trong phiếu (tên, người thực hiện, trạng thái, tiến độ, hạn) + "Mở chi tiết phiếu →". Trang **Chi tiết phiếu** (board 98): tiến độ cuộn lên từ công việc, người xử lý, hạn, công việc trong phiếu, Sửa phiếu, ＋ Công việc. Modal **Tạo phiếu** (tiêu đề, loại, ưu tiên, hạn, người xử lý: người hoặc Worker đã tham gia dự án) |
+| Chi tiết dự án | "← Danh sách dự án"; modal Thêm người (vai trò trong dự án), Mời Worker (báo người phụ trách Worker), Sửa dự án (đơn vị chủ trì, PM, hạn, trạng thái) |
+| Người phụ trách Worker khi Worker được mời vào dự án | Thông báo + modal: lời mời tự chấp nhận; công tắc **"Cho phép dùng tài liệu Mật trong dự án này"** (mặc định tắt); có thể **rút Worker** khỏi dự án kèm lý do |
+| Chi tiết công việc | "← Danh sách công việc"; trạng thái chờ duyệt hiện **người đang giữ, hạn duyệt và hậu quả quá hạn**; modal **Báo cáo tiến độ** (%, phút làm, ghi chú, tệp ≤ 20 MB); **Tạm dừng / Huỷ việc** (lý do bắt buộc); **Trả về làm lại** khi nghiệm thu chưa đạt (góp ý → Worker tạo phiên bản kết quả mới, giữ bản cũ để so sánh) |
+
+### 21.8 Điều phối, Phê duyệt, Yêu cầu liên phòng, Kết quả
+
+| Màn | Thao tác (modal) |
+|---|---|
+| Điều phối | Lọc theo lý do vướng (lỗi chạy, hết ngân sách, bị Rule chặn, cần tài liệu Mật, thiếu thông tin). **Đổi người thực hiện** (nhân sự hoặc Worker khác bạn được giao trực tiếp) · **Sửa đầu bài rồi chạy lại** (đầu bài cũ giữ trong lịch sử) · **Đóng việc kèm lý do** (Không đạt / Đã xử lý ngoài hệ thống) |
+| Tài liệu Mật (§11.3) | Người phụ trách chạy lại với quyền bộ phận → **Xem trước kết quả trước khi chuyển** (vùng số liệu Mật tô vàng) → **Sửa / che số liệu** (che, làm tròn, về bản gốc; ghi nhật ký) → Duyệt chuyển bản đã che; hoặc **Trả lời "không cung cấp được"** kèm lý do (việc đóng với kết quả đó) |
+| Phê duyệt | Duyệt · **Sửa rồi duyệt** (sửa tiêu đề, người nhận, nội dung) · **Từ chối kèm góp ý** (lý do + góp ý cho Worker; việc vào Điều phối "Bị từ chối phê duyệt"). Quy tắc nào phải duyệt, ai duyệt, hạn và xử lý quá hạn lấy từ **Quy tắc duyệt** (Admin §24.5); người được uỷ quyền duyệt thay thấy mục của người uỷ quyền |
+| Yêu cầu liên phòng | Hai tab: Tôi đã gửi · Gửi tới Worker tôi phụ trách. Người phụ trách: **Tạm dừng yêu cầu** (lý do) · **Trả lại yêu cầu** (lý do, người gửi được báo, trạng thái "Đã trả lại"). Chi phí tính cho bộ phận người gửi |
+| Kết quả | Xem kết quả: so sánh 2 phiên bản (đánh dấu thêm / bỏ), tải bản bất kỳ. **Đề xuất đưa vào Kho**: tên mục Knowledge, kho đích (bộ phận / ngành dọc), gợi ý loại tài liệu và trạng thái (Đang dùng / Lưu trữ) → tạo bản nháp trong Kho cho người quản lý duyệt |
+
+### 21.9 Đăng nhập, tài khoản, trạng thái tổ chức
+
+| Màn | Quy định |
+|---|---|
+| Quên mật khẩu | Nhập email công việc; luôn báo "đã gửi" (không lộ email có tồn tại không); link dùng 1 lần, hết hạn 30 phút; gửi lại sau 60 giây |
+| Đổi mật khẩu lần đầu | Bắt buộc khi đăng nhập bằng mật khẩu tạm; ≥ 10 ký tự, có chữ và số, khác mật khẩu tạm; đổi xong đăng xuất các phiên khác |
+| Nhận lời mời | Hiện bộ phận, vai trò, người quản lý (chỉ đọc); điền họ tên, chức danh, mật khẩu, đồng ý quy định; lời mời **hết hạn sau 72 giờ**, dùng một lần (thống nhất với Admin §24.11); hết hạn thì liên hệ người mời để gửi lại |
+| Tổ chức quá hạn thanh toán | Banner trên Hôm nay; Worker vẫn đọc được lịch sử, chạy việc mới tuỳ chính sách ân hạn của gói |
+| Tổ chức tạm ngưng / vô hiệu | Tạm ngưng: banner, không chạy việc mới. Vô hiệu: màn "Tổ chức này đã bị vô hiệu hoá", không đăng nhập được |
+| Vai trò `viewer` | Thấy Hôm nay, Sơ đồ, Báo cáo; không có nút giao việc, chat |
+| Tài khoản (board 80) | 6 tab: Hồ sơ (bộ phận, vai trò chỉ quản trị viên đổi) · Bảo mật (đổi mật khẩu, MFA, phiên đăng nhập) · Hộp thư cá nhân · Thông báo · Giao diện · **Mức sử dụng** (đổi tên từ "Sử dụng của tôi") |
+| Thông báo | Gộp thông báo cùng loại trong 15 phút; lọc Tất cả / Chưa đọc / Cần tôi xử lý / Worker tôi phụ trách; cài đặt thông báo |
+| Di động | Hôm nay, Chat, Nghiệm thu trên điện thoại (bố cục 1 cột, thao tác nghiệm thu nhanh) |
+
+### 21.10 Mô hình dữ liệu bổ sung
+
+```sql
+-- Chat Social
+CREATE TABLE social_channels (id uuid PRIMARY KEY, tenant_id uuid NOT NULL, integration_id uuid,
+  kind text CHECK (kind IN ('zalo_oa','facebook','webchat','whatsapp')), name text,
+  auto_reply_worker_id uuid, handoff_rules jsonb, enabled bool);
+CREATE TABLE social_contacts (id uuid PRIMARY KEY, tenant_id uuid, channel_id uuid, external_id text,
+  name text, phone text, attrs jsonb, tags text[], UNIQUE (channel_id, external_id));
+CREATE TABLE social_conversations (id uuid PRIMARY KEY, tenant_id uuid, channel_id uuid, contact_id uuid,
+  handler_kind text CHECK (handler_kind IN ('worker','user')), handler_id uuid,
+  status text CHECK (status IN ('open','closed')), unread int DEFAULT 0, last_message_at timestamptz,
+  taken_over_by uuid, taken_over_at timestamptz);
+CREATE TABLE social_messages (id bigserial PRIMARY KEY, conversation_id uuid, direction text CHECK (direction IN ('in','out')),
+  author_kind text CHECK (author_kind IN ('contact','worker','user','system')), author_id uuid,
+  body text, attachments jsonb, external_id text, sent_at timestamptz);
+CREATE TABLE quick_replies (id uuid PRIMARY KEY, tenant_id uuid, shortcut text, body text, scope jsonb);
+
+-- Orchestrator: ngữ cảnh và trạng thái từng việc trong kế hoạch
+-- orchestrator_plans thêm: context jsonb ({project_id, ticket_id, related_task_ids[]}), budget_cap bigint,
+--   reviewer_id uuid, report_mode text
+CREATE TABLE orchestrator_plan_items (plan_id uuid, seq int, worker_id uuid, assignee_user_id uuid,
+  brief text, audience text, due_at timestamptz, depends_on int[], est_credit bigint,
+  state text CHECK (state IN ('ready','paused','approved','dropped')), task_id uuid,
+  PRIMARY KEY (plan_id, seq));
+```
+
+### 21.11 API bổ sung (Workspace)
+
+| Nhóm | Endpoint |
+|---|---|
+| Chat Social | `GET /social/conversations?channel=&status=&handler=` · `GET/POST /social/conversations/:id/messages` · `POST /social/conversations/:id/takeover` (Dừng tay) · `POST /social/conversations/:id/release` (Trả lại cho Worker) · `PATCH /social/conversations/:id` (phụ trách, đóng, tag) · `GET /social/quick-replies` |
+| Orchestrator | `POST /orchestrator/plans` (lệnh + context) · `PATCH /orchestrator/plans/:id/items/:seq` (sửa / dừng / bỏ) · `POST /orchestrator/plans/:id/approve` (`{items:'all'|[seq…]}`) |
+| Sơ đồ | `GET /org/relations?view=user|worker&unit=&kind=&q=&page=` |
+| Công việc | `GET /statuses?entity=` (đọc cấu hình Admin) · `POST /tasks/:id/rework` · `POST /tasks/:id/progress` |
+
+---
+
+*Tài liệu đi cặp với `ADMIN_PORTAL_DESIGN.md` (v2.0, gồm cả Console SuperAdmin §22 và phần cập nhật theo thiết kế §24). Các thay đổi kéo theo ở tài liệu Admin (quyền ra lệnh Orchestrator, chính sách nhận việc, cờ Mật, đọc hội thoại, chặn phiên hỗ trợ đọc hội thoại, đường dẫn Workspace) được cập nhật cùng lúc.*
