@@ -1,8 +1,8 @@
 # AI OS Admin Portal — Tài liệu mô tả & thiết kế (bản production)
 
-> **Phiên bản:** v2.0 (02/11/2026) — cập nhật theo bản thiết kế giao diện Admin · Console · Workspace (xem [§24](#24-cập-nhật-theo-thiết-kế-giao-diện-v20--112026)). Kế thừa v1.2 **đã chốt toàn bộ**: D1–D9, Q1–Q7, 4 quyết định về Console và 7 yêu cầu bổ sung (xem [§0.2](#02-quyết-định-đã-chốt)). Không còn câu hỏi mở chặn Giai đoạn 0.
+> **Phiên bản:** v2.1 (03/11/2026) — gộp **v2.0** (cập nhật theo thiết kế giao diện, [§24](#24-cập-nhật-theo-thiết-kế-giao-diện-v20--112026)) với **v1.4** (động cơ chạy Worker, ví theo lô, RLS, lộ trình 0a–1b) và áp các quyết định ngày 03/11 ([§25](#25-quyết-định-03112026-v21)). Đã chốt toàn bộ: D1–D9, Q1–Q7, C1–C4, U1–U13, M1–M12, R1. Việc **chưa làm có chủ đích**: pháp lý khi thu tiền (PL1). Thứ tự ưu tiên khi đọc: **§25 → §24 → các chương trước**.
 > **Phạm vi:** thiết kế, chưa viết code.
-> **Lịch sử:** v0.1 là bản khảo sát và đề xuất. v1.0 bỏ Hermes và Mem0, thêm subdomain theo tenant, cơ cấu tổ chức phức hợp theo ngành dọc, Kho KWSR, thanh toán và ví token, email của tenant, và đưa 11 hạng mục bổ sung vào phạm vi. v1.1 chốt Q1–Q7: **PostgreSQL thay Firebase**, thêm lược đồ CSDL ([§7.7](#77-lưu-trữ-trên-postgresql)) và cấu hình server ([§3.1](#31-thành-phần-chạy-trên-server-riêng)). v1.2 thêm đặc tả đầy đủ **Console SuperAdmin** ([§22](#22-console-superadmin-consoleai-osvn)) và sơ đồ màn hình quản trị tenant ([§23](#23-sơ-đồ-màn-hình-quản-trị-tenant-tenantabcai-osvn)). **v2.0** gộp bản Admin và bản bổ sung Console thành một tài liệu, và đưa mọi điều chỉnh chức năng / logic phát sinh khi thiết kế giao diện vào [§24](#24-cập-nhật-theo-thiết-kế-giao-diện-v20--112026): logic thống nhất 3 khu vực, Cài đặt trạng thái, Quy tắc duyệt, danh mục Kho (loại tài liệu, loại bước, thẻ), Global Rule đồng bộ, Mô hình AI, Sửa Worker một trang, Người dùng theo sơ đồ tổ chức, đổi gói và chứng từ chuyển khoản.
+> **Lịch sử:** v0.1 là bản khảo sát và đề xuất. v1.0 bỏ Hermes và Mem0, thêm subdomain theo tenant, cơ cấu tổ chức phức hợp theo ngành dọc, Kho KWSR, thanh toán và ví token, email của tenant, và đưa 11 hạng mục bổ sung vào phạm vi. v1.1 chốt Q1–Q7: **PostgreSQL thay Firebase**, thêm lược đồ CSDL ([§7.7](#77-lưu-trữ-trên-postgresql)) và cấu hình server ([§3.1](#31-thành-phần-chạy-trên-server-riêng)). v1.2 thêm đặc tả đầy đủ **Console SuperAdmin** ([§22](#22-console-superadmin-consoleai-osvn)) và sơ đồ màn hình quản trị tenant ([§23](#23-sơ-đồ-màn-hình-quản-trị-tenant-tenantabcai-osvn)). **v2.0** gộp bản Admin và bản bổ sung Console thành một tài liệu, và đưa mọi điều chỉnh chức năng / logic phát sinh khi thiết kế giao diện vào [§24](#24-cập-nhật-theo-thiết-kế-giao-diện-v20--112026): logic thống nhất 3 khu vực, Cài đặt trạng thái, Quy tắc duyệt, danh mục Kho (loại tài liệu, loại bước, thẻ), Global Rule đồng bộ, Mô hình AI, Sửa Worker một trang, Người dùng theo sơ đồ tổ chức, đổi gói và chứng từ chuyển khoản. **v1.4** (31/10, nhánh review): §9.5 Động cơ chạy Worker, ví credit theo lô, ba role CSDL và RLS cho nội dung riêng tư, U13 (Worker không nhận lệnh từ Orchestrator), quy ước frontend/CI, lộ trình 0a/0b/1a/1b. **v2.1** gộp hai nhánh; bỏ hẳn bản demo (R1: xây mới, không di trú); chốt Chat Social chỉ cho Worker gắn cờ và chỉ trả lời từ Knowledge được gán; Telegram Bot ra lệnh Orchestrator; Rule không có bước đồng bộ; chuỗi công việc tự chạy tiếp; sửa lược đồ cho đủ `tenant_id` và RLS.
 
 ---
 
@@ -10,7 +10,7 @@
 
 ### 0.1 Bức tranh chung
 
-- **Hiện trạng:** AI OS gồm một dashboard tĩnh (`website/`) và một proxy Node chạy trên máy người dùng (`server/`). Hệ thống chưa có đăng nhập, chưa có khái niệm khách hàng hay gói. Cấu hình Worker nằm cứng trong mã nguồn. Worker chạy qua Hermes, OpenRouter hoặc Genful. Đây vẫn là bản demo cho một công ty.
+- **Hiện trạng:** bản demo hiện tại (dashboard tĩnh + proxy Node chạy trên máy người dùng) chỉ dùng để thử ý tưởng cho một công ty. Production **xây mới theo kế hoạch** trong tài liệu này; không dùng lại mã, module nghiệp vụ hay dữ liệu của bản demo (R1, §2).
 - **Mục tiêu:** một nền tảng nhiều khách hàng (tenant), chạy trên server riêng. Mỗi khách có subdomain riêng (`tenantabc.ai-os.vn`). Có một **Console SuperAdmin** cho nhà cung cấp (`console.ai-os.vn`, §22) và một **Admin Portal** cho từng khách do Admin của tenant tự quản trị (§23).
 - **Bước chuyển cốt lõi:** mọi cấu hình chuyển từ mã nguồn vào cơ sở dữ liệu và gắn với `tenantId`. Mọi tính năng trong tài liệu này đều xây trên bước chuyển đó.
 
@@ -18,7 +18,7 @@
 
 | # | Chủ đề | Quyết định |
 |---|---|---|
-| — | Hermes Agent | **Không dùng.** Gỡ khỏi thiết kế và mã nguồn ([§2.3](#23-danh-mục-gỡ-hermes--mem0)). Worker gọi thẳng API mô hình |
+| — | Hermes Agent | **Không dùng.** Gỡ khỏi thiết kế và mã nguồn ([§2.2](#22-gỡ-bản-demo-khỏi-nhánh-chính-r1)). Worker gọi thẳng API mô hình |
 | D1 | Cấp quản trị | **SuperAdmin** thuộc hệ thống. Mỗi tenant có **Admin** toàn quyền cấu hình trong tenant đó |
 | D2 | Xác thực | **Tự xây**: scrypt, phiên cookie, email |
 | D3 | Tạo Worker | **Chỉ tạo qua giao diện** (trình hướng dẫn). Không có API công khai hay API token để tạo Worker |
@@ -41,6 +41,10 @@
 | C2 | Thông báo cho khách | **Luôn gửi email** cho Admin tenant khi bắt đầu và kết thúc phiên hỗ trợ |
 | C3 | Vai nhân viên hệ thống | v1 **một vai `superadmin`**, chừa cột `platform_role` để tách 4 vai sau (§22.10) |
 | C4 | Thao tác SuperAdmin bị chặn | Giữ nguyên danh sách chặn (§22.8). Với mật khẩu, SuperAdmin **chỉ gửi link đặt lại** cho Admin tenant |
+| U1–U10 | Không gian làm việc của người dùng | Chi tiết ở [`USER_WORKSPACE_DESIGN.md`](USER_WORKSPACE_DESIGN.md) §0.2. Phần ảnh hưởng tới tài liệu này: **chính sách nhận việc** Mở / Theo bộ phận / Hạn chế cho từng Worker (§9.4); **quyền ra lệnh Orchestrator** cấp riêng từng người (§5); **cờ Mật** cho tài liệu Knowledge (§9.3, §15); **chỉ `tenant_admin` xem được hội thoại** của người dùng, có nhật ký; **phiên hỗ trợ không đọc hội thoại** (§22.8) |
+| U13 | Worker nhạy cảm | Mỗi Worker có tuỳ chọn **«Không nhận lệnh từ Orchestrator»** (`accept_from_orchestrator`; mặc định vẫn nhận). Đặt trong trình tạo Worker bước 1 ([§9.4](#94-worker-tạo-sửa-xoá-d3-chỉ-qua-giao-diện)). Worker đặt tắt thì Orchestrator không giao được, kể cả cho người có quyền ra lệnh (tài liệu Workspace §6.2) |
+| R1 | Bản demo | **Xây mới theo kế hoạch.** Mã nguồn, module nghiệp vụ, dữ liệu và cấu hình của bản demo không được dùng lại và không di trú; tài liệu không mô tả lại. Cách gỡ ở [§2.2](#22-gỡ-bản-demo-khỏi-nhánh-chính-r1) |
+| PL1 | Pháp lý khi thu tiền | **Bổ sung sau** (hoá đơn, dữ liệu cá nhân). Chưa chặn GĐ0–GĐ2; phải có trước khi thu tiền thật ở GĐ3 ([§20](#20-việc-cần-chuẩn-bị-song-song-ngoài-code)) |
 
 ### 0.3 Yêu cầu bổ sung đã đưa vào
 
@@ -54,94 +58,66 @@
 | 6 | Màn "Mức sử dụng" hiện **số dư token** của các kết nối cần nạp tiền | [§12](#12-màn-mức-sử-dụng) |
 | 7 | Đồng ý cả 11 hạng mục bổ sung (B1–B11) | [§16](#16-hạng-mục-bổ-sung-b1b11) |
 | 8 | Điều chỉnh chức năng và logic theo bản thiết kế giao diện (11/2026) | [§24](#24-cập-nhật-theo-thiết-kế-giao-diện-v20--112026) |
+| 9 | Quyết định 03/11/2026: Chat Social, Telegram, Rule, ngân sách, thanh toán, phạm vi quản lý, phê duyệt, trạng thái, tài liệu Mật, chuỗi công việc | [§25](#25-quyết-định-03112026-v21) |
 
 ---
 
 ## 1. Thuật ngữ
 
-| Thuật ngữ | Nghĩa | Tên trong code hiện tại |
-|---|---|---|
-| **Platform** | Hệ thống AI OS do bạn vận hành | — |
-| **SuperAdmin** | Quản trị viên của Platform, làm việc trên Console | — |
-| **Tenant** | Một doanh nghiệp mua AI OS, có subdomain riêng | *(chưa có; đang gắn cứng "Giải Pháp An Khang")* |
-| **Plan** (Gói) | Gói tài khoản, quyết định hạn mức | *(chỉ có dòng chữ "Gói AI OS Standard")* |
-| **Subscription** | Thuê bao gói của một tenant theo chu kỳ | — |
-| **Wallet** (Ví credit) | Số dư credit để trả cho token và ảnh khi dùng khoá của Platform | — |
-| **Unit** (Đơn vị) | Tổng công ty, Chi nhánh, Cửa hàng… (cây pháp nhân hoặc địa điểm) | — |
-| **Function** (Ngành dọc) | Chức năng xuyên suốt các đơn vị: Kế toán, Kinh doanh, Nhân sự… | gần với `DEPARTMENTS` |
-| **Department** (Bộ phận) | Giao của **Unit × Function**, ví dụ "Kế toán – Chi nhánh Hà Nội" | `DEPARTMENTS` trong `app.js` |
-| **Worker** | Một AI Agent chuyên môn | `Agent` (`AGENTS`, `agents.config.json`) |
-| **Orchestrator** | Worker điều phối, nhận lệnh rồi giao việc | `Orches Agent` |
-| **KWSR** | Knowledge · Workflow · Skill · Rule | `a.knowledge / workflows / skills / rules` |
-| **Kho KWSR** (Library) | Thư viện mục KWSR dùng chung cho nhiều Worker | — |
-| **Binding** | Liên kết một Worker với một mục trong Kho (theo kho, hoặc đã tinh chỉnh) | — |
-| **Member** | Người dùng của tenant | `staff` trong `work.js` |
-| **Integration** | Kết nối tới nền tảng ngoài | `.env`, `genful.config.json`, `tripx-webpost/config.json` |
-| **Mailbox** | Hộp thư của tenant hoặc của người dùng được kết nối cho Worker | — |
+| Thuật ngữ | Nghĩa |
+|---|---|
+| **Platform** | Hệ thống AI OS do bạn vận hành |
+| **SuperAdmin** | Quản trị viên của Platform, làm việc trên Console |
+| **Tenant** | Một doanh nghiệp mua AI OS, có subdomain riêng |
+| **Plan** (Gói) | Gói tài khoản, quyết định hạn mức |
+| **Subscription** | Thuê bao gói của một tenant theo chu kỳ |
+| **Wallet** (Ví credit) | Số dư credit để trả cho token và ảnh khi dùng khoá của Platform |
+| **Unit** (Đơn vị) | Tổng công ty, Chi nhánh, Cửa hàng… (cây pháp nhân hoặc địa điểm) |
+| **Function** (Ngành dọc) | Chức năng xuyên suốt các đơn vị: Kế toán, Kinh doanh, Nhân sự… |
+| **Department** (Bộ phận) | Giao của **Unit × Function**, ví dụ "Kế toán – Chi nhánh Hà Nội" |
+| **Worker** | Một AI Agent chuyên môn |
+| **Orchestrator** | Worker điều phối, nhận lệnh rồi giao việc |
+| **KWSR** | Knowledge · Workflow · Skill · Rule |
+| **Kho KWSR** (Library) | Thư viện mục KWSR dùng chung cho nhiều Worker |
+| **Binding** | Liên kết một Worker với một mục trong Kho (theo kho, hoặc đã tinh chỉnh) |
+| **Member** | Người dùng của tenant |
+| **Integration** | Kết nối tới nền tảng ngoài |
+| **Mailbox** | Hộp thư của tenant hoặc của người dùng được kết nối cho Worker |
 
 ---
 
-## 2. Đánh giá code hiện tại
+## 2. Hiện trạng và quyết định xây mới
 
-### 2.1 Phần nên tái sử dụng
+### 2.1 Vì sao không phát triển tiếp từ bản demo
 
-| Thành phần | Vị trí | Dùng lại thế nào |
+Bản demo cho thấy ý tưởng (KWSR, sơ đồ tổ chức theo phòng ban, Orchestrator giao việc, "mỗi Agent có đúng một người chịu trách nhiệm") nhưng không đủ nền cho sản phẩm nhiều khách hàng:
+
+| # | Thiếu sót của bản demo | Thiết kế production xử lý ở |
 |---|---|---|
-| Mô hình KWSR và giao diện sửa 4 tầng | `website/js/app.js` (`SECTION_META`, `renderAgentInfo`) | Thành trình soạn mục Kho KWSR và tab KWSR của Worker |
-| Sơ đồ tổ chức | `app.js` (`orgChartHTML`) | Nền cho 3 chế độ xem sơ đồ ở §8.5 |
-| Quy tắc "1 Agent = 1 nhân sự chịu trách nhiệm" | `work.js` (`agentOwners`) | Thành `worker.ownerUserId` |
-| Ghi bản sao đĩa, chỉ ghi bản ghi đổi, hoãn nhịp | `server/db.js` | **Viết lại trên PostgreSQL** (§7.7). Giữ nguyên tắc "lỗi lưu trữ phụ không làm hỏng luồng làm việc" |
-| Gọi OpenRouter | `server/openrouter.js` (`callChatModel`) | Thành runtime chuẩn của Worker |
-| Sinh ảnh Genful và đọc số dư credit | `server/genful.js` (`sinhAnh`, `soDuCredit`) | Provider ảnh; `soDuCredit` dùng cho màn số dư kết nối (§12) |
-| Bộ SKILL.md có sẵn | `marketing/skills/*`, `hr/skills/*`, `sales/skills/*` | Nạp vào **Kho hệ thống** làm mẫu ngành |
+| G1 | Không có xác thực; mọi API mở | §6, §17 |
+| G2 | Proxy chạy trên máy người xem, không có dữ liệu chung | §3 |
+| G3 | Chỉ một công ty, dữ liệu không có `tenant_id` | §3, §7.7 (RLS) |
+| G4 | Cấu hình Worker nằm cứng trong mã | §9.4 (Worker là bản ghi, tạo qua giao diện) |
+| G5 | KWSR là danh sách chữ, không phiên bản, không dùng chung | §9 (Kho KWSR) |
+| G6 | Upload tài liệu và nguồn tri thức chỉ là giao diện mô phỏng | §15 |
+| G7 | Khoá API rải rác trong file cấu hình | §13.3 (két bí mật) |
+| G8 | Không đo sử dụng, không thu tiền | §11, §12 |
+| G9 | Không có động cơ chạy Worker có chốt chặn | §9.5 |
+| G10 | Phụ thuộc Hermes, Mem0, Firebase | Không dùng (§0.2: Hermes; Q1; D8) |
+| G11 | Sơ đồ tổ chức phẳng, không có đơn vị nhiều cấp | §8 |
 
-### 2.2 Khoảng cách phải lấp
+Các ý tưởng trên được giữ ở mức **khái niệm**, mã được viết mới theo §3.2.
 
-| # | Vấn đề hiện tại | Hệ quả khi lên production | Hướng xử lý |
-|---|---|---|---|
-| G1 | **Không có xác thực.** Mọi route `/api/*` trong `server.js` đều mở; chỉ có CORS. | Ai biết địa chỉ đều đọc được CV và kho lead, ghi đè được cấu hình. | §6 + middleware bắt buộc |
-| G2 | **Proxy chạy trên máy người xem** (header Private Network Access trong `server.js`). | Không có dữ liệu chung, không quản lý tập trung được. | Server riêng, cùng origin theo subdomain |
-| G3 | **Một công ty duy nhất**: badge cứng ở `dashboard.html`, `mem0UserId: "aios-company"`, dữ liệu không có tiền tố tenant. | Hai khách sẽ thấy và ghi đè dữ liệu của nhau. | Mọi bản ghi mang `tenantId`; tenant xác định theo subdomain |
-| G4 | **Cấu hình Worker nằm trong code**: `AGENTS` (`app.js:25`), `agents.config.json`, `HERMES_KEY_*`. | Thêm Worker phải sửa code. | Worker là bản ghi, tạo qua giao diện (D3) |
-| G5 | **KWSR lưu dạng `string[]`**, không có id, phiên bản, nguồn gốc. | Không dùng chung, không kế thừa, không audit được. | Kho KWSR + Binding (§9) |
-| G6 | **Upload file và MCP chỉ là giao diện mô phỏng** (`app.js:1284`, `app.js:1670`). | Khách tưởng đã nạp tài liệu nhưng Worker không biết gì. | Pipeline Qdrant thật (§15) |
-| G7 | **Bí mật rải rác**: `.env`, `~/.claude/skills/tripx-webpost/config.json`, `genful.config.json`. | Không có kết nối riêng theo khách; mất máy là mất khoá. | Két bí mật mã hoá (§13.3) |
-| G8 | **Không đo sử dụng, không thu tiền.** | Không bán được theo gói; vòng lặp lỗi có thể đốt hết tiền. | Đo, Ví, thanh toán, ngân sách (§11–12) |
-| G9 | **Dữ liệu nghiệp vụ nằm đĩa local** (`hr/data/`, `marketing/data/`, `data/*.json`). | Không tách được theo tenant. | Lưu theo tenant; đĩa chỉ là cache |
-| G10 | **Phụ thuộc Hermes và Mem0** (mỗi Agent một Profile, một cổng, một key). | Trái quyết định mới; không tạo Worker động được. | Gỡ bỏ (§2.3) |
-| G11 | `server.js` định tuyến bằng chuỗi `if` dài, không middleware. | Thêm khoảng 60 endpoint sẽ dễ sót kiểm quyền. | `router.js` mỏng có middleware |
-| G12 | Dữ liệu mẫu hư cấu trong `work.js` (`seed()`). | Không được lẫn vào production. | Thành script seed cho tenant demo |
-| G13 | **Không có cấu trúc tổ chức nhiều cấp**: `DEPARTMENTS` là danh sách phẳng 6 phòng. | Không biểu diễn được Tổng công ty, Chi nhánh, Cửa hàng. | Unit × Function (§8) |
-| G14 | **Lưu trữ dựa trên Firebase** (`firebase.js`, `db.js`, `firestore.rules`): không có ràng buộc duy nhất, không có giao dịch nhiều bảng cho tiền, trần 20.000 lượt ghi mỗi ngày. | Không đáp ứng được thanh toán, ledger và cây tổ chức. | PostgreSQL (Q1, §7.7); gỡ Firebase (§2.3) |
+### 2.2 Gỡ bản demo khỏi nhánh chính (R1)
 
-### 2.3 Danh mục gỡ Hermes / Mem0 / Firebase
+Làm ở **đầu Giai đoạn 0a**, một commit riêng:
 
-Gỡ ở **đầu Giai đoạn 0**, trong một commit riêng để dễ đối chiếu. Một lưu ý về hành vi: hiện 9 Agent không có `backend` (sales-1, mkt-2, hr-1, fin-1, fin-2, legal-1, cskh-1, cskh-2, mkt-6) trả lời **giả lập (MOCK)** miễn phí. Sau khi gỡ Hermes, các Agent này sẽ gọi **mô hình thật qua OpenRouter và phát sinh chi phí**. Vì vậy cần có ngân sách ngày (§12.4) đi kèm, hoặc tạm để `status: paused` cho tới khi được cấu hình.
+1. Gắn thẻ git `demo-final` vào commit cuối của bản demo, để vẫn dựng lại được bản demo đang chạy ở `workers.ai-os.vn` khi cần đối chiếu.
+2. Xoá khỏi nhánh chính toàn bộ mã và dữ liệu của bản demo: thư mục `website/`, `server/`, các thư mục nghiệp vụ mẫu và dữ liệu đi kèm, cấu hình Firebase, và các tài liệu hướng dẫn của bản demo. Chỉ giữ `docs/` (hai tài liệu thiết kế) và các tài liệu nghiên cứu ý tưởng ban đầu.
+3. Không di trú dữ liệu nào từ bản demo (kể cả dữ liệu trên Firestore nếu có): tenant đầu tiên được tạo mới qua Console (§4.3).
+4. Bản demo ở `workers.ai-os.vn` chạy độc lập cho tới khi bản production thay thế, rồi tắt (§20).
 
-| File | Việc cần làm |
-|---|---|
-| `server/server.js` | Bỏ nhánh Hermes trong `handleChat`, bỏ `MOCK_MODE`, `hermesKeyEnvName`, `CONFIG.hermesHost`. Bỏ `handleKnowledge` (Mem0), thay bằng pipeline Qdrant. Mọi Worker đi qua runtime API |
-| `server/agents.config.json` | Bỏ `hermesHost`, `mem0UserId`, `port`. File chỉ còn dùng làm dữ liệu di trú, sau đó xoá |
-| `server/.env.example` | Bỏ `MOCK_MODE`, `HERMES_KEY_*`, `MEM0_API_KEY`. Thêm `QDRANT_URL`, `QDRANT_API_KEY`, `BASE_DOMAIN`, `VAULT_MASTER_KEY`… |
-| `server/package.json` | Đổi `name`/`description` (`aios-hermes-proxy` → `aios-server`) |
-| `server/README.md`, `server/hr.js`, `server/openrouter.js` | Cập nhật chú thích có nhắc Hermes |
-| `website/js/app.js` | Bỏ `USE_REAL_HERMES`, `fetchHermesReply`, `syncKnowledgeToHermes`. Đổi `HERMES_PROXY_BASE` thành `API_BASE` (cùng origin, mặc định `""`) |
-| `website/js/work.js` | Bỏ thông báo `MOCK_MODE`, `HERMES_KEY_*`, badge "Hermes thật" |
-| `HERMES_INTEGRATION.md` | Xoá (lịch sử vẫn còn trong git) |
-| `hr/README.md`, `marketing/README.md`, `sales/README.md` | Bỏ mục "Cách C (Hermes)" |
-| `TaiLieu_ThietKe_AI_OS.md` | Giữ nguyên (tài liệu phân tích ý tưởng gốc), thêm ghi chú trỏ sang tài liệu này |
-| `server/firebase.js` | Xoá. Thay bằng `server/core/pg.js` (pool kết nối PostgreSQL) |
-| `server/db.js` | Viết lại trên PostgreSQL: `loadWork/saveWork`, `saveArticle`, `saveMedia`, `saveAgents`… giữ chữ ký hàm để `server.js` đổi ít nhất |
-| `server/db.js` (`syncLeads`, `syncRequisition`, `uploadHrFile`) và nơi gọi trong `hr.js`, `sales.js` | Bỏ đường đẩy lên Firestore/Storage; ghi vào bảng và kho file theo tenant |
-| `server/package.json` | Bỏ `firebase-admin`; thêm `pg` (gói ngoài duy nhất cho CSDL, không dùng ORM) |
-| `firebase.json`, `firestore.rules`, `firestore.indexes.json`, `storage.rules`, `FIREBASE_SETUP.md` | Xoá |
-| `server/.env.example` | Bỏ `FIREBASE_*`, `SYNC_PII`; thêm `DATABASE_URL`, `OBJECT_STORE_DIR`, `EMBEDDING_URL` |
-| `.gitignore` | Bỏ các dòng `serviceAccount*.json` (giữ thêm một thời gian nếu máy dev còn file cũ) |
-| `website/js/work.js` | Đổi huy hiệu "☁ Đã đồng bộ Firebase" thành trạng thái lưu của server |
-
-**Dữ liệu đang có trên Firestore** (nếu bạn đã bật `FIREBASE_ENABLED`) được chuyển một lần bằng `scripts/import-firestore.js`: đọc bằng service account hiện có, ghi vào tenant demo. Chạy xong mới gỡ Firebase.
-
-Kênh Discord trước đây đi qua Hermes Gateway. Nếu vẫn cần, Discord sẽ là một **Integration kênh nhắn tin** gốc ở Giai đoạn 4.
+Kho hệ thống (§9.1) và mẫu Worker (B4) được **soạn mới** theo danh mục loại tài liệu, loại bước và thẻ ở §24.7, không nạp từ nội dung mẫu của bản demo.
 
 ---
 
@@ -191,13 +167,14 @@ graph TD
 5. **Bí mật không rời server.** Khi trả về luôn che dạng `sk-…a1b2`.
 6. **Frontend giữ phong cách hiện tại:** HTML + JS thuần, không bước build.
 7. **Đóng gói chạy bằng Docker Compose** trên server riêng (§3.1). Hàng đợi tác vụ nền chạy **ngay trên PostgreSQL** (`SELECT … FOR UPDATE SKIP LOCKED`), không cần thêm Redis.
+8. **Phụ thuộc tối thiểu, nhưng không tự viết giao thức phức tạp.** Mặc định dùng thư viện chuẩn của Node và `pg`; không dùng ORM. Với phần dễ sai về bảo mật hoặc giao thức — IMAP/SMTP, OAuth client, phân tích multipart, TOTP, trích PDF/OCR, tạo PDF — dùng thư viện đã được kiểm chứng. Tiêu chí: còn được bảo trì trong 12 tháng gần nhất, giấy phép dùng thương mại được, ít phụ thuộc bắc cầu, ghim phiên bản. Mỗi thư viện thêm vào ghi một dòng lý do trong `docs/DEPENDENCIES.md`.
 
 ### 3.1 Thành phần chạy trên server riêng
 
 | Dịch vụ (Docker Compose) | Vai trò | Mạng |
 |---|---|---|
 | `caddy` | Reverse proxy, TLS wildcard `*.{BASE_DOMAIN}`, chuyển request theo Host | Mở cổng 80/443 ra Internet — **dịch vụ duy nhất mở ra ngoài** |
-| `aios-server` | Node: API, trang tĩnh, runtime Worker, tác vụ nền | Nội bộ |
+| `aios-server` | Node: API, trang tĩnh, động cơ chạy Worker, tác vụ nền. **v1 chạy một tiến trình** (bộ cộng dồn chi phí ở §11.4 chỉ đúng với một tiến trình; muốn nhân bản phải đổi theo ghi chú ở đó) | Nội bộ |
 | `postgres` (16+) | CSDL chính | Nội bộ, **không** mở cổng ra ngoài |
 | `qdrant` | Kho vector | Nội bộ, bật API key |
 | `embeddings` | Phục vụ BGE-M3 qua HTTP (ví dụ image Text Embeddings Inference) | Nội bộ |
@@ -205,6 +182,39 @@ graph TD
 | Cron sao lưu | `pg_dump` hằng ngày, snapshot Qdrant, nén thư mục `objects/`, đẩy sang máy hoặc dịch vụ khác | — |
 
 **Cấu hình server tối thiểu đề xuất** cho giai đoạn đầu (vài chục tenant): **4 vCPU, 16 GB RAM, 200 GB SSD**. BGE-M3 chạy CPU chiếm khoảng 3–4 GB RAM; khi nạp nhiều tài liệu cùng lúc, index sẽ chậm hơn nhưng không chặn Worker trả lời. Nâng cấp khi số tenant hoặc lượng tài liệu tăng: tách `embeddings` sang máy có GPU, hoặc tách `postgres` ra máy riêng.
+
+### 3.2 Quy ước frontend
+
+Giữ phong cách HTML + JS thuần, không bước build, nhưng chốt các quy ước sau **trước khi viết Console, Admin Portal và Workspace** (khoảng 40 màn mới):
+
+| Hạng mục | Quy ước |
+|---|---|
+| Module | `<script type="module">`, mỗi màn một module. Dùng chung thư mục `website/js/ui/` (API client, escape, hộp thoại, bảng, form) |
+| Escape mặc định | Mọi chuỗi chèn vào HTML đi qua helper template tag `h` tự escape. Chèn thô phải gọi `raw()` kèm ghi chú lý do. **Không** `innerHTML` với dữ liệu do người dùng hoặc Worker tạo (tên Worker, nội dung KWSR, câu trả lời của Worker) |
+| Nội dung markdown của Worker | Qua bộ render markdown + sanitizer đã kiểm chứng (allowlist thẻ và thuộc tính); liên kết có `rel="noopener noreferrer"` |
+| CSP | `script-src 'self'`; **không** `unsafe-inline`, **không** `unsafe-eval`. Không viết `onclick=` trong HTML; gắn sự kiện bằng `addEventListener` hoặc uỷ quyền sự kiện (`data-action`) |
+| API client | Một wrapper duy nhất: gắn CSRF, đọc lỗi chuẩn `{error:{code,message}}`, `401` về `/login`, `409 LIMIT_REACHED` mở hộp mời nâng gói, `402` mở hộp nạp token |
+| Mã giao diện | **Viết mới** theo bản thiết kế giao diện; không dùng lại mã của bản demo (R1). Bộ token màu, chữ, khoảng cách lấy từ thiết kế, khai báo một lần trong `website/css/tokens.css`; viết thành class CSS, không dùng `style` inline. Font tải về và phục vụ từ chính server (không gọi Google Fonts) để giữ CSP chặt |
+| Kiểm | ESLint (chỉ trong `devDependencies`) với luật cấm `innerHTML =` ngoài `ui/` và cấm thuộc tính sự kiện inline |
+
+### 3.3 Môi trường và kiểm thử
+
+| Môi trường | Cách chạy |
+|---|---|
+| **Máy lập trình** | `docker compose up` (postgres, qdrant, embeddings thu nhỏ hoặc bản giả). `BASE_DOMAIN=aios.localhost`, Caddy dùng `tls internal`; trình duyệt tự phân giải `*.localhost`. **Phải kiểm ở GĐ0a** rằng cookie `__Host-sid` chạy được trên `tenantabc.aios.localhost` ở Chrome và Firefox. Phương án dự phòng: `BASE_DOMAIN=aios.test` + `mkcert` + `dnsmasq` |
+| **Staging** | `staging.ai-os.vn` và `*.staging.ai-os.vn`; CSDL riêng; khoá nhà cung cấp riêng (PayOS sandbox); không dùng dữ liệu thật |
+| **Production** | Theo §3.1 |
+
+**CI (GitHub Actions)** chạy với dịch vụ PostgreSQL 16 và Qdrant. Các job bắt buộc phải xanh mới được gộp:
+
+1. Lint và unit test.
+2. Chạy toàn bộ migration từ CSDL rỗng; chạy lại không lỗi.
+3. **Test cách ly tenant quét mọi route.** Danh sách route lấy từ khai báo route, không viết tay, nên route mới tự bị quét.
+4. **Test RLS và quyền** bằng kết nối thật `aios_app`, `aios_console`, `aios_system`, kể cả truy vấn cố tình bỏ điều kiện `tenant_id` và `user_id`.
+5. Test dạng bảng cho `rules-engine`, `relation()`, `taskPolicy.create` và Action Gate (§9.5).
+6. Test webhook thanh toán lặp lại không cộng tiền hai lần.
+
+**Hợp đồng API.** Mỗi nhóm endpoint ở §17 có schema yêu cầu và phản hồi trong `docs/api/openapi.yaml`, **viết trước khi làm giao diện**. PR đổi API phải sửa file này; CI có test hợp đồng cho các endpoint trọng yếu (đăng nhập, tạo Worker, thanh toán, tạo công việc).
 
 ---
 
@@ -228,7 +238,7 @@ Hạ tầng cần có:
 ### 4.2 Quy tắc slug (tên tenant trên URL)
 
 - Gồm `a-z`, `0-9` và `-`, dài 3–30 ký tự, không bắt đầu hay kết thúc bằng `-`. Lưu chữ thường, duy nhất toàn hệ thống.
-- **Danh sách cấm:** `www, api, app, admin, console, mail, smtp, imap, static, cdn, assets, auth, login, billing, pay, status, docs, help, support, dev, staging, test, demo, root, superadmin, system, ai-os`. SuperAdmin bổ sung được.
+- **Danh sách cấm:** `www, api, app, admin, console, mail, smtp, imap, static, cdn, assets, auth, login, billing, pay, status, docs, help, support, dev, staging, test, demo, workers, root, superadmin, system, ai-os`. SuperAdmin bổ sung được.
 - Đổi slug được (chỉ SuperAdmin làm). Slug cũ tự chuyển hướng 301 trong 30 ngày và bị giữ chỗ 180 ngày để tránh người khác chiếm.
 
 ### 4.3 Hai cách tạo tenant
@@ -316,6 +326,8 @@ Trong luồng này người dùng tự chọn mật khẩu nên không bắt đ�
 - Không xoá hay hạ quyền được Admin cuối cùng của tenant.
 - `unit_manager` và `function_head` không bao giờ được gỡ Rule do cấp trên đặt (§8.3).
 
+**Ràng buộc v1 (đã chấp nhận):** mỗi người dùng thuộc **một** bộ phận (`dept_id`). Một người có thể giữ **nhiều phạm vi quản lý** (bộ phận, đơn vị và cấp dưới, ngành dọc) trong bảng `user_manage_scopes`; quyền thực tế là hợp các phạm vi (§24.11, M7).
+
 ---
 
 ## 6. Xác thực
@@ -342,12 +354,12 @@ Trong luồng này người dùng tự chọn mật khẩu nên không bắt đ�
 | Hạng mục | Quy định |
 |---|---|
 | Băm mật khẩu | `crypto.scrypt` (N ≥ 2¹⁵, r=8, p=1), salt 16 byte; so sánh bằng `timingSafeEqual` |
-| Mật khẩu | Tối thiểu 10 ký tự; chặn danh sách mật khẩu phổ biến; không trùng username hoặc email; không ép đổi định kỳ |
+| Mật khẩu | Tối thiểu 10 ký tự; chặn danh sách mật khẩu phổ biến; không trùng username hoặc email; khác mật khẩu tạm (khi đổi lần đầu); **không** bắt buộc tổ hợp chữ/số/ký tự đặc biệt và không ép đổi định kỳ. Áp như nhau ở mọi màn (đăng ký, đổi mật khẩu lần đầu, nhận lời mời, đặt lại) |
 | Phiên | Cookie `__Host-sid` (`HttpOnly; Secure; SameSite=Lax; Path=/`), giá trị 32 byte ngẫu nhiên; CSDL chỉ lưu băm SHA-256. Hạn tuyệt đối 12 giờ, hết hạn sau 2 giờ không hoạt động (Console: 4 giờ và 30 phút) |
 | Chống dò mật khẩu | Sai 5 lần trong 15 phút (tính theo user + IP) thì khoá tạm, thời gian khoá tăng dần; giới hạn tốc độ theo IP; thời gian phản hồi gần như nhau giữa các trường hợp |
 | CSRF | `SameSite=Lax` + kiểm `Origin` và `Sec-Fetch-Site` với mọi request ghi |
 | Header | HSTS, CSP chặt, `X-Frame-Options: DENY`, `Referrer-Policy: same-origin` |
-| MFA (TOTP) | **Bắt buộc với SuperAdmin** từ Giai đoạn 0. Tenant Admin bật tuỳ chọn ở Giai đoạn 4 |
+| MFA (TOTP) | **Bắt buộc với SuperAdmin** từ Giai đoạn 0b. Tenant Admin bật tuỳ chọn ở Giai đoạn 4 |
 | SuperAdmin đầu tiên | Tạo bằng CLI `node scripts/create-superadmin.js`. Không có đường đăng ký SuperAdmin công khai |
 | Audit | Đăng nhập thành công hoặc thất bại, đổi mật khẩu, khoá, đổi vai trò, mở và đóng phiên hỗ trợ |
 
@@ -398,7 +410,7 @@ erDiagram
   "trialDays": 14,
   "includedCreditsPerCycle": 0,                          // credit tặng mỗi chu kỳ (không cộng dồn)
   "limits": { "maxWorkers": 10, "maxMembers": 25, "maxUnits": 3, "maxKnowledgeMB": 2048,
-              "maxDocsPerWorker": 200, "maxIntegrations": 10, "maxMailboxes": 5,
+              "maxDocsPerWorker": 200, "maxIntegrations": 10, "maxMailboxes": 5, "maxConcurrentRuns": 5,
               "allowedModels": ["deepseek/deepseek-v4-flash", "…"],
               "features": { "mcpSources": false, "functionLines": true, "byok": true,
                             "auditRetentionDays": 90, "customDomain": false } } }
@@ -416,12 +428,17 @@ erDiagram
   "status": "active", "currentPeriodStart": "…", "currentPeriodEnd": "…",
   "graceEndsAt": null, "pendingChange": { "planId": "starter", "effectiveAt": "…" } }
 
-// wallets       — 1 ví / tenant; balance là số đệm, nguồn sự thật là ledger
-{ "tenantId": "t_…", "balance": 1250000, "lowBalanceThreshold": 100000, "autoPauseAtZero": true }
+// wallets       — 1 ví / tenant; balance là số đệm = Σ remaining của các lô còn hạn − overdraft (đối soát hằng giờ)
+{ "tenantId": "t_…", "balance": 1250000, "overdraft": 0, "lowBalanceThreshold": 100000, "autoPauseAtZero": true }
+
+// credit_lots   — mỗi lần cộng credit là một lô; trừ credit là giảm remaining của lô (§11.4)
+{ "id": 42, "tenantId": "t_…", "bucket": "purchased",   // plan (tặng theo chu kỳ) | purchased (nạp) | adjust (SuperAdmin cộng tay)
+  "granted": 500000, "remaining": 312000, "grantedAt": "…", "expiresAt": "…",   // purchased: +12 tháng; adjust: null
+  "closedAt": null, "closedReason": null }                // depleted | expired
 
 // credit_ledger — CHỈ THÊM, không sửa, không xoá
 { "tenantId": "t_…", "type": "consume",                  // grant_plan | purchase | consume | refund | adjust | expire
-  "amount": -3120, "balanceAfter": 1246880, "bucket": "purchased", "expiresAt": "…",
+  "amount": -3120, "balanceAfter": 1246880, "bucket": "purchased", "lotId": 42,
   "ref": { "kind": "usage_batch", "id": "ub_…" }, "note": null, "at": "…", "by": "system" }
 
 // model_pricing — SuperAdmin quản lý
@@ -446,7 +463,7 @@ erDiagram
 // users
 { "id": "usr_…", "tenantId": "t_…", "email": "a@abc.vn", "username": "an.nguyen",
   "name": "…", "title": "…", "role": "member", "deptId": "d_…",
-  "scope": { "unitId": null, "functionId": null },   // cho unit_manager / function_head
+  "manageScopes": [ { "kind": "unit_subtree", "unitId": "u_hn" }, { "kind": "function", "unitId": "u_hq", "functionId": "f_ketoan" } ],   // nhiều phạm vi (M7)
   "status": "active",          // invited | active | locked | disabled
   "passwordHash": "scrypt$…", "mustChangePassword": false, "emailVerifiedAt": "…",
   "mfa": { "enabled": false, "secretRef": null },
@@ -465,6 +482,8 @@ Ràng buộc duy nhất: `tenants.slug`; `users.email` (toàn hệ thống, ch�
   "deptId": "d_…", "ownerUserId": "usr_…", "accessUserIds": [],
   "runtime": { "integrationId": "i_…", "model": "deepseek/deepseek-v4-flash",
                "mode": "Planning", "maxTokens": 16000, "temperature": 0.4 },
+  "intakePolicy": "department",                // open | department | restricted — chính sách nhận việc (tài liệu Workspace §5.3)
+  "acceptFromOrchestrator": true,              // false = Worker nhạy cảm, không nhận lệnh từ Orchestrator (U13)
   "systemPrompt": "…", "status": "draft",     // draft | active | paused | archived
   "budget": { "dailyCredit": 50000, "onExceed": "pause" },
   "integrationIds": [], "mailboxGrants": [], "maturity": 0, "stage": "Học việc" }
@@ -480,9 +499,10 @@ Ràng buộc duy nhất: `tenants.slug`; `users.email` (toàn hệ thống, ch�
 // library_versions — nội dung theo phiên bản
 { "itemId": "lib_…", "version": 3, "content": { … }, "changeNote": "…", "at": "…", "by": "…" }
 //   knowledge: { state: active|archived, kind, source: file|text|mcp, mime, sizeBytes, storagePath, indexStatus, chunks }
-//   workflow:  { command: "/bao-cao-thang", description, steps[], markdown }
-//   skill:     { slug, description, markdown }   // SKILL.md
-//   rule:      { text, severity: block|warn, enforcement: prompt|hard, allowLocalOverride: false }
+//   workflow:  { command: "/bao-cao-thang", description, steps[], markdown, requiresActions: [] }
+//   skill:     { slug, description, markdown, requiresActions: [] }   // SKILL.md; requiresActions = hành động cần dùng (§9.5.4)
+//   rule:      { text, severity: block|warn|ask, enforcement: prompt|hard|ai, allowLocalOverride: false,
+//                hardCheck: { action, denyIf?, approvalIf? } }   // bắt buộc khi enforcement = hard; khai báo dạng dữ liệu (§9.5.4). ai = chỉ cảnh báo / hỏi lại, không phải chốt chặn (§24.4)
 
 // bindings — Worker dùng mục nào trong Kho
 { "workerId": "w_…", "itemId": "lib_…",
@@ -510,7 +530,18 @@ Mục chỉ dùng cho riêng một Worker vẫn nằm trong Kho, với `visibili
   "secret": { "ciphertext": "…", "nonce": "…", "keyVersion": 1 }, "masked": "sk-…a1b2",
   "config": { … }, "status": "ok", "lastTestedAt": "…",
   "balance": { "source": "api", "amount": 18.42, "currency": "USD", "checkedAt": "…" } }
+// worker_integrations — Worker được dùng kết nối nào (quyền tối thiểu)
+{ "workerId": "w_…", "integrationId": "i_…", "scopes": [], "grantedBy": "usr_…", "grantedAt": "…" }
 // mailboxes — §14
+{ "id": "mb_…", "tenantId": "t_…", "kind": "shared",       // shared | personal
+  "ownerUserId": null,                                       // personal: bắt buộc là chủ hộp thư
+  "provider": "gmail", "address": "sales@abc.vn",            // gmail | graph | imap
+  "secret": { "ciphertext": "…", "nonce": "…", "keyVersion": 1 },
+  "status": "ok", "syncState": { }, "lastSyncedAt": "…" }
+// mailbox_grants — một dòng cho mỗi cặp (hộp thư × Worker)
+{ "mailboxId": "mb_…", "workerId": "w_…", "canRead": false, "readFilter": { "labels": [], "senders": [], "sinceDays": 30 },
+  "canDraft": true, "canSend": false, "sendRequiresApproval": true,
+  "allowedDomains": [], "dailySendCap": 20, "signature": "…", "grantedBy": "usr_…" }
 // usage_events — gộp theo lô; usage_daily — tổng theo ngày × worker × model
 // audit_logs
 { "at": "…", "tenantId": "t_…", "actorId": "…", "actorRole": "…", "ip": "…",
@@ -518,23 +549,22 @@ Mục chỉ dùng cho riêng một Worker vẫn nằm trong Kho, với `visibili
   "diff": { "before": { … }, "after": { … } }, "supportSessionId": null }   // khác null = thao tác trong phiên hỗ trợ
 ```
 
-### 7.6 Di trú từ dữ liệu hiện có
+### 7.6 Dữ liệu khởi tạo (không di trú)
 
-| Hiện tại | → | Mới |
-|---|---|---|
-| `DEPARTMENTS` (6 phòng phẳng) | → | 1 Unit `hq` + 6 Function + 6 Department |
-| `AGENTS[]` + `agents.config.json` (model, maxTokens) | → | `workers` (bỏ `port`, `hermes*`) |
-| `a.knowledge/workflows/skills/rules` (`string[]`) | → | `library_items` riêng của Worker + `bindings` |
-| `SKILLS` / `WFLOWS` trong `app.js` | → | `library_items` loại skill / workflow của tenant |
-| `GLOBAL_RULES` | → | `library_items` loại rule + `policy_rules` có scope `tenant`, `mandatory` |
-| `marketing/hr/sales/skills/*/SKILL.md` | → | Kho **hệ thống** (mẫu ngành) + nhập vào tenant mặc định |
-| `staff` + `agentOwners` (`work.js`) | → | `users` + `worker.ownerUserId` (chỉ cho tenant demo) |
-| `OPENROUTER_API_KEY`, Genful, TripX config | → | `integrations` (Platform hoặc tenant mặc định) |
-| `HERMES_KEY_*`, `MEM0_API_KEY` | → | **bỏ** |
+Không di trú dữ liệu từ bản demo (R1). Khi tạo tenant (§4.3), hệ thống dựng sẵn:
 
-Script `scripts/migrate-default-tenant.js` tạo tenant `ankhang` (tenant demo) để Dashboard hiện có chạy tiếp.
+| Dữ liệu | Khởi tạo |
+|---|---|
+| Đơn vị | 1 đơn vị gốc `hq` |
+| Phòng ban | Bộ phòng ban mặc định do Console quản lý (Kế toán, Kinh doanh, Marketing, Nhân sự, Pháp lý, CSKH…) |
+| Orchestrator | 1 Worker `kind = orchestrator` |
+| Trạng thái, Nhóm trạng thái, bảng chuyển trạng thái, ánh xạ sự kiện → trạng thái | Bộ mặc định (§24.3, §25.3) |
+| Loại tài liệu, Loại bước Workflow, Danh mục thẻ | Bộ mặc định từ Kho hệ thống (§24.7) |
+| Mô hình AI | Model Console cho phép theo gói; 1 model mặc định |
+| Quy tắc duyệt | Bộ khuyến nghị (bật sẵn) (§24.5) |
+| Ví, thuê bao, kết nối Platform | Theo §4.3 |
 
----
+Bộ mặc định ở trên do Console quản lý (`scripts/seed-platform-defaults.js` nạp lần đầu), không lấy từ bản demo.
 
 ### 7.7 Lưu trữ trên PostgreSQL
 
@@ -553,19 +583,35 @@ Script `scripts/migrate-default-tenant.js` tạo tenant `ankhang` (tenant demo) 
 **Lớp chắn thứ hai: Row-Level Security (RLS).** Repository (§3) là lớp chắn thứ nhất. RLS thêm một lớp nữa ở chính CSDL, để một truy vấn lỡ quên điều kiện `tenant_id` vẫn không đọc được dữ liệu tenant khác.
 
 ```sql
--- Ứng dụng kết nối bằng role KHÔNG phải chủ bảng, KHÔNG có BYPASSRLS
-CREATE ROLE aios_app LOGIN;          -- phục vụ request của tenant
-CREATE ROLE aios_console LOGIN;      -- phục vụ Console SuperAdmin + tác vụ hệ thống
+-- Ứng dụng kết nối bằng role KHÔNG phải chủ bảng, KHÔNG có BYPASSRLS. Ba role, ba phạm vi:
+CREATE ROLE aios_app LOGIN;      -- request của tenant VÀ tác vụ nền của một tenant (index tài liệu, đồng bộ mail, chạy Worker):
+                                 --   luôn set_config('app.tenant_id', …) trước khi chạy
+CREATE ROLE aios_console LOGIN;  -- Console SuperAdmin: chỉ đọc các VIEW quản lý (bên dưới) + ghi qua thao tác định nghĩa sẵn
+CREATE ROLE aios_system LOGIN;   -- tác vụ xuyên tenant, không gắn người dùng: nhắc gia hạn, đối soát thanh toán, đóng lô credit hết hạn,
+                                 --   đăng ký tenant mới, webhook thanh toán. Chỉ chạm bảng quản lý, không chạm bảng nội dung
 -- Mỗi bảng thuộc tenant:
 ALTER TABLE workers ENABLE ROW LEVEL SECURITY;
 ALTER TABLE workers FORCE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON workers TO aios_app
   USING (tenant_id = current_setting('app.tenant_id')::uuid)
   WITH CHECK (tenant_id = current_setting('app.tenant_id')::uuid);
-CREATE POLICY console_all ON workers TO aios_console USING (true) WITH CHECK (true);
+-- aios_console / aios_system KHÔNG có policy trên bảng gốc của tenant. Chúng chỉ có quyền trên:
+--   (a) bảng của Platform (plans, model_pricing, payment_orders, subscriptions, credit_*, tenants, jobs, audit_logs…) và
+--   (b) các view quản lý, ví dụ:
+CREATE VIEW console_workers WITH (security_barrier) AS
+  SELECT id, tenant_id, name, kind, dept_id, status, runtime->>'model' AS model, created_at FROM workers;   -- không có system_prompt
+GRANT SELECT ON console_workers TO aios_console;
 ```
 
-Mỗi request của tenant chạy trong một giao dịch, mở đầu bằng `SELECT set_config('app.tenant_id', $1, true)`. Tham số `true` nghĩa là chỉ có hiệu lực trong giao dịch đó, nên kết nối trả về pool không mang theo tenant cũ. Thiếu biến này thì `current_setting` báo lỗi và truy vấn thất bại, tức là **mặc định từ chối**.
+**Nguyên tắc cho `aios_console` và `aios_system`: danh sách cho phép, không phải danh sách cấm.** Role không có quyền gì trên bảng nào cho tới khi được `GRANT` rõ ràng.
+
+- Console đọc dữ liệu của tenant **chỉ qua view quản lý** (`console_users`, `console_workers`, `console_integrations`, `console_mailboxes`, `console_worker_runs`…) chứa đúng các cột nêu ở §22.1 và §22.5. Không view nào có cột nội dung hay bí mật: `password_hash`, `mfa`, `secret`, `system_prompt`, địa chỉ hộp thư cá nhân.
+- Dữ liệu của chính Platform (nhân viên hệ thống, `tenant_id IS NULL`; Kho hệ thống, `library_items` có `tenant_id IS NULL`) có policy riêng cho `aios_console`, giới hạn đúng các dòng đó.
+- Nhóm **bảng nội dung riêng tư** — `conversations`, `messages`, `message_feedback`, `feedback_shares`, `worker_run_state` — còn được `REVOKE ALL … FROM aios_console, aios_system`, để chạm vào là lỗi `permission denied` thay vì lặng lẽ thấy bảng rỗng. Chỉ có policy cho `aios_app` (chi tiết ở Workspace §16).
+- Việc hệ thống buộc phải chạm tới nhóm này — xoá hẳn hội thoại sau 30 ngày, xoá dữ liệu tenant khi hết hợp đồng (B8) — đi qua hàm `SECURITY DEFINER` hẹp (`purge_deleted_conversations()`, `delete_tenant_data(tenant_id)`), có audit, và không hàm nào trả nội dung ra.
+- Test CI (§3.3): `aios_console` và `aios_system` không `SELECT` được bảng gốc hay cột nào ngoài danh sách cho phép.
+
+Mỗi request của tenant chạy trong một giao dịch, mở đầu bằng `SELECT set_config('app.tenant_id', $1, true)`. Tham số `true` nghĩa là chỉ có hiệu lực trong giao dịch đó, nên kết nối trả về pool không mang theo tenant cũ. Thiếu biến này thì `current_setting` báo lỗi và truy vấn thất bại, tức là **mặc định từ chối**. Mỗi request đặt thêm `app.user_id` và `app.is_tenant_admin`; biến sau mặc định `'false'` và chỉ được đặt `'true'` trong các handler đọc hội thoại của người khác (Workspace §16).
 
 Một số bước phải chạy **trước khi** biết tenant, hoặc phải nhìn xuyên tenant. Mỗi bước đi qua một hàm hẹp, không mở quyền rộng:
 
@@ -573,7 +619,7 @@ Một số bước phải chạy **trước khi** biết tenant, hoặc phải n
 |---|---|
 | Đổi Host thành tenant | Hàm `resolve_tenant(slug)` dạng `SECURITY DEFINER`, chỉ trả `id` và `status` |
 | Kiểm email trùng toàn hệ thống khi thêm user | Dựa vào ràng buộc `UNIQUE` của CSDL; lỗi trùng được đổi thành thông báo chung, không lộ email đó thuộc tenant nào |
-| Đăng ký tenant mới, webhook thanh toán, tác vụ nền | Chạy bằng role `aios_console` trong module riêng, có audit |
+| Đăng ký tenant mới, webhook thanh toán, tác vụ xuyên tenant | Chạy bằng role `aios_system` trong module riêng, có audit. Tác vụ nền của **một** tenant (index tài liệu, đồng bộ mail, chạy Worker) chạy bằng `aios_app` với `app.tenant_id` của tenant đó |
 
 **Lược đồ các bảng chính** (rút gọn; khi viết migration sẽ thêm đủ cột theo §7.2–7.5):
 
@@ -596,7 +642,7 @@ CREATE TABLE users (id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   email citext NOT NULL UNIQUE,                        -- D9: duy nhất toàn hệ thống
   username citext NOT NULL, name text, title text, role text NOT NULL,
   platform_role text,                                  -- chỉ cho superadmin: v1 luôn 'owner' (§22.10)
-  dept_id uuid, scope_unit_id uuid, scope_function_id uuid, status text NOT NULL,
+  dept_id uuid, status text NOT NULL,              -- phạm vi quản lý: bảng user_manage_scopes (§24.13, M7)
   password_hash text, must_change_password boolean NOT NULL DEFAULT false,
   email_verified_at timestamptz, mfa jsonb, failed_logins int NOT NULL DEFAULT 0,
   locked_until timestamptz, last_login_at timestamptz,
@@ -612,14 +658,27 @@ CREATE TABLE tenant_notes (id bigserial PRIMARY KEY, tenant_id uuid NOT NULL REF
 CREATE TABLE subscriptions (tenant_id uuid PRIMARY KEY REFERENCES tenants(id), plan_id text NOT NULL REFERENCES plans(id),
   cycle text NOT NULL, status text NOT NULL, current_period_start timestamptz, current_period_end timestamptz,
   grace_ends_at timestamptz, pending_change jsonb);
-CREATE TABLE wallets (tenant_id uuid PRIMARY KEY REFERENCES tenants(id), balance bigint NOT NULL DEFAULT 0,
+CREATE TABLE wallets (tenant_id uuid PRIMARY KEY REFERENCES tenants(id),
+  balance bigint NOT NULL DEFAULT 0,                  -- số đệm = Σ remaining các lô còn hạn − overdraft; đối soát hằng giờ
+  overdraft bigint NOT NULL DEFAULT 0 CHECK (overdraft >= 0),   -- phần đã dùng vượt số dư (tối đa bằng ngưỡng, §11.4)
   low_balance_threshold bigint, auto_pause_at_zero boolean NOT NULL DEFAULT true);
+CREATE TABLE credit_lots (id bigserial PRIMARY KEY, tenant_id uuid NOT NULL REFERENCES tenants(id),
+  bucket text NOT NULL CHECK (bucket IN ('plan','purchased','adjust')),
+  granted bigint NOT NULL CHECK (granted > 0),
+  remaining bigint NOT NULL CHECK (remaining >= 0 AND remaining <= granted),
+  granted_at timestamptz NOT NULL DEFAULT now(),
+  expires_at timestamptz,                             -- NULL = không hết hạn (adjust)
+  closed_at timestamptz, closed_reason text);         -- depleted | expired
+CREATE INDEX credit_lots_open ON credit_lots (tenant_id, bucket, expires_at) WHERE closed_at IS NULL;
 CREATE TABLE credit_ledger (id bigserial PRIMARY KEY, tenant_id uuid NOT NULL REFERENCES tenants(id),
   type text NOT NULL CHECK (type IN ('grant_plan','purchase','consume','refund','adjust','expire')),
-  amount bigint NOT NULL, balance_after bigint NOT NULL, bucket text NOT NULL, expires_at timestamptz,
+  lot_id bigint REFERENCES credit_lots(id),           -- mỗi dòng ledger thuộc đúng một lô
+  amount bigint NOT NULL, balance_after bigint NOT NULL, bucket text NOT NULL,
   ref_kind text, ref_id text, note text, at timestamptz NOT NULL DEFAULT now(), by_user uuid);
--- Ledger chỉ thêm: thu hồi quyền UPDATE/DELETE với aios_app và aios_console
-REVOKE UPDATE, DELETE ON credit_ledger FROM aios_app, aios_console;
+-- Ledger chỉ thêm: thu hồi quyền UPDATE/DELETE với mọi role ứng dụng
+REVOKE UPDATE, DELETE ON credit_ledger FROM aios_app, aios_console, aios_system;
+-- Lô chỉ đổi remaining/closed_*, không bao giờ xoá
+REVOKE DELETE ON credit_lots FROM aios_app, aios_console, aios_system;
 CREATE TABLE payment_orders (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), tenant_id uuid NOT NULL REFERENCES tenants(id),
   gateway text NOT NULL, order_code bigint NOT NULL, kind text NOT NULL, items jsonb NOT NULL,
   amount bigint NOT NULL CHECK (amount > 0), currency text NOT NULL DEFAULT 'VND', status text NOT NULL,
@@ -644,6 +703,8 @@ CREATE TABLE departments (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), tenant_
 -- ===== Worker & Kho KWSR =====
 CREATE TABLE workers (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), tenant_id uuid NOT NULL REFERENCES tenants(id),
   kind text NOT NULL DEFAULT 'worker', name text NOT NULL, icon text, role text, dept_id uuid REFERENCES departments(id),
+  intake_policy text NOT NULL DEFAULT 'department' CHECK (intake_policy IN ('open','department','restricted')),
+  accept_from_orchestrator boolean NOT NULL DEFAULT true,   -- U13: false = không nhận lệnh từ Orchestrator
   owner_user_id uuid REFERENCES users(id), runtime jsonb NOT NULL, system_prompt text, status text NOT NULL,
   budget jsonb, maturity int DEFAULT 0, stage text);
 CREATE UNIQUE INDEX one_orchestrator_per_tenant ON workers(tenant_id) WHERE kind = 'orchestrator';
@@ -665,13 +726,71 @@ CREATE TABLE policy_rules (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), tenant
   item_id uuid NOT NULL REFERENCES library_items(id), scope text NOT NULL, unit_id uuid, function_id uuid,
   inherit_down boolean NOT NULL DEFAULT true);
 
+-- ===== Động cơ chạy Worker (§9.5) =====
+CREATE TABLE worker_runs (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), tenant_id uuid NOT NULL REFERENCES tenants(id),
+  worker_id uuid NOT NULL REFERENCES workers(id),
+  kind text NOT NULL CHECK (kind IN ('chat','task','test','plan','social')),
+  config_version int NOT NULL,              -- phiên bản cấu hình Worker dùng cho cả run (M12)
+  cost_dept_id uuid REFERENCES departments(id),
+  task_id uuid, conversation_id uuid,        -- khoá ngoại tới tasks / conversations thêm ở migration Workspace (Workspace §16)
+  status text NOT NULL CHECK (status IN ('queued','running','waiting_approval','waiting_user','succeeded','failed','cancelled','timed_out')),
+  stop_reason text,                          -- done|rule_blocked|budget|credit|max_cost|max_steps|timeout|loop_detected|needs_confidential|cancelled|error
+  tainted boolean NOT NULL DEFAULT false,    -- ngữ cảnh đã nhận dữ liệu không tin cậy (§9.5.6)
+  limits jsonb NOT NULL,                     -- maxSteps, maxCostCredit, deadlineAt: chụp lúc tạo run
+  steps int NOT NULL DEFAULT 0, tokens_in bigint NOT NULL DEFAULT 0, tokens_out bigint NOT NULL DEFAULT 0,
+  credit bigint NOT NULL DEFAULT 0, billed_to text NOT NULL DEFAULT 'tenant',
+  error text, queued_at timestamptz NOT NULL DEFAULT now(), started_at timestamptz, finished_at timestamptz);
+CREATE INDEX worker_runs_by_worker ON worker_runs (tenant_id, worker_id, queued_at DESC);
+CREATE TABLE run_steps (run_id uuid REFERENCES worker_runs(id) ON DELETE CASCADE, n int, tenant_id uuid NOT NULL REFERENCES tenants(id),
+  kind text NOT NULL CHECK (kind IN ('model','action')), action_id text,
+  gate text CHECK (gate IN ('allow','deny','needs_approval')), gate_reason text,   -- gate_reason: mã + id Rule, không chứa nội dung
+  tokens_in int, tokens_out int, credit bigint, duration_ms int, idempotency_key text, ok boolean,
+  at timestamptz NOT NULL DEFAULT now(), PRIMARY KEY (run_id, n));                  -- KHÔNG lưu tham số hay kết quả hành động
+-- Trạng thái để tiếp tục run công việc (chat không lưu state). Có thể chứa đoạn tài liệu Mật → bảng nội dung riêng tư (xem trên)
+CREATE TABLE worker_run_state (run_id uuid PRIMARY KEY REFERENCES worker_runs(id) ON DELETE CASCADE,
+  tenant_id uuid NOT NULL REFERENCES tenants(id), state jsonb NOT NULL, updated_at timestamptz NOT NULL DEFAULT now());
+-- Xoá state 30 ngày sau khi run kết thúc
+
 -- ===== Kết nối, email, đo đếm, audit, hàng đợi =====
-CREATE TABLE integrations (...);  CREATE TABLE worker_integrations (...);
-CREATE TABLE mailboxes (...);     CREATE TABLE mailbox_grants (...);
+CREATE TABLE integrations (id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id uuid REFERENCES tenants(id),              -- NULL = kết nối của Platform
+  provider text NOT NULL, category text NOT NULL,     -- llm | image | publish | messaging | workspace | ads | custom
+  name text NOT NULL, billing_mode text CHECK (billing_mode IN ('platform','byok')),
+  secret jsonb,                                       -- {ciphertext, nonce, keyVersion}; không bao giờ trả ra ngoài
+  masked text, config jsonb NOT NULL DEFAULT '{}',
+  status text NOT NULL DEFAULT 'unverified',          -- ok | error | expired | low_balance | unverified
+  last_tested_at timestamptz, balance jsonb, alert_threshold jsonb,
+  created_at timestamptz NOT NULL DEFAULT now(), created_by uuid);
+CREATE TABLE worker_integrations (worker_id uuid REFERENCES workers(id) ON DELETE CASCADE,
+  integration_id uuid REFERENCES integrations(id), tenant_id uuid NOT NULL REFERENCES tenants(id),
+  scopes text[], granted_by uuid, granted_at timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (worker_id, integration_id));
+CREATE TABLE mailboxes (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), tenant_id uuid NOT NULL REFERENCES tenants(id),
+  kind text NOT NULL CHECK (kind IN ('shared','personal')),
+  owner_user_id uuid REFERENCES users(id),
+  provider text NOT NULL CHECK (provider IN ('gmail','graph','imap')), address citext NOT NULL,
+  secret jsonb NOT NULL, status text NOT NULL DEFAULT 'ok', sync_state jsonb NOT NULL DEFAULT '{}',
+  last_synced_at timestamptz, created_at timestamptz NOT NULL DEFAULT now(), created_by uuid,
+  CHECK ((kind = 'personal') = (owner_user_id IS NOT NULL)),   -- hộp thư cá nhân luôn có chủ
+  UNIQUE (tenant_id, address));
+CREATE TABLE mailbox_grants (mailbox_id uuid REFERENCES mailboxes(id) ON DELETE CASCADE,
+  worker_id uuid REFERENCES workers(id) ON DELETE CASCADE, tenant_id uuid NOT NULL REFERENCES tenants(id),
+  can_read boolean NOT NULL DEFAULT false, read_filter jsonb,
+  can_draft boolean NOT NULL DEFAULT true,
+  can_send boolean NOT NULL DEFAULT false, send_requires_approval boolean NOT NULL DEFAULT true,
+  allowed_domains text[] NOT NULL DEFAULT '{}', daily_send_cap int NOT NULL DEFAULT 20, signature text,
+  granted_by uuid NOT NULL, granted_at timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (mailbox_id, worker_id));
+-- Hộp thư cá nhân: người cấp phải là chủ hộp thư, Admin không cấp hộ được (§14.1); kiểm ở handler và bằng trigger
+CREATE TABLE mail_send_log (id bigserial PRIMARY KEY, tenant_id uuid NOT NULL REFERENCES tenants(id),
+  mailbox_id uuid NOT NULL REFERENCES mailboxes(id), worker_id uuid NOT NULL REFERENCES workers(id), run_id uuid,
+  recipients text[] NOT NULL, subject text, message_id text, approved_by uuid,
+  at timestamptz NOT NULL DEFAULT now());   -- không lưu nội dung thư (§14.4)
 CREATE TABLE usage_daily (tenant_id uuid, day date, worker_id uuid, model text, integration_id uuid,
+  billed_to text NOT NULL DEFAULT 'tenant',            -- 'platform' cho lượt gọi trong phiên hỗ trợ (§22.8)
   tokens_in bigint DEFAULT 0, tokens_out bigint DEFAULT 0, images int DEFAULT 0, calls int DEFAULT 0,
   errors int DEFAULT 0, credit bigint DEFAULT 0, provider_cost_estimate numeric,
-  PRIMARY KEY (tenant_id, day, worker_id, model, integration_id));   -- cộng dồn bằng ON CONFLICT DO UPDATE
+  PRIMARY KEY (tenant_id, day, worker_id, model, integration_id, billed_to));   -- cộng dồn bằng ON CONFLICT DO UPDATE
 CREATE TABLE audit_logs (id bigserial, tenant_id uuid, at timestamptz NOT NULL DEFAULT now(), actor_id uuid,
   actor_role text, ip inet, action text NOT NULL, target_type text, target_id text, diff jsonb,
   support_session_id uuid) PARTITION BY RANGE (at);   -- khác NULL = thao tác trong phiên hỗ trợ (§22.8);   -- phân vùng theo tháng, xoá theo auditRetentionDays
@@ -684,7 +803,7 @@ CREATE TABLE jobs (id bigserial PRIMARY KEY, tenant_id uuid, kind text NOT NULL,
 
 | Thao tác | Cách làm |
 |---|---|
-| Trừ hoặc cộng credit | Một giao dịch: `SELECT … FROM wallets WHERE tenant_id=$1 FOR UPDATE` → `INSERT credit_ledger` → `UPDATE wallets SET balance` |
+| Trừ hoặc cộng credit | Một giao dịch: `SELECT … FROM wallets WHERE tenant_id=$1 FOR UPDATE` → chọn và trừ `credit_lots` theo thứ tự ở §11.4 → `INSERT credit_ledger` (một dòng cho mỗi lô bị trừ) → `UPDATE wallets SET balance, overdraft` |
 | Xử lý webhook thanh toán | Một giao dịch: `INSERT payment_webhook_events … ON CONFLICT DO NOTHING` (đã có thì dừng) → khoá `payment_orders` bằng `FOR UPDATE` → kiểm số tiền → áp dụng |
 | Tạo Worker hoặc user trong hạn mức | Một giao dịch: khoá dòng `subscriptions` của tenant bằng `FOR UPDATE` → đếm → chèn. Hai request song song phải chờ nhau, không vượt hạn mức |
 | Tính Rule hiệu lực | Truy vấn đệ quy `WITH RECURSIVE` lấy chuỗi đơn vị tổ tiên (sâu tối đa 6) rồi nối với `policy_rules` |
@@ -792,7 +911,7 @@ Worker tạo mới ở chi nhánh vì vậy **tự có ngay chuẩn ngành** c�
 |---|---|---|
 | **1. Theo đơn vị** | Cây Tổng công ty → Chi nhánh → Cửa hàng; mỗi nút có người đứng đầu, số người, số Worker, các bộ phận | Thêm hoặc **đổi cha đơn vị** (modal chọn cây, khoá chính nó và đơn vị con, xem ảnh hưởng, hiệu lực ngay / từ ngày, lý do — §24.10); **Tạo bộ phận** (đơn vị × phòng ban); kéo-thả người và Worker giữa các bộ phận |
 | **2. Theo ngành dọc** | Chọn một ngành (ví dụ Kế toán) để thấy cây đơn vị chỉ gồm bộ phận Kế toán: Worker, người, **số Rule kế thừa và Rule riêng**, mục Kho được phân phối | Đặt Rule và phát hành mục Kho cho cả ngành ngay trên sơ đồ |
-| **3. Người dùng ↔ Worker** (trước: Ma trận) | Hai cách xem **Theo người dùng / Theo Worker**, gom theo bộ phận, phân trang; 4 mức 👑 **Phụ trách** (mỗi Worker đúng 1 người) · ✔ Dùng trực tiếp · ✉ Qua yêu cầu · 👁 Chỉ xem (§24.0 L3, §24.10). Không dùng ma trận vì không hiển thị được khi có 50+ Worker | Đổi người phụ trách, cấp quyền dùng hàng loạt |
+| **3. Người dùng ↔ Worker** (trước: Ma trận) | Hai cách xem **Theo người dùng / Theo Worker**, gom theo bộ phận, phân trang; 4 mức 👑 **Phụ trách** (mỗi Worker đúng 1 người) · ✔ Dùng trực tiếp · ✉ Qua yêu cầu · 👁 Chỉ xem (§24.0 TN3, §24.10). Không dùng ma trận vì không hiển thị được khi có 50+ Worker | Đổi người phụ trách, cấp quyền dùng hàng loạt |
 
 Cả ba chế độ đều có khung **"Chưa phân công"** (Worker chưa có người phụ trách, người chưa có bộ phận). Orchestrator luôn nằm ở đỉnh, không kéo được.
 
@@ -814,7 +933,7 @@ Chế độ 2 — Ngành dọc: [Kế toán ▾]
 
 | Kho | Ai quản lý | Nội dung | Tenant dùng thế nào |
 |---|---|---|---|
-| **Kho hệ thống** | SuperAdmin | Mẫu theo ngành (Sales, Content Cluster, Tuyển dụng, Kế toán, Pháp lý, CSKH…), lấy từ các `SKILL.md` có sẵn trong repo | **Nhập về** Kho tenant (sao chép, nhớ nguồn). Khi Kho hệ thống có bản mới thì báo "có cập nhật" |
+| **Kho hệ thống** | SuperAdmin | Gói mẫu theo ngành (Kế toán, Kinh doanh, Pháp lý, CSKH, Nhân sự…) gồm K/W/S/R và Mẫu Worker, **soạn mới** theo danh mục dùng chung (§24.7) | **Nhập về** Kho tenant (sao chép, nhớ nguồn). Khi Kho hệ thống có bản mới thì báo "có cập nhật" |
 | **Kho tenant** | Admin, người quản lý trong phạm vi được gán | Tài liệu, quy trình, kỹ năng, quy tắc của công ty | Gắn vào Worker: theo kho hoặc tinh chỉnh |
 
 ### 9.2 Màn Kho KWSR
@@ -852,6 +971,11 @@ Giới hạn khi tinh chỉnh:
 
 **Hạn mức:** dung lượng Knowledge tính **một lần cho mỗi tài liệu trong Kho**, dù 10 Worker cùng dùng. Đây là lợi ích chi phí trực tiếp của mô hình Kho.
 
+**Tài liệu Mật.** Mục **Knowledge** có thêm cờ **"Mật"** (biểu tượng 🔒 trong Kho và trên Binding).
+- Tài liệu Mật chỉ được đưa vào tìm kiếm khi Worker làm việc cho **người thuộc bộ phận của Worker**, quản lý cấp trên trong phạm vi, `tenant_admin`, hoặc việc đến từ **Orchestrator**. Các trường hợp còn lại bị loại khỏi tập `item_id` đưa vào truy vấn Qdrant (§15).
+- **Workflow, Skill, Rule không có cờ Mật** và luôn áp dụng đầy đủ cho mọi người, để quy trình không bị hở.
+- Quy tắc đầy đủ và cách xử lý khi một quy trình cần tài liệu Mật mà người yêu cầu không có quyền: tài liệu Workspace §11.
+
 ### 9.4 Worker: tạo, sửa, xoá (D3: chỉ qua giao diện)
 
 - Worker **chỉ được tạo qua trình hướng dẫn** trong Admin Portal.
@@ -862,8 +986,8 @@ Giới hạn khi tinh chỉnh:
 
 | Bước | Nội dung |
 |---|---|
-| 1. Vị trí & danh tính | Chọn **đơn vị → phòng ban** (ra bộ phận, §24.0 L1), tên, icon, vai trò, **người chịu trách nhiệm** (bắt buộc). Hiện thanh hạn mức "7/10 Worker" |
-| 2. Bộ não | Kết nối mô hình (Platform hoặc BYOK), model (lọc theo gói và theo **Mô hình AI** đã bật, §24.9), Planning/Fast; `maxTokens` và trần credit ngày có **công tắc, mặc định tắt**. Gợi ý model theo ngành |
+| 1. Vị trí & danh tính | Chọn **đơn vị → phòng ban** (ra bộ phận, §24.0 TN1), tên, icon, vai trò, **người chịu trách nhiệm** (bắt buộc), **chính sách nhận việc**: Mở / Theo bộ phận (mặc định) / Hạn chế, kèm danh sách người được cấp riêng (tài liệu Workspace §5.3), và ô tick **«Không nhận lệnh từ Orchestrator»** (U13; mặc định tắt, tự gợi ý khi chọn «Hạn chế» nhưng không tự bật; chỉ `tenant_admin` hoặc quản lý trong phạm vi đổi được, có audit). Hiện thanh hạn mức "7/10 Worker" |
+| 2. Bộ não | Kết nối mô hình (Platform hoặc BYOK), model (lọc theo gói và theo **Mô hình AI** đã bật, §24.9), Planning/Fast; `maxTokens` mỗi lượt và **trần credit ngày (mặc định bật, 50.000 credit, `onExceed = pause`)** — Admin sửa hoặc tắt được, có nhật ký (§9.5.7). Gợi ý model theo ngành |
 | 3. Chọn từ Kho KWSR | 4 cột K/W/S/R. **Bắt buộc** (khoá, đến từ ngành dọc hoặc đơn vị) · **Gợi ý** (tick sẵn) · tìm thêm trong Kho. Mỗi mục có nút **Tinh chỉnh** để mở trình soạn ngay trong bước này. Có thể "＋ Tạo mục riêng" |
 | 4. Xem lại | Tóm tắt; **danh sách Rule hiệu lực** (kế thừa + riêng); chi phí ước tính mỗi ngày; nút **Thử 1 câu** trước khi tạo. Worker tạo ra ở trạng thái `draft`, bấm **Kích hoạt** mới chạy |
 
@@ -877,12 +1001,216 @@ Thao tác: Tạm dừng · Nhân bản (trong hạn mức) · Xuất cấu hình
 - **Lưu trữ:** ngừng chạy, giải phóng một chỗ trong hạn mức, khôi phục được trong 30 ngày (nếu còn chỗ).
 - **Xoá vĩnh viễn:** phải gõ lại tên Worker để xác nhận. Xoá binding, các mục `worker_private`, vector riêng; thu hồi kết nối và hộp thư. **Mục Kho dùng chung không bị ảnh hưởng.** Audit, lịch sử công việc và chi phí được giữ lại.
 
-**Runtime khi Worker chạy** (thay Hermes):
-1. Ghép system prompt theo thứ tự: vai trò → **Rule hiệu lực** (§8.3) → Skill phù hợp (chọn theo `description`) → Workflow nếu tin nhắn bắt đầu bằng `/lệnh`.
-2. Truy vấn Qdrant, lọc theo `tenantId` + các tài liệu Worker được gắn.
-3. Gọi model qua kết nối đã chọn.
-4. Kiểm các Rule `hard` trước khi thực hiện hành động có tác động ra ngoài.
-5. Ghi sử dụng (§12).
+**Runtime khi Worker chạy** (thay Hermes) được đặc tả ở [§9.5](#95-động-cơ-chạy-worker): một vòng lặp gọi model và hành động, mọi hành động đi qua Action Gate.
+
+### 9.5 Động cơ chạy Worker
+
+Phần này thay cho đoạn «runtime» một lượt gọi model của v1.3. Hai việc Worker làm — **trò chuyện** (Workspace §7) và **làm công việc** (Workspace §8) — dùng chung một động cơ, để quyền, chi phí và Rule chỉ được kiểm ở một chỗ.
+
+#### 9.5.1 Nguyên tắc
+
+1. **Một lõi, hai cách vào.** `engine.run(ctx)` phục vụ cả chat (chạy trong request, trả luồng SSE) lẫn công việc (chạy nền qua bảng `jobs`).
+2. **Ngữ cảnh đọc từ công việc, không tự suy.** Với công việc, `run_mode` và `confidential_allowed` lấy từ bản ghi `tasks` (Workspace §9.1). Với chat, tính một lần lúc mở lượt chat bằng cùng hàm `taskPolicy`.
+3. **Mọi hành động ra khỏi vòng lặp đều đi qua Action Gate.** Model chỉ *đề nghị* gọi hành động; chỉ Gate mới cho chạy.
+4. **Chốt chặn là mã, không phải lời dặn trong prompt.** Rule `hard`, ngân sách, danh sách domain và phê duyệt đều nằm trong Gate.
+5. **Mỗi run truy vết được, dừng được và (với công việc) tiếp tục được**: bảng `worker_runs`, `run_steps`, `worker_run_state`.
+6. **v1 không có trình thực thi mã do model sinh ra**, và **Worker không tự giao việc cho Worker khác**. Điều phối nhiều Worker chỉ qua Orchestrator (kế hoạch do người xác nhận) hoặc qua người.
+
+#### 9.5.2 Ngữ cảnh chạy
+
+| Trường | Ý nghĩa |
+|---|---|
+| `tenantId`, `workerId` | Tenant và Worker chạy |
+| `kind` | `chat` · `task` (công việc) · `test` (nút «Thử» ở trình tạo Worker) · `plan` (Orchestrator lập kế hoạch: không có hành động, chỉ trả JSON kế hoạch) · `social` (trả lời khách trong Chat Social, chế độ hạn chế §9.5.12) |
+| `requesterId`, `taskId`, `conversationId` | Người yêu cầu; công việc hoặc hội thoại đang chạy |
+| `runMode`, `confidentialAllowed` | Đọc từ công việc (Workspace §9.1) |
+| `limits` | `maxSteps`, `maxCostCredit`, `deadlineAt`; chụp vào `worker_runs.limits` lúc tạo run (§9.5.7) |
+| `billedTo` | `tenant` (mặc định) hoặc `platform` (phiên hỗ trợ, §22.8) |
+| `configVersion` | Phiên bản cấu hình Worker lúc tạo run (§24.8, M12); cả run dùng đúng bản này, kể cả khi Admin lưu bản mới giữa chừng |
+| `costDeptId` | Bộ phận chịu chi phí: bộ phận người yêu cầu (công việc, chat) hoặc bộ phận sở hữu kênh (Chat Social, §9.5.12) |
+| `tainted` | Bắt đầu `false`; thành `true` khi ngữ cảnh nhận dữ liệu không tin cậy (§9.5.6) |
+
+#### 9.5.3 Vòng lặp
+
+```
+engine.run(ctx):
+  1. Tạo worker_runs. Từ chối ngay nếu Worker không active, tenant suspended/disabled.
+  2. Dựng prompt theo thứ tự:
+       vai trò → Rule hiệu lực (§8.3) → Skill phù hợp (chọn theo `description`)
+       → Workflow nếu tin nhắn bắt đầu bằng /lệnh
+       → đoạn Knowledge truy xuất tự động theo tin nhắn hoặc đầu bài (từ GĐ2, §15)
+       → lịch sử hội thoại (chat) hoặc đầu bài và báo cáo trước đó (công việc).
+  3. Gọi model, kèm danh sách hành động Worker được dùng (§9.5.4).
+  4. Model trả lời cuối       → kết thúc.
+     Model đề nghị hành động  → Action Gate → thực thi → đưa kết quả vào ngữ cảnh → quay lại bước 3.
+  5. Mỗi bước (gọi model hoặc hành động) ghi một dòng run_steps và cộng dồn chi phí (§11.4).
+  6. Dừng khi: xong · chạm giới hạn (§9.5.7) · Gate từ chối dứt khoát · cần người (hỏi thêm, chờ duyệt) · bị huỷ.
+```
+
+#### 9.5.4 Hành động và Action Gate
+
+**Danh mục hành động.** Khai báo trong mã (`server/workers/actions/*.js`), mỗi hành động là `{ id, effect, input (JSON Schema), requires, estimateCredit(input), run(ctx, input) }`. Thêm hành động mới là thêm một file, không cần màn hình mới.
+
+| Hành động | Loại tác động | Cần | GĐ |
+|---|---|---|---|
+| `task.report` | write | công việc | 1b |
+| `task.ask_user` | write | công việc; dừng run, công việc vào Điều phối «Thiếu thông tin đầu vào» | 1b |
+| `knowledge.search` | read | binding Knowledge | 2 |
+| `file.generate` | write | — (§9.5.8) | 2 |
+| `image.generate` | external | kết nối loại ảnh | 2 |
+| `email.read` | read | `mailbox_grants.can_read` | 4 |
+| `email.draft` | write | `mailbox_grants.can_draft` | 4 |
+| `email.send` | external | `mailbox_grants.can_send` | 4 |
+| `publish.post` | external | kết nối xuất bản | 4 |
+| `http.call` | external | kết nối tuỳ chỉnh (Webhook/REST) | 4 |
+
+Loại tác động: **read** chỉ đọc; **write** đổi dữ liệu trong tenant; **external** tác động ra ngoài tenant hoặc tốn tiền nhà cung cấp. Trừ `image.generate`, hành động **external** chỉ được bật cho Worker từ GĐ4, khi đã có Phê duyệt (B6).
+
+**Tập hành động Worker được dùng** = (hành động nền `task.report`, `task.ask_user`, và `knowledge.search` nếu có Knowledge) ∪ (các `requiresActions` khai trong Skill/Workflow đã gắn), **giao** với quyền có thật (kết nối được cấp, hộp thư được cấp đúng quyền). Skill cần hành động mà Worker thiếu kết nối hay quyền thì trình tạo Worker cảnh báo ở bước 4; lúc chạy, hành động đó không có trong danh sách gửi cho model.
+
+**Action Gate** kiểm theo thứ tự, dừng ở bước đầu tiên không qua:
+
+| # | Kiểm | Kết quả khi không qua |
+|---|---|---|
+| 1 | Hành động nằm trong tập Worker được dùng | `deny NOT_ALLOWED` |
+| 2 | Worker `active`; tenant không `suspended`/`disabled`; **phiên hỗ trợ SuperAdmin không bao giờ chạy hành động external** | `deny STATE` |
+| 3 | **Rule `hard`** hiệu lực có `hardCheck` khớp hành động: `denyIf` đúng thì chặn; `approvalIf` đúng thì cần duyệt | `deny RULE_BLOCKED` (kèm id Rule) hoặc `needs_approval` |
+| 4 | Ngân sách: trần `maxCostCredit` của run, ngân sách ngày của Worker, Ví credit (Ví từ GĐ3) | `deny BUDGET` / `deny NO_CREDIT` |
+| 5 | Phê duyệt (B6): hành động external mà chính sách của (Worker, hành động) yêu cầu; hoặc run `tainted` (§9.5.6); hoặc `approvalIf` ở bước 3 | `needs_approval` |
+| 6 | Idempotency: khoá `(run_id, n)`; bước đã chạy thành công không chạy lại khi tiếp tục run | bỏ qua, dùng kết quả cũ |
+
+Hệ quả của Rule: `severity = block` thì `deny RULE_BLOCKED` **dừng cả run** (`stop_reason = rule_blocked`) và công việc vào Điều phối «Bị Rule chặn»; `severity = warn` thì vẫn cho chạy, ghi cảnh báo vào `run_steps` và báo người phụ trách Worker. Các từ chối khác trả về model dưới dạng kết quả hành động lỗi có mã và lý do để nó giải thích hoặc đổi cách làm; cùng một từ chối lặp lại sẽ bị phát hiện lặp (§9.5.7).
+
+**`hardCheck` — Rule chặn bằng mã.** Rule `enforcement = hard` **bắt buộc có `hardCheck`**, kiểm khi phát hành mục Kho; thiếu thì không phát hành được. `hardCheck` là dữ liệu khai báo, không phải mã tuỳ ý:
+
+```jsonc
+// Cấm gửi email ra ngoài domain được phép
+{ "text": "Không gửi dữ liệu nội bộ ra ngoài domain công ty", "severity": "block", "enforcement": "hard",
+  "hardCheck": { "action": "email.send",
+                 "denyIf": { "field": "input.to[*].domain", "notIn": "$grant.allowedDomains" } } }
+
+// Chi phí một lần đăng bài lớn thì phải chờ duyệt
+{ "text": "Đăng bài có chi phí trên 50.000 credit phải chờ duyệt", "severity": "block", "enforcement": "hard",
+  "hardCheck": { "action": "publish.post",
+                 "approvalIf": { "field": "$run.costCredit", "gt": 50000 } } }
+```
+
+Toán tử: `eq`, `ne`, `gt`, `gte`, `lt`, `lte`, `in`, `notIn`, `matches`; ghép bằng `allOf`/`anyOf`. Trường tham chiếu: `input.*` (tham số hành động), `$tenant.*` (cài đặt tenant), `$worker.*`, `$run.*`, `$integration.*`, `$grant.*` (quyền hộp thư hoặc kết nối đang dùng). Rule `enforcement = prompt` chỉ vào prompt và **không được bảo đảm**; giao diện gắn nhãn «Nhắc trong prompt» khác với «Chặn bằng mã» để người quản trị biết Rule nào thật sự chặn.
+
+#### 9.5.5 Trạng thái, hàng đợi, đồng thời
+
+| Trạng thái run | Nghĩa | Trạng thái Công việc (Workspace §8.2, §8.6) |
+|---|---|---|
+| `queued` | Trong hàng đợi | Mới |
+| `running` | Đang chạy | Đang thực hiện |
+| `waiting_approval` | Chờ phê duyệt; state đã lưu | Đang thực hiện (hiện «Chờ duyệt») |
+| `waiting_user` | Worker hỏi lại | Vướng · «Thiếu thông tin đầu vào» |
+| `succeeded` | Xong | Chờ nghiệm thu (Worker **không** tự Hoàn tất) |
+| `failed`, `timed_out` | Lỗi hoặc dừng do giới hạn | Vướng, lý do theo `stop_reason` (bảng dưới) |
+| `cancelled` | Bị huỷ | Đã huỷ nếu người huỷ công việc |
+
+Cột «Trạng thái Công việc» là **ánh xạ mặc định**. Admin đổi được ánh xạ sự kiện → trạng thái kế tiếp; động cơ chỉ chuyển theo ánh xạ và bảng chuyển được phép (§25.3).
+
+| `stop_reason` | Lý do Vướng |
+|---|---|
+| `rule_blocked` | Bị Rule chặn |
+| `budget`, `credit`, `max_cost` | Hết ngân sách / hết credit |
+| `needs_confidential` | Cần tài liệu Mật (Worker phát hiện thiếu dữ liệu Mật, Workspace §11.3) |
+| `max_steps`, `timeout`, `loop_detected`, `error` | Lỗi chạy |
+
+**Hàng đợi và đồng thời**
+
+- **Chat** chạy ngay trong request, không xếp hàng; tối đa 30 lượt mỗi phút mỗi người.
+- **Công việc** chạy qua `jobs (kind = 'worker_run')`. Mỗi Worker chạy **một công việc một lúc**; mỗi tenant tối đa `maxConcurrentRuns` (§10); toàn hệ thống tối đa `RUN_CONCURRENCY` (mặc định 8). Hàng đợi lấy lần lượt giữa các tenant, không FIFO toàn cục, để một tenant không chiếm hết chỗ. Khi tranh chỗ, chat được ưu tiên hơn công việc.
+- **Tiếp tục.** `waiting_approval` và `waiting_user` lưu `worker_run_state` rồi nhả chỗ chạy. Duyệt xong hoặc người trả lời thì sinh job `worker_run_resume`. Quá hạn duyệt thì làm theo `on_overdue` của quy tắc duyệt (§24.5): huỷ hành động và báo · nhắc lại và báo Điều phối · **chuyển lên cấp duyệt kế tiếp** (run vẫn chờ) · dừng tác vụ. Huỷ hoặc dừng thì run `cancelled` và công việc vào Điều phối «Bị từ chối phê duyệt».
+- **Sập giữa chừng.** Job `running` quá `locked_until` được nhặt lại. Run chỉ chạy lại từ bước đang dở nếu bước đó **chưa** gọi hành động external. Nếu đã gọi (hoặc không chắc) thì run `failed` kèm ghi chú «không rõ hành động ra ngoài đã chạy hay chưa», để người xem trước khi chạy lại, tránh gửi trùng.
+- **Thử lại.** Lỗi tạm (429, 5xx, mạng) khi gọi model hoặc hành động `read`: tối đa 3 lần, chờ 2 giây, 6 giây, 18 giây. Hành động `write` và `external` **không tự thử lại**.
+- **Huỷ.** Tín hiệu huỷ dừng luồng model; hành động đang chạy dở được chờ xong, không ngắt nửa chừng.
+
+#### 9.5.6 Dữ liệu không tin cậy
+
+Email đến, nội dung tệp đính kèm trong chat hoặc công việc, kết quả `http.call` và mọi văn bản do người ngoài tenant viết là **dữ liệu, không phải chỉ thị**. Knowledge do tenant tự nạp vào Kho thì coi là tin cậy.
+
+- Nội dung loại này được đưa vào prompt trong khối đánh dấu nguồn (`<du_lieu_khong_tin_cay nguon="…">`), kèm lời dặn model không làm theo lệnh nằm trong khối đó.
+- **Lời dặn không phải chốt chặn.** Run đã nhận khối loại này thì đặt `tainted = true`; từ đó mọi hành động **external** của run (gửi email, đăng bài, gọi HTTP) cần người duyệt trước (Gate bước 5), trừ `image.generate`, hoặc trừ khi Admin cho phép rõ cho cặp (Worker, hành động). Nhờ vậy dù model bị lừa, hành động ra ngoài vẫn không tự chạy.
+
+#### 9.5.7 Giới hạn và chi phí
+
+| Giới hạn | Mặc định đề xuất | Cấu hình |
+|---|---|---|
+| Số bước mỗi run (`maxSteps`) | chat 8 · công việc 25 | Console đặt mặc định và trần hệ thống 50; Worker ghi đè trong `runtime.limits` nhưng không vượt trần |
+| Chi phí mỗi run (`maxCostCredit`) | nhỏ hơn của ngân sách ngày còn lại của Worker và 50.000 credit | như trên |
+| Thời gian | gọi model: chat 90 giây, công việc 300 giây · cả run: chat 5 phút, công việc 20 phút | Console |
+| Lặp | cùng hành động và cùng tham số (so băm) 3 lần liên tiếp thì dừng `loop_detected` | cố định |
+| Tệp tạo ra | tối đa 20 MB mỗi tệp, 5 tệp mỗi run | Console |
+| Ngân sách ngày của Worker | mọi Worker mới có `budget.dailyCredit` mặc định (đề xuất 50.000) và `onExceed = pause`; Admin sửa ở trình tạo bước 2 | tenant |
+
+**Từ GĐ1b** có đo token đổi ra credit bằng `model_pricing` (SuperAdmin nhập trên Console) và ghi `usage_daily`; **trần cứng** gồm `maxCostCredit` mỗi run và `budget.dailyCredit` mỗi Worker. Chưa có Ví và thanh toán (GĐ3), nên trong thời gian này khoá Platform chỉ phục vụ tenant nội bộ và demo; không nhận khách trả tiền trước GĐ3.
+
+#### 9.5.8 Tệp tạo ra và kết quả bàn giao
+
+`file.generate` nhận dữ liệu có cấu trúc (tiêu đề, đoạn văn, bảng, hoặc giá trị điền vào mẫu có sẵn trong Kho) rồi render bằng thư viện: `exceljs` cho `.xlsx`, `docxtemplater` + `pizzip` cho `.docx` (đã có trong dự án), thư viện PDF đã kiểm chứng (§3, nguyên tắc 8) cho `.pdf`. Kết quả lưu ở object-store `tenants/{t}/outputs/…` và tạo bản ghi `task_outputs` (Workspace §10). Không thực thi mã do model sinh ra.
+
+#### 9.5.9 Phân kỳ
+
+| GĐ | Có trong động cơ |
+|---|---|
+| **1b** | Vòng lặp; Gate bước 1, 2, 3 (Rule `hard` với `hardCheck`), 4 (chỉ trần run và ngân sách ngày Worker), 6; `task.report`, `task.ask_user`; các kiểu run `chat`, `task`, `test`, `plan`; `worker_runs`, `run_steps`; hàng đợi và giới hạn đồng thời; thử lại, huỷ, nhặt lại sau sập; ghi `config_version`; **kích hoạt công việc và chuỗi chuyển giao** (§9.5.11); ánh xạ sự kiện → trạng thái (§25.3) |
+| **2** | `knowledge.search` và truy xuất tự động (Qdrant, §15); `file.generate`; `image.generate`; **Gate bước 5 cho phê duyệt nội bộ** (bước «Chờ người duyệt» của Workflow, `approvalIf`, quy tắc duyệt) và tiếp tục run sau duyệt; **run `social`** và hành động `social.reply`, `social.handoff` (§9.5.12) |
+| **3** | Gate bước 4 đầy đủ: Ví credit, ngân sách tháng, tự tạm dừng khi hết credit |
+| **4** | `email.*`, `publish.post`, `http.call` (hành động external ra ngoài Chat Social) |
+
+#### 9.5.10 Kiểm thử bắt buộc
+
+- Gate: bảng test mỗi bước 1–6 với cả hai kết quả đạt và không đạt.
+- `hardCheck`: mỗi toán tử, ghép `allOf`/`anyOf`, và Rule `hard` thiếu `hardCheck` không phát hành được.
+- Chat và công việc cùng ngữ cảnh cho cùng kết quả Gate.
+- Run `tainted`: `email.send` luôn thành `needs_approval`.
+- Sập giữa chừng: trước và sau hành động external; không gửi trùng.
+- Chạm `maxSteps`, `maxCostCredit`, `loop_detected`: run dừng đúng `stop_reason` và công việc vào đúng lý do Vướng.
+- Run của phiên hỗ trợ không chạy được hành động external và không trừ Ví khách.
+
+#### 9.5.11 Kích hoạt công việc và chuỗi chuyển giao
+
+Worker **chỉ** nhận việc qua: (1) kế hoạch Orchestrator đã duyệt, (2) Công việc được tạo (trong dự án / phiếu, việc lẻ, yêu cầu liên phòng). Hội thoại là trao đổi, không phải công việc, trừ khi người dùng bấm «Tạo công việc từ hội thoại». Worker **không tự giao việc** cho Worker khác (§9.5.1); chuỗi nhiều Worker luôn do kế hoạch Orchestrator hoặc do người dựng sẵn bằng **phụ thuộc** giữa các công việc. Đặc tả phía người dùng: tài liệu Workspace §8.7.
+
+**Điều kiện bắt đầu** (`tasks.start_rule`):
+
+| Giá trị | Khi nào động cơ xếp việc vào hàng đợi |
+|---|---|
+| `after_deps` (mặc định khi có phụ thuộc) | Mọi việc phụ thuộc đã đạt điều kiện của cạnh nối, **và** đã tới `start_at` nếu có đặt |
+| `at_time` | Tới `start_at` (giờ bắt đầu đã hẹn). **Hạn chót (`deadline`) không phải điều kiện bắt đầu**; hạn chót chỉ dùng để cảnh báo |
+| `immediate` (mặc định khi không phụ thuộc) | Ngay khi tạo hoặc khi được duyệt (kế hoạch Orchestrator) |
+| `manual` | Người bấm «Bắt đầu» |
+
+**Điều kiện của cạnh nối** (`task_dependencies.condition`):
+- `done` (**mặc định**): việc trước **xong phần thực hiện**. Với Worker là `succeeded` (trạng thái nhóm «Chờ nghiệm thu»), với người là trạng thái nhóm «Kết thúc · đạt». Chuỗi chạy liền mạch, **không dừng chờ nghiệm thu từng bước**; nghiệm thu dồn về người nghiệm thu của chuỗi.
+- `accepted`: chờ việc trước **được nghiệm thu**. Chỉ dùng khi người dựng chuỗi cố ý đặt điểm kiểm tra.
+
+**Chuyển giao.** Khi việc kế tiếp bắt đầu, động cơ đưa **kết quả bàn giao mới nhất** của các việc trước (`task_outputs`) vào ngữ cảnh dưới mục «Đầu vào từ việc trước», kèm tên việc và người/Worker làm. Nếu run của việc trước có `tainted = true` thì run kế tiếp cũng bắt đầu ở `tainted = true`. Cờ Mật không truyền theo chuỗi: mỗi việc tự có `confidential_allowed` của nó; kết quả có dùng tài liệu Mật chỉ được chuyển giao khi việc kế tiếp cũng được phép dùng tài liệu Mật, nếu không thì đi theo luồng duyệt chuyển (Workspace §11.3).
+
+**Khi một bước bị vướng.** Việc kế tiếp chuyển trạng thái «Chờ việc trước» và hiện rõ **việc nào đang chặn, vì sao, ai cần xử lý**. Người phụ trách chuỗi (người ra lệnh Orchestrator, PM của dự án hoặc người yêu cầu) và người phụ trách Worker của bước vướng được báo ngay (Workspace §14). Xử lý xong ở Điều phối (chạy lại, sửa đầu bài, đổi người thực hiện) thì chuỗi **tự chạy tiếp**, không cần thao tác thêm. Bước bị đóng «Kết thúc · không đạt» thì các bước sau **tạm dừng** và hỏi người phụ trách chuỗi: tiếp tục không có đầu vào đó, giao lại, hay huỷ phần còn lại của chuỗi.
+
+**Nghiệm thu trả về «Làm lại» sau khi các bước sau đã chạy.** Các bước sau được đánh dấu «Đầu vào đã đổi», hiện nút **Chạy lại từ bước này**; hệ thống không tự chạy lại để tránh tốn chi phí ngoài ý muốn.
+
+**Hàng đợi.** Mỗi Worker chạy một công việc một lúc (§9.5.5); bước tới lượt mà Worker đang bận thì hiện «Xếp hàng sau việc X». Bước có nguy cơ trễ hạn (thời gian chờ ước tính vượt `deadline`) thì báo sớm.
+
+**Toàn vẹn.** Phụ thuộc vòng tròn bị từ chối lúc tạo. Một chuỗi đi qua Worker «không nhận lệnh từ Orchestrator» (U13) chỉ dựng được bởi người, không qua Orchestrator.
+
+#### 9.5.12 Chế độ Chat Social (run `social`)
+
+Chỉ áp cho Worker **gắn cờ Chat Social** (`workers.social_agent = true`, đặt ở trình tạo hoặc Sửa Worker; chỉ Worker có cờ mới chọn được làm «Worker tự trả lời» của một kênh, §24.17). Mỗi tin nhắn mới của khách trong cuộc chat do Worker phụ trách tạo một run `kind = social`.
+
+| Quy định | Nội dung |
+|---|---|
+| **Chỉ trả lời từ tài liệu được gán** | Câu trả lời phải dựa trên đoạn truy xuất từ Knowledge **gắn cho chính Worker này**. Không có đoạn nào đủ liên quan (dưới ngưỡng điểm) thì **không trả lời bằng kiến thức chung của model**: gửi câu chờ đã cấu hình và chuyển người (`social.handoff`) |
+| **Không bao giờ dùng tài liệu Mật** | Khách là người ngoài tổ chức; tập `item_id` của run `social` luôn loại mục `confidential = true` |
+| **Tập hành động cố định** | `knowledge.search` (giới hạn như trên), `social.reply` (gửi văn bản vào **đúng cuộc chat đang mở**; liên kết trong câu trả lời chỉ được lấy từ Knowledge), `social.handoff` (chuyển người theo quy tắc chuyển người của kênh). Không có hành động nào khác, kể cả khi Worker có Skill/Workflow khác |
+| **Dữ liệu không tin cậy** | Tin nhắn của khách là dữ liệu không tin cậy (§9.5.6). `social.reply` là **ngoại lệ duy nhất** được chạy dù run `tainted`, vì chỉ trả lời trong cuộc chat khách tự mở và chỉ chứa nội dung từ Knowledge. Mọi hành động khác (gửi ZNS, tin hàng loạt…) vẫn theo Quy tắc duyệt |
+| **Rule** | Rule hiệu lực của Worker áp đầy đủ; chạm Rule `block` thì chuyển người |
+| **Giới hạn** | Tối đa 1 câu trả lời cho mỗi tin của khách; trần độ dài; trần số lượt mỗi cuộc chat mỗi giờ; ngân sách ngày của Worker |
+| **Chi phí** | Tính cho bộ phận sở hữu kênh |
+| **Giai đoạn** | GĐ 2 |
 
 ---
 
@@ -893,10 +1221,11 @@ Thao tác: Tạm dừng · Nhân bản (trong hạn mức) · Xuất cấu hình
 | Số Worker (không tính Orchestrator) | 3 | 10 | 25 | tuỳ chỉnh |
 | Số người dùng | 5 | 25 | 100 | tuỳ chỉnh |
 | Số đơn vị (*thêm mới, đề xuất*) | 1 | 3 | 20 | tuỳ chỉnh |
-| Ngành dọc và Rule kế thừa | ✖ (chỉ phòng ban) | ✔ | ✔ | ✔ |
+| Ngành dọc và Rule kế thừa theo đơn vị/ngành | ✖ (chỉ phòng ban; **vẫn có Global Rule**, B3) | ✔ | ✔ | ✔ |
 | Dung lượng Knowledge | 200 MB | 2 GB | 10 GB | tuỳ chỉnh |
 | Số kết nối API | 3 | 10 | 30 | tuỳ chỉnh |
 | Số hộp thư email (*thêm mới, đề xuất*) | 1 | 5 | 30 | tuỳ chỉnh |
+| Công việc của Worker chạy song song (*thêm mới, đề xuất*; §9.5.5) | 2 | 5 | 15 | tuỳ chỉnh |
 | Model | model rẻ | + Sonnet | + Opus | tất cả |
 | Nguồn MCP (Drive/Notion…) | ✖ | ✖ | ✔ | ✔ |
 | Dùng khoá riêng (BYOK) | ✖ | ✔ | ✔ | ✔ |
@@ -987,14 +1316,17 @@ Mỗi **kết nối mô hình** có một trong hai chế độ:
 
 - **Đơn vị (Q4):** 1 credit = 1 VNĐ. Giá bán token = giá nhà cung cấp × hệ số (mặc định 1,3, SuperAdmin chỉnh theo từng model trong `model_pricing`). Giao diện luôn hiện cả số token và số tiền.
 - **Mặc định khi tạo tenant (Q6):** tenant mới được gắn sẵn kết nối mô hình **Platform**, nên tạo Worker và dùng được ngay. BYOK là tuỳ chọn từ gói Standard.
-- **Hai nguồn credit (bucket):** `plan` là credit tặng theo chu kỳ, **không cộng dồn** sang chu kỳ sau. `purchased` là credit nạp, **hết hạn sau 12 tháng**. Khi trừ, dùng bucket `plan` trước, sau đó `purchased` theo thứ tự sắp hết hạn trước.
 - **Gói nạp:** ví dụ 200.000 / 500.000 / 2.000.000 VNĐ, hoặc số tuỳ chọn ≥ 100.000.
-- **Trừ tiền không tốn lượt ghi:**
-  - Trước mỗi lượt gọi, **ước tính chi phí tối đa** (`maxTokens` × giá output) và chặn nếu Ví không đủ.
-  - Sau khi gọi, cộng dồn chi phí thật trong bộ nhớ theo (tenant, worker, model). Cứ mỗi 30 giây hoặc mỗi khi một tác vụ kết thúc, ghi **một** dòng `consume` vào ledger.
-  - Cho phép âm tối đa bằng ngưỡng nhỏ (mặc định 5.000 credit) để không cắt ngang một tác vụ đang chạy dở.
+- **Lô credit (`credit_lots`).** Mỗi lần cộng credit tạo một lô, mỗi lô thuộc một bucket: `plan` (tặng theo chu kỳ, **không cộng dồn** sang chu kỳ sau), `purchased` (nạp, **hết hạn sau 12 tháng** kể từ ngày nạp), `adjust` (SuperAdmin cộng tay, không hết hạn, lý do bắt buộc). `wallets.balance` là số đệm bằng tổng `remaining` của các lô còn hạn trừ `overdraft`; tác vụ đối soát kiểm lại hằng giờ.
+- **Thứ tự trừ.** Lô `plan` còn hạn trước; sau đó các lô còn lại theo `expires_at` tăng dần (lô không hết hạn xếp cuối). Một lần ghi sổ trừ nhiều lô thì sinh **một dòng ledger cho mỗi lô** (cột `lot_id`).
+- **Điều chỉnh tay (§22.6).** Điều chỉnh **cộng** tạo lô `adjust`. Điều chỉnh **trừ** đi qua đúng thứ tự trừ ở trên và sinh dòng ledger `adjust` âm cho từng lô bị trừ; nếu không đủ số dư thì từ chối (không đẩy vào `overdraft`).
+- **Gia hạn gói.** Lô `plan` của chu kỳ cũ đóng, phần còn lại ghi dòng `expire`; lô `plan` mới cấp bằng dòng `grant_plan`. Lô `purchased` quá hạn do tác vụ đối soát đóng, cũng ghi dòng `expire`.
+- **Vượt số dư (`overdraft`).** Cho phép âm tối đa bằng một ngưỡng nhỏ (mặc định 5.000 credit) để không cắt ngang tác vụ đang chạy dở. Phần âm ghi vào `wallets.overdraft`; lần cộng credit kế tiếp trả `overdraft` trước rồi mới tạo `remaining`. Quá ngưỡng thì chặn.
+- **Chặn trước khi gọi.** Ước tính chi phí tối đa (`maxTokens` × giá output) và so với `balance` **đã trừ phần đang chờ ghi sổ trong bộ nhớ**; không đủ thì từ chối.
+- **Cộng dồn trong bộ nhớ để không tốn lượt ghi.** Chi phí thật cộng dồn theo (tenant, worker, model, run). Cứ mỗi 30 giây hoặc khi một run kết thúc thì ghi sổ trong **một giao dịch** (khoá `wallets` bằng `FOR UPDATE` → trừ lô → ghi ledger → cập nhật số đệm). Tắt máy chủ êm (SIGTERM) thì ghi sổ hết trước khi thoát. Nếu máy chủ sập, mất tối đa 30 giây chi phí chưa ghi (nghiêng về phía khách; ghi nhận ở §21).
+- **v1 chạy một tiến trình `aios-server`** (§3.1), vì cách cộng dồn trên chỉ đúng với một tiến trình. Muốn nhân bản thì phải chuyển phần «chờ ghi sổ» vào PostgreSQL (`UPDATE usage_pending SET amount = amount + $1`) **trước khi** nhân bản.
 - **Hết credit:** nếu `autoPauseAtZero` thì Worker dùng kết nối Platform chuyển `paused (hết credit)`, báo cho Admin, nạp xong tự chạy lại. Worker dùng BYOK không bị ảnh hưởng.
-- **Không bao giờ sửa trực tiếp `wallet.balance`.** Mọi thay đổi đều đi qua một dòng ledger, trong cùng giao dịch. Điều chỉnh tay của SuperAdmin là dòng `adjust` có lý do bắt buộc.
+- **Không bao giờ sửa trực tiếp `wallet.balance` hay `credit_lots.remaining`.** Mọi thay đổi đều đi qua một dòng ledger, trong cùng giao dịch. Điều chỉnh tay của SuperAdmin là dòng `adjust` có lý do bắt buộc.
 
 ---
 
@@ -1064,7 +1396,7 @@ Lỗi `402` hoặc `insufficient credit` từ nhà cung cấp được nhận di
 | Mô hình ngôn ngữ | OpenRouter · Anthropic · OpenAI · Google Gemini | API key | OpenRouter: có (cần kiểm) · các nhà cung cấp khác: nhập tay | `.env` `OPENROUTER_API_KEY` |
 | Sinh ảnh | Genful | Token | Có (`soDuCredit`) | `genful.config.json` |
 | Nhúng vector (embedding) | BGE-M3 tự chạy (Q5) — kết nối **của Platform**, tenant không thấy | Nội bộ | — | — |
-| Xuất bản nội dung | TripX SEO-CMS · WordPress · Shopify | Token / OAuth | — | `tripx-webpost/config.json` |
+| Xuất bản nội dung | WordPress · Shopify | Token / OAuth | — | — |
 | Kênh nhắn tin | Telegram · Zalo OA · Facebook Page/Messenger · Discord · Slack | Bot token / OAuth | — | (Discord trước qua Hermes — bỏ) |
 | Google Workspace | Drive · Sheets · Calendar | OAuth | — | — |
 | Email của tenant | Xem §14 | OAuth / IMAP | — | — |
@@ -1143,12 +1475,12 @@ Upload (≤20MB, kiểm magic bytes, chặn file thực thi) → Lưu file (tena
 
 **Thiết kế Qdrant:**
 - **Một collection** `aios_knowledge`. Dùng chế độ multitenancy của Qdrant: payload index `tenant_id` với `is_tenant: true`.
-- Payload mỗi điểm: `tenant_id, item_id, version, worker_id (null nếu mục Kho dùng chung), state, function_ids`.
-- Truy vấn của Worker **luôn có** bộ lọc `tenant_id = X` **và** `item_id ∈ {các mục Knowledge Worker đang gắn, đúng phiên bản}`. Bộ lọc này đặt cứng trong `knowledgeStore.search()`; handler không tự dựng được truy vấn.
+- Payload mỗi điểm: `tenant_id, item_id, version, worker_id (null nếu mục Kho dùng chung), state, function_ids`. **Không có cờ Mật trong payload** (xem dưới).
+- Truy vấn của Worker **luôn có** bộ lọc `tenant_id = X` **và** `item_id ∈ S`. Tập `S` được **tính từ PostgreSQL ngay trước mỗi truy vấn**: các mục Knowledge Worker đang gắn (đúng phiên bản), **trừ** các mục có `confidential = true` khi công việc không được phép dùng tài liệu Mật (`confidential_allowed = false`, tài liệu Workspace §9.1, §11.2). Cờ Mật chỉ có **một nguồn sự thật** là `library_items.confidential`; không sao chép vào Qdrant, nên bật hay tắt cờ có hiệu lực ngay ở lượt truy vấn kế tiếp, không cần index lại và không có khoảng lệch. Việc tính `S` và dựng bộ lọc đặt cứng trong `knowledgeStore.search()`; handler không tự dựng được truy vấn.
+- Tri thức chỉ có **2 trạng thái**: **Đang dùng** (đưa vào truy vấn) và **Lưu trữ** (mặc định **không** đưa vào truy vấn thường, trừ khi người dùng hỏi về lịch sử). Không phân tầng T1–T4 (§24.6).
 - Phiên bản mới của tài liệu được index song song; xong mới chuyển con trỏ và xoá vector của bản cũ (không có khoảng trống "đang không biết gì").
-- Tri thức chỉ có **2 trạng thái**: **Đang dùng** (đưa vào truy vấn) và **Lưu trữ** (mặc định **không** đưa vào truy vấn thường, trừ khi người dùng hỏi về lịch sử). Không phân tầng T1–T4 (chốt v2.0, §24.6).
 - **Vận hành:** Qdrant chạy Docker trên server riêng, bật API key, **không mở cổng ra Internet** (chỉ mạng nội bộ Docker); snapshot hằng ngày (B11).
-- **Kiểm thử cách ly:** Worker A không thấy tài liệu của Worker B (nếu không được gắn) và tenant X không thấy tenant Y (test tự động).
+- **Kiểm thử cách ly:** Worker A không thấy tài liệu của Worker B (nếu không được gắn) và tenant X không thấy tenant Y (test tự động). Thêm: bật rồi tắt cờ Mật của một tài liệu, truy vấn ngay sau mỗi lần đổi phải cho kết quả đổi theo.
 - **Nguồn MCP** (Drive, Notion, SharePoint): đồng bộ định kỳ vào cùng pipeline; chỉ có từ gói Business.
 
 ---
@@ -1159,19 +1491,19 @@ Cả 11 hạng mục đã được đồng ý và đưa vào phạm vi.
 
 | # | Hạng mục | Đặc tả rút gọn | GĐ |
 |---|---|---|---|
-| **B1** | Nhật ký kiểm toán | Ghi mọi thay đổi cấu hình, quyền, kết nối, thanh toán, gửi email, phiên hỗ trợ của SuperAdmin. Lọc theo người, hành động, đối tượng, ngày. Xuất CSV. Lưu theo `auditRetentionDays`. Không sửa, không xoá được | 0 |
-| **B2** | Sử dụng, chi phí, ngân sách tự dừng | §12 | 3 |
-| **B3** | Global Rule | Là Rule scope `tenant` trong §8.3. **v2.0:** quản lý ở tab Rule của Orchestrator, có thời gian áp dụng và trạng thái đồng bộ tới Worker (§24.4) | 1 |
+| **B1** | Nhật ký kiểm toán | Ghi mọi thay đổi cấu hình, quyền, kết nối, thanh toán, gửi email, phiên hỗ trợ của SuperAdmin. Lọc theo người, hành động, đối tượng, ngày. Xuất CSV. Lưu theo `auditRetentionDays`. Không sửa, không xoá được | 0a |
+| **B2** | Sử dụng, chi phí, ngân sách tự dừng | §12 | 1b (trần cứng, §9.5.7) · 3 (đầy đủ) |
+| **B3** | Global Rule | Là Rule scope `tenant` trong §8.3, quản lý ở tab Rule của **Cấu hình Orchestrator**, có thời gian áp dụng (§24.4) | 1a |
 | **B4** | Mẫu Worker | Một bộ cấu hình dựng sẵn = vai trò + model gợi ý + gói mục Kho. Nằm ở Kho hệ thống (SuperAdmin) và Kho tenant. Dùng ở bước 1 trình tạo | 2 |
 | **B5** | Sức khoẻ Worker và kết nối | Trạng thái 🟢🟡🔴; lỗi liên tiếp, độ trễ, kết nối hết hạn hoặc hết tiền; hiện trên Tổng quan | 3 |
-| **B6** | Phê duyệt (Decision Gate) | **v2.0:** cấu hình tập trung ở Cài đặt › Quy tắc duyệt (điều kiện, nhiều cấp, uỷ quyền — §24.5). Cấu hình theo Worker và hành động: gửi email, đăng bài, chi phí một tác vụ > X, ghi dữ liệu ra ngoài. Hộp "Chờ duyệt": Duyệt / Từ chối kèm góp ý / Sửa rồi duyệt. Hết hạn duyệt thì huỷ | 4 |
+| **B6** | Phê duyệt (Decision Gate) | **v2.0:** cấu hình tập trung ở Cài đặt › Quy tắc duyệt (điều kiện, nhiều cấp, uỷ quyền — §24.5). Cấu hình theo Worker và hành động: gửi email, đăng bài, chi phí một tác vụ > X, ghi dữ liệu ra ngoài. Hộp "Chờ duyệt": Duyệt / Từ chối kèm góp ý / Sửa rồi duyệt. Hết hạn duyệt thì huỷ | 2 |
 | **B7** | Xuất/nhập cấu hình Worker | Xuất JSON gồm Worker + binding + nội dung mục tinh chỉnh (**không** kèm bí mật). Nhập vào tenant khác: khớp mục Kho theo nguồn, kiểm hạn mức | 4 |
-| **B8** | Dữ liệu tenant: xuất & xoá | Xuất toàn bộ dữ liệu tenant (ZIP). Khi `cancelled`: mở xuất 30 ngày rồi xoá hẳn (CSDL, file, vector). *Phần pháp lý về dữ liệu cá nhân tạm chưa xử lý theo chỉ đạo; chỉ làm phần kỹ thuật* | 4 |
-| **B9** | Vào quản trị tenant (SuperAdmin) | Đặc tả đầy đủ ở **§22.8**: phiên hỗ trợ mang danh tính SuperAdmin; vé dùng 1 lần chuyển phiên giữa hai host; lý do + MFA; mặc định **chỉ xem**; 30 phút; danh sách thao tác luôn bị chặn; **luôn** gửi email cho Admin tenant; chi phí model không trừ Ví khách | 1 |
-| **B10** | Thông báo | Kênh: email + trong Portal (Telegram/Slack qua kết nối, tuỳ chọn). Sự kiện: sắp hết hạn gói, Ví hoặc số dư nhà cung cấp thấp, Worker tự dừng, kết nối lỗi, user bị khoá, có việc chờ duyệt. Mỗi người tự bật/tắt từng loại | 3 |
-| **B11** | Sao lưu & khôi phục | Sao lưu CSDL hằng ngày (giữ 30 ngày), snapshot Qdrant, sao lưu thư mục file, bản sao ở máy hoặc dịch vụ khác. Diễn tập khôi phục mỗi quý. Khôi phục một tenant riêng lẻ do SuperAdmin thực hiện | 1 (sao lưu) · 4 (khôi phục theo tenant) |
+| **B8** | Dữ liệu tenant: xuất & xoá | Xuất toàn bộ dữ liệu tenant (ZIP; **hội thoại chỉ đưa vào khi Admin tick chọn**, ghi nhật ký `conversation.exported`; SuperAdmin không xuất được hội thoại). Khi `cancelled`: mở xuất 30 ngày rồi xoá hẳn (CSDL, file, vector). *Phần pháp lý về dữ liệu cá nhân tạm chưa xử lý theo chỉ đạo; chỉ làm phần kỹ thuật* | 4 |
+| **B9** | Vào quản trị tenant (SuperAdmin) | Đặc tả đầy đủ ở **§22.8**: phiên hỗ trợ mang danh tính SuperAdmin; vé dùng 1 lần chuyển phiên giữa hai host; lý do + MFA; mặc định **chỉ xem**; 30 phút; danh sách thao tác luôn bị chặn; **luôn** gửi email cho Admin tenant; chi phí model không trừ Ví khách | 1b |
+| **B10** | Thông báo | Kênh: email + trong Portal (Telegram qua Bot của tenant từ GĐ 1b, §25.2; Slack qua kết nối, tuỳ chọn). Sự kiện: sắp hết hạn gói, Ví hoặc số dư nhà cung cấp thấp, Worker tự dừng, kết nối lỗi, user bị khoá, có việc chờ duyệt. Mỗi người tự bật/tắt từng loại | 3 |
+| **B11** | Sao lưu & khôi phục | Sao lưu CSDL hằng ngày (giữ 30 ngày), snapshot Qdrant, sao lưu thư mục file, bản sao ở máy hoặc dịch vụ khác. Diễn tập khôi phục mỗi quý. Khôi phục một tenant riêng lẻ do SuperAdmin thực hiện | 0b (sao lưu) · 4 (khôi phục theo tenant) |
 
-Đi kèm B1–B11 có **thương hiệu tenant**: logo và màu trên trang đăng nhập và Portal (dùng ở §4.4), làm ở Giai đoạn 1.
+Đi kèm B1–B11 có **thương hiệu tenant**: logo và màu trên trang đăng nhập và Portal (dùng ở §4.4), làm ở Giai đoạn 1a.
 
 ---
 
@@ -1196,17 +1528,17 @@ Lỗi trả về thống nhất `{ "error": { "code", "message", "details" } }`.
 | **Console** | `plans` CRUD · `tenants` CRUD · `model-pricing` CRUD · `system-library` CRUD · `platform-integrations` CRUD · `payments` (danh sách, `/:id/confirm-manual`, `/:id/refund`). Dashboard, hành động trên tenant, phiên hỗ trợ, nhân viên hệ thống, nhật ký và sức khoẻ: xem **§22.13** |
 | **Tenant / thuê bao** | `GET /tenant` · `PATCH /tenant/settings` · `PATCH /tenant/branding` · `GET /subscription` · `POST /subscription/{renew,change-plan}` · `GET /invoices` |
 | **Ví & sử dụng** | `GET /wallet` · `GET /wallet/ledger` · `POST /wallet/topup` · `GET /usage?month=&groupBy=` · `GET /usage/provider-balances` · `POST /integrations/:id/balance` (nhập tay) |
-| **Tổ chức** | `units` CRUD + `POST /units/:id/move/preview` + `/move` · `functions` CRUD · `departments` CRUD · `GET /org?view=unit|function&functionId=` · `GET /org/matrix` · `PUT /org/assignments` |
+| **Tổ chức** | `units` CRUD + `POST /units/:id/move/preview` + `/move` · `functions` CRUD · `departments` CRUD · `GET /org?view=unit\|function&functionId=` · `GET /org/matrix` · `PUT /org/assignments` |
 | **Người dùng** | `users` CRUD · `POST /users/bulk` · `POST /users/:id/{lock,unlock,disable,enable,reset-password,revoke-sessions}` |
 | **Kho KWSR** | `library` CRUD (`?type&functionId&unitId&status`) · `GET/POST /library/:id/versions` · `GET /library/:id/diff?from&to` · `POST /library/:id/{publish,deprecate}` · `GET /library/:id/usage` · `POST /library/import-system/:systemItemId` · `POST /library/:id/knowledge` (multipart) · `POST /library/:id/reindex` |
 | **Rule kế thừa** | `policy-rules` CRUD · `GET /workers/:id/effective-rules` · `POST /workers/:id/rule-overrides` (khi `allowLocalOverride`) |
-| **Worker** | `POST /workers/wizard/start` (cấp `wizardToken`) · `POST /workers` (bắt buộc `wizardToken`) · `GET/PATCH/DELETE /workers/:id` · `POST /workers/:id/{activate,pause,archive,restore,duplicate,test}` · `GET/POST/PATCH/DELETE /workers/:id/bindings[/:bid]` · `POST /workers/:id/bindings/:bid/{upgrade,merge}` · `GET /workers/:id/export` · `POST /workers/import` |
+| **Worker** | `POST /workers/wizard/start` (cấp `wizardToken`) · `POST /workers` (bắt buộc `wizardToken`) · `GET/PATCH/DELETE /workers/:id` · `POST /workers/:id/{activate,pause,archive,restore,duplicate,test}` · `GET/POST/PATCH/DELETE /workers/:id/bindings[/:bid]` · `POST /workers/:id/bindings/:bid/{upgrade,merge}` · `GET /workers/:id/export` · `POST /workers/import` · `GET /workers/:id/runs` · `GET /runs/:id` (siêu dữ liệu và các bước, không có nội dung) · `POST /runs/:id/cancel` |
 | **Kết nối** | `GET /integrations/catalog` · `integrations` CRUD · `POST /integrations/:id/test` · `GET /integrations/oauth/:provider/{start,callback}` · `PUT /workers/:id/integrations` |
 | **Email tenant** | `mailboxes` CRUD (dùng chung: Admin; cá nhân: chính chủ) · `GET /mailboxes/oauth/:provider/{start,callback}` · `PUT /workers/:id/mailbox-grants` · `GET /mailboxes/:id/send-log` |
 | **Phê duyệt / Thông báo / Audit** | `GET /approvals` · `POST /approvals/:id/{approve,reject}` · `GET/PATCH /notifications/preferences` · `GET /audit` · `GET /audit/export` |
-| **Runtime (dashboard)** | `POST /workers/:id/chat` · `POST /orchestrator/command` — thay cho `/api/agents/:id/{chat,knowledge}` hiện tại |
+| **Runtime (Workspace)** | `POST /workers/:id/chat` · `POST /orchestrator/plans` (tài liệu Workspace §17) |
 
-Các endpoint nghiệp vụ hiện có (`/api/db/*`, `/api/hr/*`, `/api/sales/*`, `/api/marketing/*`, `/api/tripx/*`) chuyển về dưới `/api/v1/` và **bắt buộc có phiên + tenant**.
+Không có route nào dưới `/api/` ngoài ba nhóm host ở trên, và **mọi route đều bắt buộc có phiên + tenant** (trừ nhóm công khai).
 
 ---
 
@@ -1217,40 +1549,45 @@ docker-compose.yml          caddy · aios-server · postgres · qdrant · embedd
 Caddyfile                   wildcard *.{BASE_DOMAIN}, console, public
 server/
   server.js                 khởi động + gắn router (bỏ nhánh Hermes)
-  router.js                 router mỏng có middleware, không gói ngoài
+  router.js                 router mỏng có middleware, không framework
   core/  pg.js  auth.js  tenancy.js (Repository, effectiveLimits, enforce)  vault.js  audit.js  mailer.js  jobs.js  object-store.js
   billing/  wallet.js  ledger.js  metering.js  subscriptions.js  gateways/{payos,vnpay,manual}.js
   org/      units.js  functions.js  departments.js  rules-engine.js (tính Rule hiệu lực)
   library/  items.js  versions.js  bindings.js  knowledge-store.js (Qdrant)  extract/  embed.js
-  workers/  workers.js  wizard.js  runtime.js (ghép prompt + gọi model)
-  integrations/  catalog/  providers/{openrouter,anthropic,genful,tripx,…}.js  balances.js
+  workers/  workers.js  wizard.js  engine.js (vòng lặp, §9.5)  gate.js (Action Gate)  prompt.js (ghép prompt)
+            actions/{task,knowledge,file,image,email,publish,http}.js
+  integrations/  catalog/  providers/{openrouter,anthropic,genful,…}.js  balances.js
   mail/     mailboxes.js  providers/{gmail,graph,imap}.js  send-guard.js
   api/      console/*.js  tenant/*.js  public/*.js
-  db.js (viết lại trên PostgreSQL) · hr.js · sales.js · marketing.js · tripx.js · genful.js · openrouter.js   (giữ, chuyển dần vào tenant)
 server/db/migrations/      0001_core.sql, 0002_org.sql … (SQL thuần, đánh số, chạy theo thứ tự)
 server/db/migrate.js       chạy migration chưa áp dụng, ghi vào bảng schema_migrations
-scripts/   create-superadmin.js  migrate-default-tenant.js  import-firestore.js  seed-system-library.js
+scripts/   create-superadmin.js  seed-platform-defaults.js
 website/
   index.html … (trang giới thiệu, thêm trang giá + đăng ký)
   console/   SuperAdmin
   admin/     Admin Portal của tenant
-  dashboard.html · js/app.js · js/work.js  (đọc dữ liệu qua API, bỏ dữ liệu cứng)
-docs/ADMIN_PORTAL_DESIGN.md
+  app/       Workspace của người dùng
+  css/tokens.css · js/ui/  (token thiết kế, thành phần dùng chung, §3.2)
+docs/ADMIN_PORTAL_DESIGN.md · USER_WORKSPACE_DESIGN.md
+docs/api/openapi.yaml       hợp đồng API, viết trước giao diện (§3.3)
+docs/DEPENDENCIES.md        lý do từng thư viện ngoài (§3, nguyên tắc 8)
 ```
 
 ---
 
 ## 19. Lộ trình triển khai
 
-Mỗi giai đoạn kết thúc ở trạng thái **chạy được và kiểm thử được**.
+Mỗi giai đoạn kết thúc ở trạng thái **chạy được và kiểm thử được**; không bắt đầu bước sau khi bước trước chưa qua nghiệm thu. «GĐ 0» nghĩa là 0a + 0b, «GĐ 1» nghĩa là 1a + 1b khi không nêu rõ. Phần Workspace của từng giai đoạn: tài liệu Workspace §18. Phần Console: §22.14.
 
 | GĐ | Nội dung | Kết quả kiểm chứng được |
 |---|---|---|
-| **0 — Nền móng** | Gỡ Hermes/Mem0 (§2.3). Docker Compose (§3.1) + Caddy wildcard. **PostgreSQL + migration + RLS** (§7.7); viết lại `db.js`, chuyển dữ liệu Firestore cũ rồi gỡ Firebase. `router.js`, `auth.js`, `tenancy.js` (Host→tenant, Repository), `vault.js`, `audit.js` (B1). Console: đăng nhập SuperAdmin + MFA, **tạo tenant** (§4.3a), **danh sách và chi tiết tenant** bản cơ bản (§22.4–22.5), **vô hiệu hoá / kích hoạt lại** (§22.7), thêm nhân viên hệ thống (§22.10), nhật ký hệ thống (§22.11). Đăng nhập tenant theo subdomain. Bắt buộc phiên cho mọi route cũ. Sao lưu hằng ngày (B11) | Không đăng nhập thì mọi API trả 401. Phiên tenant A gọi sang B bị chặn (test tự động trên mọi route), **kể cả khi cố tình bỏ điều kiện `tenant_id` trong một truy vấn thử (RLS chặn)**. Tạo `tenantabc` xong đăng nhập được ở `tenantabc.<domain>` |
-| **1 — Tổ chức, người dùng, Worker** | Gói & hạn mức. Unit / Function / Department + 3 chế độ sơ đồ. Người dùng (mời / mật khẩu khởi tạo). **Bộ máy Rule kế thừa** + Global Rule (B3). Trình tạo Worker (bản đầu: Rule + chọn model). Orchestrator tự tạo. **Phiên hỗ trợ** từ Console (§22.8). **Dashboard Console** khối Tenant, Hoạt động, Cần xử lý (§22.3). Sức khoẻ hệ thống (§22.12). Sơ đồ màn hình tenant (§23). Thương hiệu. Di trú tenant demo | Rule Kế toán đặt ở Tổng công ty xuất hiện ở Worker Kế toán chi nhánh, không gỡ được. Worker thứ 11 ở gói 10 bị chặn, kể cả khi gửi song song. Dashboard cũ chạy bằng dữ liệu từ CSDL |
-| **2 — Kho KWSR & tri thức** | Kho tenant + Kho hệ thống (nạp SKILL.md sẵn có), phiên bản, so sánh, binding theo kho / tinh chỉnh, phân phối theo ngành dọc. Qdrant + pipeline Knowledge thật. Kết nối API dạng API key + két bí mật. Runtime ghép prompt. Mẫu Worker (B4). Nút "Thử" | Nạp PDF vào Kho, gắn cho 2 Worker: cả hai trả lời đúng, Worker thứ 3 không biết; dung lượng chỉ tính một lần. Kho ra bản mới thì Worker "theo kho" tự cập nhật, Worker "tinh chỉnh" hiện badge khác biệt |
-| **3 — Thanh toán & sử dụng** | Đo token, `model_pricing`, Ví + ledger, nạp token, ngân sách và tự dừng (B2). Số dư nhà cung cấp (§12.3). Cổng **PayOS** + xác nhận thủ công: mua, gia hạn, đổi gói, phiếu thu PDF. Nhắc gia hạn, ân hạn, tạm khoá. Tự đăng ký (§4.3b). Sức khoẻ (B5). Thông báo (B10). Console: khối Doanh thu, Token & credit trên Dashboard; các tab và hành động thanh toán (§22.5–22.6, §22.9) | Thanh toán thử trên sandbox: webhook lặp lại không cộng tiền hai lần. Hết credit thì Worker Platform dừng còn Worker BYOK vẫn chạy. Số dư OpenRouter thấp thì có cảnh báo kèm số ngày còn lại |
-| **4 — Email & vận hành nâng cao** | Hộp thư tenant (Gmail, Microsoft 365, IMAP) + chốt chặn gửi. Phê duyệt (B6). Xuất/nhập Worker (B7). Xuất & xoá dữ liệu tenant (B8). Khôi phục theo tenant (B11). OAuth kênh nhắn tin, quảng cáo. MFA cho Admin tenant. Tên miền riêng | Worker soạn nháp vào Gmail thật. Gửi tới domain ngoài danh sách bị chặn bằng mã, có audit. Gửi trực tiếp thì phải qua hộp Chờ duyệt |
+| **0a — Nền móng hạ tầng và dữ liệu** | Gỡ bản demo khỏi nhánh chính (R1, §2.2; thẻ `demo-final`). Docker Compose (§3.1) + Caddy wildcard. **PostgreSQL + migration + RLS + ba role** (§7.7). `router.js`, `auth.js`, `tenancy.js` (Host→tenant, Repository), `vault.js`, `audit.js` (B1). Middleware đặt `app.tenant_id`, `app.user_id`, `app.is_tenant_admin` (mặc định `'false'`). Nền frontend: `tokens.css` theo thiết kế, `js/ui/`, CSP (§3.2). CI (§3.3) và khung `openapi.yaml`. Kiểm cookie `__Host-sid` trên `*.localhost` | Không đăng nhập thì mọi API trả 401. Test quét mọi route: phiên tenant A gọi sang B bị chặn, kể cả khi cố tình bỏ điều kiện `tenant_id` (RLS chặn). `aios_console` đọc bảng nội dung riêng tư nhận `permission denied`. Migration chạy từ CSDL rỗng trong CI |
+| **0b — Console tối thiểu và đăng nhập** | Console: đăng nhập + MFA, **tạo tenant** (§4.3a), danh sách và chi tiết tenant cơ bản, **vô hiệu hoá / kích hoạt lại**, nhân viên hệ thống, nhật ký hệ thống (§22.14). `seed-platform-defaults.js` (§7.6). Đăng nhập tenant theo subdomain, quên mật khẩu, lời mời, đổi mật khẩu lần đầu. Khung Admin (§24.1) và khung Workspace (Workspace §21.1), chuyển khu vực qua menu tài khoản. Sao lưu hằng ngày (B11) | Tạo `tenantabc` xong đăng nhập được ở `tenantabc.<domain>` và tenant có đủ dữ liệu khởi tạo. `member` không thấy Quản trị; gọi `/api/v1/admin/*` trả `403`. Khôi phục thử bản sao lưu lên máy khác thành công |
+| **1a — Tổ chức, người dùng, Rule, cấu hình nền** | Gói & hạn mức. Đơn vị / Phòng ban / Bộ phận + 3 chế độ sơ đồ, đổi đơn vị cha, tạo bộ phận (§24.10). Người dùng: thêm theo sơ đồ, **nhiều phạm vi quản lý**, chi tiết 3 tab, quyền bổ sung (§24.11). **Kho KWSR tối thiểu** (Rule, Workflow, Skill dạng văn bản; phiên bản) + **Loại bước Workflow** (4 loại hệ thống) + **Danh mục thẻ**. **Rule kế thừa** + **Global Rule ở Cấu hình Orchestrator** (thời gian áp dụng, ba cách thực thi, trình dựng `hardCheck`). **Cài đặt trạng thái** (nhóm, trạng thái, bảng chuyển, ánh xạ sự kiện, Dashboard) (§24.3, §25.3). Thương hiệu. Console: Gói & Giá | Rule Kế toán ở Tổng công ty hiện ở Rule hiệu lực của Kế toán chi nhánh, không gỡ được. Người dùng thứ 26 ở gói 25 bị chặn kể cả khi gửi song song. Rule `hard` thiếu `hardCheck` không phát hành được; Rule «AI kiểm tra» không chọn được mức `block`. Người có hai phạm vi thấy đúng hợp của hai phạm vi |
+| **1b — Worker, động cơ, công việc, Orchestrator, Telegram** | Trình tạo Worker và **Sửa Worker một trang** + **phiên bản cấu hình** (M12); chính sách nhận việc, U13, **ngân sách ngày mặc định bật** (M5). **Mô hình AI** (danh mục, mặc định, model dự phòng). Cấu hình Orchestrator (model, ngân sách). Kết nối Platform tối thiểu + `model_pricing` + **động cơ chạy lõi** (§9.5.9) + trần chi phí cứng. Workspace: danh bạ, hội thoại, Công việc / Dự án / Phiếu theo trạng thái cấu hình, `taskPolicy.create`, **chuỗi công việc tự chạy tiếp** (§9.5.11), Orchestrator có ngữ cảnh và duyệt từng việc, Điều phối, Hôm nay. **Telegram Bot**: ra lệnh Orchestrator, duyệt kế hoạch, nhận báo cáo (§25.2). Console: phiên hỗ trợ, Dashboard khối đầu, sức khoẻ hệ thống, kết nối hệ thống | Worker thứ 11 ở gói 10 bị chặn. Việc từ Orchestrator chạy ngay ở Worker «Hạn chế», Rule `hard` vẫn chặn; Worker U13 không nhận việc. Chuỗi 3 bước chạy liền không chờ nghiệm thu từng bước; bước giữa vướng thì bước sau hiện «Chờ việc trước» kèm lý do, xử lý xong tự chạy tiếp. Người không liên kết Telegram hoặc không có quyền ra lệnh thì Bot từ chối; kế hoạch chỉ chạy sau khi đúng người bấm Duyệt. Lưu cấu hình Worker giữa chừng không đổi run đang chạy |
+| **2 — Tri thức, phê duyệt, Chat Social** | Kho đầy đủ: Knowledge, **Loại tài liệu**, trạng thái **Đang dùng / Lưu trữ**, Nhập từ Kho hệ thống, phân phối theo ngành dọc, **cờ Mật**. Qdrant + pipeline Knowledge. BYOK + két. Mẫu Worker (B4). Nút «Thử». `knowledge.search`, `file.generate`, `image.generate`. **Quy tắc duyệt** + hộp Chờ duyệt / Phê duyệt (một hành động một phê duyệt, chuỗi cấp, uỷ quyền, quá hạn theo quy tắc) + **duyệt qua Telegram**. Yêu cầu liên phòng, Worker tham gia dự án, kết quả và đề xuất vào Kho, góp ý 👎. **Chat Social** (Webchat, Zalo OA, Facebook; WhatsApp khi Meta duyệt) với Worker gắn cờ (§9.5.12) | Nạp PDF vào Kho, gắn cho 2 Worker: cả hai trả lời đúng, Worker thứ 3 không biết. Bật / tắt cờ Mật có hiệu lực ngay. Worker Chat Social không trả lời khi không có đoạn Knowledge liên quan mà chuyển người; không bao giờ trích tài liệu Mật; Worker không gắn cờ không chọn được làm Worker tự trả lời. Bước Workflow «Chờ người duyệt» và quy tắc duyệt cùng khớp chỉ sinh **một** yêu cầu duyệt |
+| **3 — Thanh toán, sử dụng, chat nội bộ** | Đo token đầy đủ, **Ví theo lô** + ledger, nạp token, ngân sách tháng và tự dừng (B2). Số dư nhà cung cấp (§12.3). **PayOS + chuyển khoản kèm chứng từ, xác nhận thủ công** (§24.12): mua, gia hạn, đổi gói có tính phần còn lại, phiếu thu PDF. Nhắc gia hạn, ân hạn, tạm khoá. Tự đăng ký (§4.3b). Sức khoẻ (B5), Thông báo (B10). Console: Doanh thu, Token & credit, hàng chờ chứng từ. **Chat nội bộ giữa nhân sự** (§25.4). Có PL1 trước khi thu tiền thật | Webhook lặp lại không cộng tiền hai lần. Chứng từ lệch số tiền không xác nhận được. Hết credit thì Worker dùng Platform dừng, Worker BYOK vẫn chạy. Một lần trừ qua nhiều lô sinh nhiều dòng ledger |
+| **4 — Email & vận hành nâng cao** | Hộp thư tenant (Gmail, Microsoft 365, IMAP) + chốt chặn gửi. `email.*`, `publish.post`, `http.call`. Xuất/nhập Worker (B7). Xuất & xoá dữ liệu tenant (B8), huỷ tenant. Khôi phục theo tenant (B11). OAuth quảng cáo. MFA cho Admin tenant. Tên miền riêng | Worker soạn nháp vào Gmail thật. Gửi tới domain ngoài danh sách bị chặn bằng mã, có audit. Gửi trực tiếp phải qua duyệt |
 
 ---
 
@@ -1268,7 +1605,10 @@ Không còn câu hỏi thiết kế nào chặn tiến độ. Các việc dướ
 | Đăng ký merchant **PayOS**, lấy khoá sandbox | GĐ 3 | Q2 |
 | Bảng giá gói (tháng/năm), credit tặng mỗi gói, hệ số giá token | GĐ 3 | Nhập trên Console, không cần sửa code |
 | Thông tin bên bán cho phiếu thu (tên công ty, MST, địa chỉ) | GĐ 3 | Q3 |
+| Đăng ký ứng dụng Zalo OA (Zalo for Developers) và ứng dụng Meta (Facebook Messenger; WhatsApp Business cần xác minh doanh nghiệp và số điện thoại) cho Chat Social | GĐ 2 | Duyệt ứng dụng có thể mất vài tuần, nên bắt đầu từ GĐ 1 |
 | Đăng ký ứng dụng OAuth Google (và xin xác minh quyền Gmail) và Microsoft | GĐ 4 | Thủ tục xác minh của Google có thể mất vài tuần, nên bắt đầu sớm |
+| **Pháp lý khi thu tiền** (hoá đơn, bảo vệ dữ liệu cá nhân) | Trước khi thu tiền thật ở GĐ 3 | **Bổ sung sau** (PL1). Chưa chặn GĐ0–GĐ2. Điều khoản dịch vụ và chính sách dữ liệu nên được soạn cùng đợt này |
+| Xác nhận bản ghi DNS hiện có của `ai-os.vn`: bản demo đang chạy ở `workers.ai-os.vn`. Bản ghi cụ thể luôn ưu tiên hơn wildcard `*.ai-os.vn` | GĐ 0a | Bản demo chạy độc lập tới khi bản production thay thế rồi tắt; không di trú dữ liệu (R1). `workers` thêm vào danh sách slug cấm |
 
 ---
 
@@ -1277,16 +1617,22 @@ Không còn câu hỏi thiết kế nào chặn tiến độ. Các việc dướ
 | Rủi ro | Mức | Giảm thiểu |
 |---|---|---|
 | Rò dữ liệu chéo tenant (sót bộ lọc ở một truy vấn CSDL hoặc Qdrant) | **Rất cao** | Hai lớp: `Repository(tenantId)` + **RLS của PostgreSQL** (§7.7); `knowledgeStore.search()` là cửa duy nhất vào Qdrant; lint cấm import `pg`/Qdrant ở nơi khác; test tự động quét mọi route bằng phiên tenant khác |
-| Chuyển từ Firebase sang PostgreSQL làm mất dữ liệu cũ | Trung bình | `import-firestore.js` chạy và đối chiếu số bản ghi trước khi gỡ Firebase; giữ service account cũ tới khi xác nhận xong |
 | Sai lệch tiền (cộng trùng khi webhook lặp, trừ thiếu credit) | **Cao** | Idempotency theo `orderCode`; ledger chỉ thêm; đối soát hằng giờ; kiểm chữ ký; trang return không kích hoạt gì |
 | Rule kế thừa tính sai, Worker chạy thiếu chốt chặn | Cao | `rules-engine.js` là hàm thuần, có bộ test bảng cho cây 3 cấp; màn Rule hiệu lực cho người kiểm bằng mắt; xem trước khác biệt khi chuyển đơn vị |
 | Worker gửi email sai người hoặc lộ dữ liệu | Cao | Gửi mặc định tắt; chặn domain bằng mã; Phê duyệt; trần mỗi ngày; audit |
 | Lộ khoá API hoặc token OAuth của khách | Cao | Két mã hoá, che khi trả về, không log, xoay khoá chủ; Qdrant và CSDL không mở ra Internet |
-| Chi phí tăng vọt khi gỡ MOCK (§2.3) | Trung bình | Worker di trú để `paused` + ngân sách ngày trước khi bật |
+| Chi phí model vượt kiểm soát khi Worker bắt đầu chạy thật | Trung bình | Từ GĐ1b có trần chi phí cứng mỗi run và **ngân sách ngày mặc định bật** cho mọi Worker (§9.5.7, §25.1 M5) |
 | Server riêng là điểm hỏng duy nhất (server, PostgreSQL, Qdrant cùng một máy) | Trung bình | Sao lưu hằng ngày ra nơi khác; diễn tập khôi phục mỗi quý; giám sát uptime và dung lượng đĩa; runbook; tách CSDL ra máy riêng khi tải tăng |
 | Chờ duyệt ứng dụng OAuth Gmail kéo dài | Trung bình | Bắt đầu thủ tục sớm; có IMAP/SMTP làm phương án tạm |
 | Tài khoản SuperAdmin bị chiếm, kẻ tấn công vào được mọi tenant | **Rất cao** | MFA bắt buộc; phiên ngắn; email báo mỗi lần đăng nhập; tuỳ chọn giới hạn IP; phiên hỗ trợ mặc định chỉ xem, cần lý do + MFA mỗi lần, có danh sách thao tác luôn bị chặn, và khách luôn nhận email; thu hồi phiên console là thu hồi luôn phiên hỗ trợ (§22) |
-| Phạm vi lớn | Trung bình | Chia 5 giai đoạn, mỗi giai đoạn tự đứng được; không bắt đầu giai đoạn sau khi giai đoạn trước chưa qua tiêu chí nghiệm thu |
+| Worker bị lừa bởi nội dung không tin cậy (email đến, tệp đính kèm, kết quả HTTP) để làm hành động ra ngoài | Cao | Action Gate là chốt chặn, không dựa vào lời dặn; run đã nhận nội dung loại này thì hành động external buộc duyệt (§9.5.6) |
+| Vòng lặp công cụ đốt tiền | Trung bình | `maxSteps`, `maxCostCredit`, phát hiện lặp, ngân sách ngày (§9.5.7) |
+| Mất tối đa 30 giây chi phí chưa ghi sổ khi máy chủ sập | Thấp | Chấp nhận (nghiêng về phía khách); ghi sổ khi run kết thúc và khi tắt êm; đối soát hằng giờ (§11.4) |
+| Ra lệnh Orchestrator lách chính sách nhận việc để chạm Worker hoặc tài liệu nhạy cảm | Trung bình | Quyền cấp từng người, có nhật ký; Worker nhạy cảm đặt «không nhận lệnh từ Orchestrator» (U13) |
+| Thu tiền khi chưa có căn cứ pháp lý (hoá đơn, dữ liệu cá nhân) | Cao | Bổ sung sau (PL1); không go-live thu tiền ở GĐ3 cho tới khi có |
+| Worker Chat Social trả lời sai hoặc lộ thông tin cho khách | Cao | Chỉ Worker gắn cờ; chỉ trả lời từ Knowledge được gán, không dùng tài liệu Mật, thiếu tài liệu thì chuyển người; tập hành động cố định; Rule áp đầy đủ; nhãn «Trợ lý tự động» (§9.5.12) |
+| Lệnh qua Telegram bị giả mạo hoặc người khác bấm duyệt | Cao | Webhook kiểm `secret_token`; chỉ chat riêng với người đã liên kết bằng mã một lần; kiểm quyền ra lệnh và đúng người duyệt ở mỗi lần bấm; mọi thao tác ghi nhật ký (§25.2) |
+| Phạm vi lớn | Trung bình | Chia 7 bước (0a, 0b, 1a, 1b, 2, 3, 4), mỗi bước tự đứng được; không bắt đầu bước sau khi bước trước chưa qua tiêu chí nghiệm thu |
 
 ---
 
@@ -1295,7 +1641,7 @@ Không còn câu hỏi thiết kế nào chặn tiến độ. Các việc dướ
 ### 22.1 Nguyên tắc
 
 - **Console dùng để quản lý và quan sát, không để làm việc thay khách.** Console chỉ hiển thị thông tin quản lý và số liệu tổng hợp: tenant, gói, thanh toán, credit, số lượng, trạng thái, lỗi. **Nội dung nghiệp vụ của khách** (bài viết, CV, lead, nội dung chat, tài liệu Knowledge, nội dung KWSR) **không bao giờ hiện trên Console**. Muốn xem phải dùng "Vào quản trị tenant" (§22.8), có lý do, có nhật ký và có thông báo cho khách.
-- **Truy cập dữ liệu:** Console đọc qua role CSDL `aios_console` (§7.7). Các truy vấn của Dashboard và danh sách **chỉ chạm các bảng quản lý và tổng hợp**: `tenants`, `subscriptions`, `payment_orders`, `credit_ledger`, `usage_daily`, `users` (chỉ các cột quản lý), `workers` (chỉ các cột quản lý), `jobs`, `audit_logs`.
+- **Truy cập dữ liệu:** Console đọc qua role CSDL `aios_console` (§7.7), role chỉ có quyền trên danh sách cho phép. Các truy vấn của Dashboard và danh sách **chỉ chạm các bảng của Platform và các view quản lý**: `tenants`, `subscriptions`, `payment_orders`, `credit_ledger`, `usage_daily`, `jobs`, `audit_logs`, cùng view `console_users`, `console_workers`, `console_integrations`, `console_mailboxes`, `console_worker_runs` (§7.7). Tab «Người dùng», «Worker», «Kết nối & email» ở §22.5 đọc từ các view này.
 - **Bảo vệ riêng cho Console** (bổ sung §6.2):
 
 | Hạng mục | Quy định |
@@ -1369,7 +1715,7 @@ Dashboard — 31/10/2026 14:05                                            ⟳ t�
 | Hoạt động | Tenant có đăng nhập hoặc có lượt gọi Worker trong 7 ngày; số Worker `active`; số lượt gọi; tỉ lệ lỗi | `sessions`, `usage_daily`, `workers` |
 | Biểu đồ | Top 10 tenant theo chi phí token; tenant mới và doanh thu 12 tháng | như trên |
 
-Số liệu tiền chốt theo ngày giờ Việt Nam (`Asia/Ho_Chi_Minh`). Dashboard bản đầu (Giai đoạn 1) chỉ có các khối Tenant, Hoạt động và Cần xử lý; khối Doanh thu và Token & credit có từ Giai đoạn 3, khi đã có dữ liệu thanh toán.
+Số liệu tiền chốt theo ngày giờ Việt Nam (`Asia/Ho_Chi_Minh`). Dashboard bản đầu (Giai đoạn 1b) chỉ có các khối Tenant, Hoạt động và Cần xử lý; khối Doanh thu và Token & credit có từ Giai đoạn 3, khi đã có dữ liệu thanh toán.
 
 ### 22.4 Danh sách tenant
 
@@ -1486,9 +1832,9 @@ console.ai-os.vn                                      tenantabc.ai-os.vn
 | Banner | Đỏ, cố định đầu trang, không đóng được: "🛟 Bạn đang hỗ trợ **Công ty TNHH ABC** với tư cách Admin · **Chỉ xem** · còn 24:13 · [Bật chế độ sửa] [Thoát]" |
 | Chế độ **Chỉ xem** (mặc định) | Mọi request ghi (POST/PUT/PATCH/DELETE) bị middleware từ chối, trừ hai việc: bật chế độ sửa và kết thúc phiên. Được xem mọi màn của Admin tenant, kể cả nội dung KWSR và dữ liệu nghiệp vụ, trừ các mục trong danh sách luôn bị chặn |
 | **Bật chế độ sửa** | Hộp xác nhận + bổ sung lý do. Ghi `support.write_enabled` vào nhật ký. Không tắt lại được trong cùng phiên (để nhật ký rõ ràng: mọi thao tác sau mốc đó đều thuộc chế độ sửa) |
-| **Luôn bị chặn**, ở mọi chế độ | Xem hoặc thay khoá API, token OAuth (két chỉ hiện dạng che, kể cả với SuperAdmin) · Đặt mật khẩu, đổi email hoặc đổi vai trò của user · Thêm hoặc xoá Admin của tenant · Xoá dữ liệu (Worker vĩnh viễn, mục Kho, tài liệu, đơn vị) · Xuất toàn bộ dữ liệu · Thanh toán, nạp token, đổi gói (làm ở Console) · **Đọc hộp thư cá nhân** · Gửi email từ bất kỳ hộp thư nào của tenant · Tạo hoặc sửa phiên hỗ trợ khác |
+| **Luôn bị chặn**, ở mọi chế độ | Xem hoặc thay khoá API, token OAuth (két chỉ hiện dạng che, kể cả với SuperAdmin) · Đặt mật khẩu, đổi email hoặc đổi vai trò của user · Thêm hoặc xoá Admin của tenant · Xoá dữ liệu (Worker vĩnh viễn, mục Kho, tài liệu, đơn vị) · Xuất toàn bộ dữ liệu · Thanh toán, nạp token, đổi gói (làm ở Console) · **Đọc hộp thư cá nhân** · Gửi email từ bất kỳ hộp thư nào của tenant · **Đọc nội dung hội thoại của người dùng** (chỉ `tenant_admin` của chính công ty đó được đọc) · Cấp quyền ra lệnh Orchestrator · Đổi chính sách nhận việc hoặc tuỳ chọn «Không nhận lệnh từ Orchestrator» của Worker (U13) · Chạy hành động external của Worker (§9.5.4) · Tạo hoặc sửa phiên hỗ trợ khác |
 | Cách chặn | Mỗi route khai báo cờ `supportBlocked: true` ngay trong định nghĩa route. Middleware từ chối theo cờ này, không dựa vào giao diện ẩn nút |
-| Chi phí | Mọi lượt gọi model trong phiên hỗ trợ (ví dụ chat thử với Worker) **không trừ Ví của khách**. `usage_daily` ghi `billed_to = platform` |
+| Chi phí | Mọi lượt gọi model trong phiên hỗ trợ **không trừ Ví của khách**; `usage_daily` và `worker_runs` ghi `billed_to = platform`. Phiên hỗ trợ **không tạo hội thoại** và route chat là `supportBlocked`; muốn thử Worker thì dùng nút «Thử» (run `kind = test`, không lưu nội dung), và chỉ ở chế độ sửa vì đó là request ghi |
 | Tenant `disabled` | Vẫn vào được nhưng **chỉ xem**, không bật được chế độ sửa (để điều tra) |
 | Tenant `suspended` | Vào được; bật chế độ sửa được để hỗ trợ khách khắc phục |
 | Tenant `cancelled` | Không vào được |
@@ -1560,6 +1906,8 @@ CREATE TABLE support_sessions (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), su
 
 Mỗi cảnh báo hiện ở khối "Cần xử lý ngay" của Dashboard và gửi email cho các SuperAdmin. Lặp lại tối đa 1 lần mỗi giờ cho cùng một vấn đề.
 
+Theo phân kỳ ở §22.14: dòng nào thuộc thành phần chưa tồn tại thì chưa hiện (Qdrant và embedding từ GĐ2, thanh toán từ GĐ3).
+
 ### 22.13 API Console bổ sung
 
 Tất cả nằm dưới `console.{BASE_DOMAIN}/api/console/v1/`:
@@ -1573,6 +1921,21 @@ Tất cả nằm dưới `console.{BASE_DOMAIN}/api/console/v1/`:
 | Nhân viên hệ thống | `GET/POST /staff` · `POST /staff/:id/{lock,unlock,disable,revoke-sessions,reset-mfa}` |
 | Nhật ký & sức khoẻ | `GET /audit?actor&action&tenant&from&to` · `GET /audit/export.csv` · `GET /health` |
 
+### 22.14 Phân kỳ Console
+
+Console không làm một lần. Bảng dưới nối từng màn với giai đoạn ở §19, để mỗi bước có Console vừa đủ dùng:
+
+| GĐ | Có trên Console |
+|---|---|
+| **0b** | Đăng nhập + MFA; **Tạo tenant**; Danh sách tenant (cột: công ty, slug, gói, trạng thái, hết hạn, hoạt động); Chi tiết tenant: tab Tổng quan, Người dùng, Nhật ký, Cài đặt (slug, hạn mức riêng); **Vô hiệu hoá / kích hoạt lại**; Nhân viên hệ thống; Nhật ký hệ thống |
+| **1a** | Màn **Gói & Giá** (sửa gói và hạn mức; gói ban đầu nạp bằng script); cột Worker, User đã đủ số liệu |
+| **1b** | **Phiên hỗ trợ** (§22.8); Dashboard khối Tenant, Hoạt động, Cần xử lý; **Sức khoẻ hệ thống** (PostgreSQL, hàng đợi, ổ đĩa, sao lưu, TLS, email hệ thống, nhà cung cấp mô hình); tab Worker; **Kết nối hệ thống** (khoá Platform) và Giá model tối thiểu |
+| **2** | **Kho hệ thống** và Mẫu Worker; tab Kết nối & email; sức khoẻ Qdrant và embedding; **OAuth app cho kênh Chat Social** (Zalo OA, Meta) và sức khoẻ webhook Chat Social trong Kết nối hệ thống |
+| **3** | **Thanh toán** (đơn, hàng chờ xác nhận thủ công, phiếu thu); Dashboard khối Doanh thu, Token & credit; tab Thuê bao & thanh toán, Ví & sử dụng; cột Ví và Chi 30 ngày; các hành động đổi gói, gia hạn thủ công, điều chỉnh credit, hoàn tiền |
+| **4** | **Huỷ tenant** (cần xuất và xoá dữ liệu, B8); sức khoẻ hộp thư; MFA của Admin tenant ảnh hưởng tới luồng hỗ trợ |
+
+Trước GĐ4, tenant chỉ có thể bị **vô hiệu hoá**, chưa huỷ được.
+
 ---
 
 ## 23. Sơ đồ màn hình quản trị tenant (`tenantabc.ai-os.vn`)
@@ -1583,12 +1946,12 @@ Do Admin của tenant tự quản trị. Đặt cạnh Console (§22) để th�
 tenantabc.ai-os.vn
 ├─ /login · /quen-mat-khau · /doi-mat-khau · /moi/:token (nhận lời mời) · /dang-ky (+ thanh toán, gửi chứng từ CK)
 ├─ /                   Workspace (tài liệu Workspace)
-├─ /tai-khoan          Hồ sơ cá nhân, bảo mật, MFA, hộp thư cá nhân (§14), thông báo (B10), mức sử dụng
+├─ /tai-khoan          Hồ sơ cá nhân, bảo mật, MFA (GĐ 4), hộp thư cá nhân (§14), thông báo (B10), mức sử dụng
 └─ /admin              Thanh bên: tên tổ chức + avatar (AN ▾) · Ví credit · 4 nhóm menu (§24.1)
     VẬN HÀNH
     ├─ Tổng quan               hạn mức, cảnh báo, việc chờ duyệt, sức khoẻ (B5)
     ├─ Sơ đồ tổ chức           theo đơn vị · theo ngành dọc · Người dùng ↔ Worker; đổi đơn vị cha; tạo bộ phận   §8, §24.10
-    ├─ AI Worker               lưới / danh sách (Orchestrator ghim đầu) · trình tạo 4 bước · chi tiết · Sửa Worker · Cấu hình Orchestrator   §9.4, §24.4, §24.8
+    ├─ AI Worker               lưới / danh sách (Orchestrator ghim đầu) · trình tạo 4 bước · chi tiết · Sửa Worker · Cấu hình Orchestrator · lọc theo chính sách nhận việc, «không nhận lệnh từ Orchestrator» · tab Nhật ký gồm các lượt chạy (§9.5)   §9.4, §24.4, §24.8
     ├─ Kho KWSR                danh sách · Tạo mục · Nhập từ Kho hệ thống · chi tiết mục   §9, §24.6
     └─ Chờ duyệt               hộp Chờ duyệt (link "Cấu hình quy tắc duyệt")            B6, §24.5
     CHI PHÍ
@@ -1610,7 +1973,7 @@ tenantabc.ai-os.vn
 | Mục | tenant_admin | unit_manager | function_head | member / viewer |
 |---|:-:|:-:|:-:|:-:|
 | Tổng quan | ✔ | ◐ | ◐ | ✖ |
-| Cơ cấu tổ chức | ✔ | ◐ | ◐ (chế độ Ngành dọc) | ✖ |
+| Cơ cấu tổ chức | ✔ | ◐ | ◐ (chế độ Ngành dọc: xem cấu trúc, đặt Rule và phát hành mục Kho của ngành; không sửa cấu trúc) | ✖ |
 | Người dùng | ✔ | ◐ | ✖ | ✖ |
 | Worker | ✔ | ◐ | ◐ | ✖ |
 | Kho KWSR | ✔ | ◐ | ◐ | ✖ |
@@ -1633,18 +1996,18 @@ tenantabc.ai-os.vn
 
 | # | Khái niệm | Quy định chốt | Console | Admin | Workspace |
 |---|---|---|---|---|---|
-| L1 | **Bộ phận** | Bộ phận = **Đơn vị × Phòng ban**. Đơn vị lấy từ cây Sơ đồ tổ chức (Tổng công ty → Chi nhánh → Cửa hàng); Phòng ban là danh mục chức năng (Kế toán, Kinh doanh…). Không nhập tay tên bộ phận ở bất cứ form nào | — | Sơ đồ tổ chức, Thêm người dùng, Tạo bộ phận, Trình tạo Worker | Danh bạ, Sơ đồ (chỉ xem) |
-| L2 | **Phòng ban + "Dùng cho ngành dọc"** | Mọi chỗ trước đây ghi "Ngành dọc" trong form đổi thành **Phòng ban**, kèm ô tick **"Dùng cho ngành dọc"** (áp xuống phòng ban cùng ngành ở đơn vị cấp dưới). Phạm vi phát hành chỉ còn **Toàn công ty** / **Đơn vị và cấp dưới**; lựa chọn "Ngành dọc từ đơn vị" bị bỏ vì đã do ô tick quyết định | — | Kho KWSR (Tạo mục, Nhập từ Kho hệ thống), Rule | — |
-| L3 | **Quan hệ Người dùng ↔ Worker** | 4 mức: **👑 Phụ trách** (người quản lý Worker: cấu hình, duyệt việc ra ngoài, nhận cảnh báo; mỗi Worker đúng 1 người) · **✔ Dùng trực tiếp** · **✉ Qua yêu cầu** · **👁 Chỉ xem**. Cả hai bên hiển thị cùng một dữ liệu `worker_access` + `workers.owner_user_id` | — | Sơ đồ › Người dùng ↔ Worker (sửa được) | Sơ đồ › Người dùng ↔ Worker (chỉ xem) |
-| L4 | **Rule toàn công ty = Rule của Orchestrator** | Rule đặt tại Orchestrator (Global Rule, scope `tenant`) **tự đồng bộ** xuống mọi Worker, kể cả Worker tạo sau; tại Worker hiện nhãn 🔒 "Toàn công ty", không gỡ được. Có **thời gian áp dụng** | — | Orchestrator › Rule | Worker từ chối việc trái Rule, hiện tên Rule |
-| L5 | **Quy tắc duyệt** | Danh mục quy tắc "việc gì phải chờ người duyệt" cấu hình tập trung ở Cài đặt › Quy tắc duyệt; hộp Chờ duyệt (Admin) và Phê duyệt (Workspace) đều đọc từ đây | — | Cài đặt › Quy tắc duyệt, Chờ duyệt | Phê duyệt, Chat Social, Orchestrator |
-| L6 | **Trạng thái cấu hình được** | Trạng thái Công việc / Phiếu yêu cầu / Dự án và chỉ số Dashboard do Admin cấu hình; mỗi trạng thái thuộc một **Nhóm trạng thái** quyết định hành vi (trễ hạn, thiếu báo cáo, vào Điều phối, kết thúc) | — | Cài đặt › Cài đặt trạng thái | Công việc, Dashboard, Điều phối, Báo cáo |
-| L7 | **Danh mục dùng chung cho Kho** | Loại tài liệu, Loại bước Workflow, Danh mục thẻ quản lý ở Cài đặt › Kho KWSR; form chỉ **chọn**, không gõ tự do | Kho hệ thống dùng cùng danh mục mặc định | Tạo mục, Nhập từ Kho hệ thống | — |
-| L8 | **Mô hình AI** | Console quản lý giá model toàn hệ thống; Admin bật/tắt model nào tenant được dùng và đặt quy tắc đổi model; Worker chỉ chọn trong danh sách đã bật | Giá model | Mô hình AI, Đổi model | — |
-| L9 | **Chat Social** | **Luôn có** cho mọi tenant, không tính vào hạn mức gói. Kênh (Zalo OA, Facebook Fanpage, Webchat, WhatsApp Business…) kết nối và cấu hình ở **Admin › Chat Social**; **quyền xem / trả lời / gán phụ trách / quản lý kênh phân theo từng kênh** ở cùng màn đó. Worker được giao tự trả lời; nhân viên **Dừng tay** để tự trả lời | Kết nối hệ thống (OAuth app của AI OS) | Chat Social, Quy tắc duyệt, Người dùng › Quyền bổ sung | Chat Social |
-| L10 | **Chuyển khoản thủ công** | Tenant gửi chứng từ chuyển khoản; Console xác nhận ở hàng chờ (§22.9); gói chỉ kích hoạt khi xác nhận | Thanh toán › hàng chờ xác nhận | Đăng ký, Gói & thanh toán | — |
-| L11 | **Màn xem vs modal** | Chi tiết một đối tượng có nhiều tab (Người dùng, Worker, mục Kho) là **trang thường** có đủ menu và nút "← Danh sách". Modal chỉ dùng cho thao tác ngắn (thêm, sửa nhanh, chọn) | Như nhau | Như nhau | Như nhau |
-| L12 | **Danh sách lớn** | Mọi danh sách có thể lớn (AI Worker, Kết nối API, Danh bạ Worker…) có nút **▦ Lưới / ☰ Danh sách**; danh sách có lọc, tìm, phân trang | — | AI Worker, Kết nối API | Danh bạ Worker, Sơ đồ |
+| TN1 | **Bộ phận** | Bộ phận = **Đơn vị × Phòng ban**. Đơn vị lấy từ cây Sơ đồ tổ chức (Tổng công ty → Chi nhánh → Cửa hàng); Phòng ban là danh mục chức năng (Kế toán, Kinh doanh…). Không nhập tay tên bộ phận ở bất cứ form nào | — | Sơ đồ tổ chức, Thêm người dùng, Tạo bộ phận, Trình tạo Worker | Danh bạ, Sơ đồ (chỉ xem) |
+| TN2 | **Phòng ban + "Dùng cho ngành dọc"** | Mọi chỗ trước đây ghi "Ngành dọc" trong form đổi thành **Phòng ban**, kèm ô tick **"Dùng cho ngành dọc"** (áp xuống phòng ban cùng ngành ở đơn vị cấp dưới). Phạm vi phát hành chỉ còn **Toàn công ty** / **Đơn vị và cấp dưới**; lựa chọn "Ngành dọc từ đơn vị" bị bỏ vì đã do ô tick quyết định | — | Kho KWSR (Tạo mục, Nhập từ Kho hệ thống), Rule | — |
+| TN3 | **Quan hệ Người dùng ↔ Worker** | 4 mức: **👑 Phụ trách** (người quản lý Worker: cấu hình, duyệt việc ra ngoài, nhận cảnh báo; mỗi Worker đúng 1 người) · **✔ Dùng trực tiếp** · **✉ Qua yêu cầu** · **👁 Chỉ xem**. Cả hai bên hiển thị cùng một dữ liệu `worker_access` + `workers.owner_user_id` | — | Sơ đồ › Người dùng ↔ Worker (sửa được) | Sơ đồ › Người dùng ↔ Worker (chỉ xem) |
+| TN4 | **Rule toàn công ty = Rule của Orchestrator** | Rule đặt tại Orchestrator (Global Rule, scope `tenant`) áp cho mọi Worker, kể cả Worker tạo sau; tại Worker hiện nhãn 🔒 "Toàn công ty", không gỡ được. Có **thời gian áp dụng**. **Không có bước đồng bộ**: động cơ tính Rule hiệu lực ở mỗi lượt chạy, nên thay đổi có hiệu lực từ **lượt chạy kế tiếp** (§25.1 M3) | — | Orchestrator › Rule | Worker từ chối việc trái Rule, hiện tên Rule |
+| TN5 | **Quy tắc duyệt** | Danh mục quy tắc "việc gì phải chờ người duyệt" cấu hình tập trung ở Cài đặt › Quy tắc duyệt; hộp Chờ duyệt (Admin) và Phê duyệt (Workspace) đều đọc từ đây | — | Cài đặt › Quy tắc duyệt, Chờ duyệt | Phê duyệt, Chat Social, Orchestrator |
+| TN6 | **Trạng thái cấu hình được** | Trạng thái Công việc / Phiếu yêu cầu / Dự án và chỉ số Dashboard do Admin cấu hình; mỗi trạng thái thuộc một **Nhóm trạng thái** quyết định hành vi (trễ hạn, thiếu báo cáo, vào Điều phối, kết thúc) | — | Cài đặt › Cài đặt trạng thái | Công việc, Dashboard, Điều phối, Báo cáo |
+| TN7 | **Danh mục dùng chung cho Kho** | Loại tài liệu, Loại bước Workflow, Danh mục thẻ quản lý ở Cài đặt › Kho KWSR; form chỉ **chọn**, không gõ tự do | Kho hệ thống dùng cùng danh mục mặc định | Tạo mục, Nhập từ Kho hệ thống | — |
+| TN8 | **Mô hình AI** | Console quản lý giá model toàn hệ thống; Admin bật/tắt model nào tenant được dùng và đặt quy tắc đổi model; Worker chỉ chọn trong danh sách đã bật | Giá model | Mô hình AI, Đổi model | — |
+| TN9 | **Chat Social** | **Luôn có** cho mọi tenant, không tính vào hạn mức gói (**GĐ 2**). Kênh (Zalo OA, Facebook Fanpage, Webchat, WhatsApp Business…) kết nối và cấu hình ở **Admin › Chat Social**; **quyền xem / trả lời / gán phụ trách / quản lý kênh phân theo từng kênh** ở cùng màn đó. **Chỉ Worker gắn cờ Chat Social** được giao tự trả lời, và chỉ trả lời từ Knowledge gắn cho nó (§9.5.12); nhân viên **Dừng tay** để tự trả lời | Kết nối hệ thống (OAuth app của AI OS) | Chat Social, Quy tắc duyệt, Người dùng › Quyền bổ sung | Chat Social |
+| TN10 | **Chuyển khoản thủ công** | Tenant gửi chứng từ chuyển khoản; Console xác nhận ở hàng chờ (§22.9); gói chỉ kích hoạt khi xác nhận | Thanh toán › hàng chờ xác nhận | Đăng ký, Gói & thanh toán | — |
+| TN11 | **Màn xem vs modal** | Chi tiết một đối tượng có nhiều tab (Người dùng, Worker, mục Kho) là **trang thường** có đủ menu và nút "← Danh sách". Modal chỉ dùng cho thao tác ngắn (thêm, sửa nhanh, chọn) | Như nhau | Như nhau | Như nhau |
+| TN12 | **Danh sách lớn** | Mọi danh sách có thể lớn (AI Worker, Kết nối API, Danh bạ Worker…) có nút **▦ Lưới / ☰ Danh sách**; danh sách có lọc, tìm, phân trang | — | AI Worker, Kết nối API | Danh bạ Worker, Sơ đồ |
 
 ### 24.1 Khung điều hướng Admin (thay §23)
 
@@ -1692,10 +2055,10 @@ Nút "Sửa model & ngân sách" ở Sơ đồ tổ chức và dòng Orchestrato
 | Phần | Nội dung |
 |---|---|
 | **Model** | Model phân tích lệnh và lập kế hoạch (chọn trong Mô hình AI đã bật); model dự phòng |
-| **Rule** | **Rule toàn công ty (Global Rule)**: tên, nội dung, mức, **thời gian áp dụng**, cột **"Đồng bộ tới Worker"** (✓ 13/13 · ⟳ đang đồng bộ 11/13 · Lên lịch). Thẻ **Trạng thái đồng bộ**: số Worker đã nhận, lần đồng bộ gần nhất; Worker đang chạy việc thì áp từ lượt sau. Khối nhỏ riêng: **Rule chỉ dùng khi lập kế hoạch** (không đồng bộ xuống Worker) |
+| **Rule** | **Rule toàn công ty (Global Rule)**: tên, nội dung, mức, cách thực thi, **thời gian áp dụng**, cột **Hiệu lực** (Đang hiệu lực · Lên lịch từ ngày… · Hết hiệu lực). Không có cột hay thẻ «đồng bộ»: Rule áp từ lượt chạy kế tiếp của mọi Worker (§25.1 M3). Khối nhỏ riêng: **Rule chỉ dùng khi lập kế hoạch** (chỉ áp cho bước Orchestrator phân tích lệnh) |
 | **Ngân sách** | Giới hạn theo **credit hoặc token** (giống quy định usage của Worker khác): trần ngày, trần tháng, hành động khi chạm trần |
 
-**Màn Thêm / sửa Rule (board 128):** tên, nội dung, mức (`warn` / `block` / hỏi lại), kiểm bằng mã hay bằng AI, phạm vi (toàn công ty / chỉ khi lập kế hoạch); **thời gian áp dụng**: áp dụng ngay hoặc từ ngày, kết thúc không thời hạn hoặc đến ngày, chọn ngày trong tuần và khung giờ; nút **Lưu bản nháp** / **Lưu & đồng bộ**.
+**Màn Thêm / sửa Rule (board 128):** tên, nội dung, mức (`warn` / `block` / `ask` = hỏi lại), **cách thực thi** — *Trong prompt* · *Bằng mã* (bắt buộc dựng `hardCheck`: hành động + điều kiện trường – so sánh – giá trị, §9.5.4; đây là chốt chặn duy nhất) · *AI kiểm tra* (model kiểm trước khi hành động; chỉ được dùng với mức `warn` hoặc `ask`, **không** coi là chốt chặn), phạm vi (toàn công ty / chỉ khi lập kế hoạch); **thời gian áp dụng**: áp dụng ngay hoặc từ ngày, kết thúc không thời hạn hoặc đến ngày, chọn ngày trong tuần và khung giờ; nút **Lưu bản nháp** / **Lưu & áp dụng**.
 
 → Mục "Rule toàn công ty" (B3) không còn là mục menu riêng; B3 = tab Rule của Orchestrator.
 
@@ -1711,7 +2074,8 @@ Nút "Sửa model & ngân sách" ở Sơ đồ tổ chức và dòng Orchestrato
 | Bật | Bật / tắt từng quy tắc |
 
 - **Modal thêm / sửa:** tên, loại hành động, **điều kiện** (trường – so sánh – giá trị, thêm nhiều điều kiện), áp dụng cho, kênh duyệt (hộp Chờ duyệt + Telegram / chỉ hộp), người duyệt theo cấp (＋ Thêm cấp), hạn, quá hạn thì, **cho người duyệt sửa nội dung rồi duyệt**.
-- **Mặc định:** hạn duyệt mặc định, xử lý khi quá hạn, cho duyệt nhanh trên điện thoại / Telegram.
+- **Mặc định:** hạn duyệt mặc định, xử lý khi quá hạn, cho duyệt nhanh trên điện thoại / Telegram (Telegram duyệt từ **GĐ 2**, chỉ người dùng đã liên kết tài khoản và đúng là người duyệt, §25.2).
+- **Một hành động, một phê duyệt.** Khi bước «Chờ người duyệt» của Workflow, `approvalIf` của Rule và quy tắc duyệt cùng khớp một hành động, hệ thống gộp thành **một** yêu cầu duyệt có chuỗi cấp: người duyệt của bước Workflow là cấp 1, các cấp của quy tắc duyệt nối sau; người trùng chỉ duyệt một lần. Quá hạn làm theo `on_overdue` của cấp đang chờ.
 - **Người được duyệt thay:** uỷ quyền tạm thời khi người duyệt nghỉ (từ ngày – đến ngày); mọi lần duyệt thay ghi nhật ký.
 - Link "Cấu hình quy tắc duyệt" ở màn Chờ duyệt mở thẳng tab này.
 - Giai đoạn đầu khuyến nghị bật hết, tắt dần khi đã tin kết quả.
@@ -1783,8 +2147,8 @@ Nút "Sửa model & ngân sách" ở Sơ đồ tổ chức và dòng Orchestrato
 
 **Trình tạo Worker (board 10–13):**
 - Nằm trong khung Admin (đủ menu); Thoát về màn trước.
-- B1: chọn **Đơn vị → Phòng ban** (ra bộ phận theo L1).
-- B2 Bộ não: công tắc **"Giới hạn maxTokens mỗi lượt"** và **"Đặt trần credit mỗi ngày"** — **mặc định tắt**; tắt thì ô nhập bị khoá. Tiêu đề "Cách làm việc (mặc định, có thể thay đổi sau)".
+- B1: chọn **Đơn vị → Phòng ban** (ra bộ phận theo TN1).
+- B2 Bộ não: công tắc **"Giới hạn maxTokens mỗi lượt"** (mặc định tắt) và **"Đặt trần credit mỗi ngày"** — **mặc định bật, 50.000 credit, khi chạm trần thì tạm dừng** (§9.5.7, §25.1 M5); Admin sửa số hoặc tắt được, có nhật ký. Ô **«Worker Chat Social»** (mặc định tắt; bật thì Worker chọn được làm Worker tự trả lời của kênh, §9.5.12). Tiêu đề "Cách làm việc (mặc định, có thể thay đổi sau)".
 
 **Chi tiết Worker (board 14):**
 - Icon **✎** cạnh tên Worker mở **Sửa Worker**; không còn nút chữ "Sửa" ở thẻ Danh tính.
@@ -1804,7 +2168,7 @@ Nút "Sửa model & ngân sách" ở Sơ đồ tổ chức và dòng Orchestrato
 | Phần | Nội dung |
 |---|---|
 | Danh mục model | Nhà cung cấp, nhãn phù hợp, giá vào / ra (credit), ngữ cảnh, nguồn (Platform trừ ví / khoá riêng), số Worker đang dùng, **bật / tắt cho phép**, **mặc định cho Worker mới**. Model đang có Worker dùng thì không tắt được |
-| Quy tắc chọn model | Ai được đổi model; hỏi xác nhận khi model mới đắt hơn 50%; **model dự phòng** khi nhà cung cấp lỗi; có cho dùng tài liệu Mật qua khoá riêng hay không |
+| Quy tắc chọn model | Ai được đổi model; hỏi xác nhận khi model mới đắt hơn 50%; **model dự phòng** khi nhà cung cấp lỗi (chuyển tự động, ghi nhật ký). **Model không quyết định quyền:** tài liệu Mật chỉ Worker được phép mới truy cập (tập tài liệu tính trước khi gọi model, §15); model chính hay dự phòng chỉ là phần thực thi và không vượt được Rule hay quyền của Worker (§25.1 M10) |
 | Mức dùng | Theo model trong tháng |
 
 Giá lấy từ Console › Giá model (§22.9); tenant không sửa giá.
@@ -1813,95 +2177,154 @@ Giá lấy từ Console › Giá model (§22.9); tenant không sửa giá.
 
 - **Đổi đơn vị cha** (board 129): ô tìm; cây chọn một (cha hiện tại có nhãn "Hiện tại"; chính đơn vị đó và đơn vị con **bị khoá** để tránh vòng lặp); khung **Ảnh hưởng khi đổi** (đơn vị con, người và Worker đi theo; Rule ngành dọc thay đổi; phạm vi quản lý; dự án đang chạy; số người bị tính lại quan hệ với Worker); hiệu lực **ngay / từ ngày**; ô lý do → nhật ký.
 - **Tạo bộ phận** (board 47): chọn đơn vị, phòng ban, tên, người phụ trách, mã, thừa hưởng Rule / Kho.
-- Chế độ 3 đổi tên **"Người dùng ↔ Worker"** (thay "Ma trận Người ↔ Worker"); hiển thị theo L3 với 2 cách xem Theo người dùng / Theo Worker (giống Workspace §21.6 nhưng sửa được: đổi người phụ trách, cấp quyền dùng hàng loạt).
+- Chế độ 3 đổi tên **"Người dùng ↔ Worker"** (thay "Ma trận Người ↔ Worker"); hiển thị theo TN3 với 2 cách xem Theo người dùng / Theo Worker (giống Workspace §21.6 nhưng sửa được: đổi người phụ trách, cấp quyền dùng hàng loạt).
 
 ### 24.11 Người dùng
 
 - **Danh sách (board 23):** bấm tên → **trang Chi tiết người dùng** (không còn modal). Mỗi dòng có nút **🔐 Quyền** mở thẳng tab Quyền bổ sung. Khối **Quy tắc an toàn** đặt **cuối trang**, trải ngang.
 - **Chi tiết người dùng (board 46, trang thường):** đầu trang tên, đường dẫn Quản trị › Người dùng › Thông tin, "← Danh sách"; 3 tab **Thông tin · Quyền bổ sung · Hội thoại**. Tab Thông tin: Thông tin cá nhân, Email đăng nhập (đổi email gửi link xác nhận; email cũ dùng đến khi xác nhận), Trạng thái (Hoạt động / Khoá tạm / Vô hiệu), Vai trò & phạm vi, Mật khẩu (gửi link đặt lại 72 giờ hoặc đặt mật khẩu tạm); thanh **Huỷ / Lưu thay đổi** cuối trang. Tab Quyền bổ sung: ra lệnh Orchestrator, tạo dự án, **Chat Social (xem & trả lời theo kênh, liên kết tới Admin › Chat Social)**…, danh sách người đang có quyền Orchestrator. Tab Hội thoại: chỉ `tenant_admin`, mỗi lần mở ghi `conversation.viewed`.
-- **Thêm người dùng (modal, board 45):** Bộ phận chọn trên **cây sơ đồ tổ chức** (mỗi đơn vị ghi các phòng ban hiện có) rồi chọn **Phòng ban**, hiện "Bộ phận: …"; **Phạm vi quản lý = 3 ô tick**: Quản lý bộ phận này · Quản lý đơn vị và đơn vị con · **Quản lý ngành dọc** (hiện danh sách bộ phận sẽ thuộc quyền). Không tick = thành viên. Ô tick **gợi ý** vai trò (`unit_manager` / `function_head`); quyền thực tế không vượt vai trò đã chọn. Cách cấp tài khoản: gửi lời mời (72 giờ, một lần) hoặc mật khẩu khởi tạo.
+- **Thêm người dùng (modal, board 45):** Bộ phận chọn trên **cây sơ đồ tổ chức** (mỗi đơn vị ghi các phòng ban hiện có) rồi chọn **Phòng ban**, hiện "Bộ phận: …"; **Phạm vi quản lý = 3 ô tick, chọn được nhiều**: Quản lý bộ phận này · Quản lý đơn vị và đơn vị con · **Quản lý ngành dọc** (hiện danh sách bộ phận sẽ thuộc quyền). Không tick = thành viên. **Quyền thực tế = hợp của mọi phạm vi đã tick** (lưu ở `user_manage_scopes`); `relation()` và kiểm quyền xét «bất kỳ phạm vi nào khớp». Vai trò tự suy ra để quyết định khu vực Quản trị nhìn thấy: có phạm vi đơn vị hoặc bộ phận → `unit_manager`; chỉ có phạm vi ngành dọc → `function_head`; «Quản lý bộ phận này» là `unit_manager` giới hạn trong một bộ phận (§25.1 M7). Cách cấp tài khoản: gửi lời mời (72 giờ, một lần) hoặc mật khẩu khởi tạo.
 
 ### 24.12 Kết nối API, Gói & thanh toán
 
 - **Kết nối API (board 20, 144):** nút ▦ Lưới / ☰ Danh sách. Dạng danh sách: lọc loại / trạng thái, tìm; bảng kết nối (tên, loại, cách xác thực), trạng thái, dùng bởi, ghi chú (số dư, hạn token), thao tác (Chi tiết / Nạp tiền / Phạm vi / Cấp lại / Cấu hình); dòng tổng kết số cần xử lý và hạn mức gói. Kênh chat khách hàng **không** quản lý ở đây mà ở mục riêng **Chat Social** (§24.17).
-- **Đổi gói (modal, board 138):** so sánh gói (gói hiện tại, gói chọn); chu kỳ tháng / năm (năm giảm 15%, theo Console); bảng tính: giá gói mới − phần còn lại của gói cũ (tính theo ngày) + VAT = thanh toán hôm nay; phương thức: chuyển khoản QR / thẻ / trừ ví. **Nâng gói hiệu lực ngay** sau khi thanh toán xác nhận; **hạ gói áp từ kỳ sau** và phải tắt bớt Worker / người dùng vượt hạn mức trước ngày chuyển.
+- **Đổi gói (modal, board 138):** so sánh gói (gói hiện tại, gói chọn); chu kỳ **tháng / năm** (năm giảm theo cấu hình Console, mặc định 15%); bảng tính: giá gói mới − phần còn lại của gói cũ (tính theo ngày) = thanh toán hôm nay. **v1 chỉ một phương thức: chuyển khoản QR (PayOS) hoặc chuyển khoản thường kèm chứng từ để xác nhận thủ công**; không trả bằng thẻ, **không trừ Ví credit** (Ví chỉ dùng trả token). **Chưa hiện dòng VAT** cho tới khi có hoá đơn điện tử (PL1); chứng từ là phiếu thu (§25.1 M6). **Nâng gói hiệu lực ngay** sau khi thanh toán xác nhận; **hạ gói áp từ kỳ sau** và phải tắt bớt Worker / người dùng vượt hạn mức trước ngày chuyển.
 - **Thanh toán đăng ký (board 04, 139):** nút đổi thành **"Đã chuyển khoản"**, mở popup **Gửi chứng từ chuyển khoản**: tóm tắt gói, số tiền, nội dung CK; đính kèm ảnh / PDF (≤ 10 MB, ≤ 5 tệp); ngày chuyển, mã giao dịch (tuỳ chọn), ghi chú. **Gửi** → về Dashboard; đơn ở trạng thái `awaiting_confirmation`; Console xác nhận ở hàng chờ chuyển khoản thủ công (§22.9), lệch số tiền thì không xác nhận; xác nhận xong kích hoạt gói và gửi email.
 
 ### 24.13 Mô hình dữ liệu bổ sung (PostgreSQL)
 
+Theo quy ước §7.7: **mọi bảng thuộc tenant có `tenant_id uuid NOT NULL REFERENCES tenants(id)`, bật và ép RLS** (`ENABLE` + `FORCE ROW LEVEL SECURITY`, policy `tenant_isolation` cho `aios_app`); bảng con cũng mang `tenant_id` để RLS không phải join. Các khối dưới đây bỏ qua phần `ENABLE/FORCE/POLICY` lặp lại; migration phải có đủ (CI §3.3 kiểm).
+
 ```sql
--- Trạng thái cấu hình được
-CREATE TABLE status_groups (id uuid PRIMARY KEY, tenant_id uuid NOT NULL, key text, name text,
-  counts_overdue bool, counts_missing_report bool, to_dispatch bool, is_terminal bool,
-  terminal_outcome text CHECK (terminal_outcome IN ('done','failed')), is_system bool DEFAULT false);
-CREATE TABLE status_defs (id uuid PRIMARY KEY, tenant_id uuid NOT NULL,
-  entity text CHECK (entity IN ('task','ticket','project')), name text, color text, sort int,
-  group_id uuid REFERENCES status_groups(id), is_default bool, reason_required bool, is_system bool DEFAULT false);
-CREATE TABLE status_transitions (tenant_id uuid, entity text, from_status uuid, to_status uuid,
+-- ===== Trạng thái cấu hình được (§24.3, §25.3) =====
+CREATE TABLE status_groups (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), tenant_id uuid NOT NULL REFERENCES tenants(id),
+  key text NOT NULL, name text NOT NULL, counts_overdue boolean NOT NULL, counts_missing_report boolean NOT NULL,
+  to_dispatch boolean NOT NULL, is_terminal boolean NOT NULL,
+  terminal_outcome text CHECK (terminal_outcome IN ('done','failed')), is_system boolean NOT NULL DEFAULT false,
+  UNIQUE (tenant_id, key));
+CREATE TABLE status_defs (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), tenant_id uuid NOT NULL REFERENCES tenants(id),
+  entity text NOT NULL CHECK (entity IN ('task','ticket','project')), key text NOT NULL, name text NOT NULL, color text,
+  sort int, group_id uuid NOT NULL REFERENCES status_groups(id), is_default boolean NOT NULL DEFAULT false,
+  reason_required boolean NOT NULL DEFAULT false, is_system boolean NOT NULL DEFAULT false, UNIQUE (tenant_id, entity, key));
+CREATE TABLE status_transitions (tenant_id uuid NOT NULL REFERENCES tenants(id), entity text NOT NULL,
+  from_status uuid NOT NULL REFERENCES status_defs(id), to_status uuid NOT NULL REFERENCES status_defs(id),
   PRIMARY KEY (tenant_id, entity, from_status, to_status));
-CREATE TABLE dashboard_settings (tenant_id uuid PRIMARY KEY, metrics jsonb, thresholds jsonb);
+-- Ánh xạ sự kiện của động cơ → trạng thái kế tiếp (§25.3). Không có dòng thì động cơ không tự chuyển.
+CREATE TABLE status_event_map (tenant_id uuid NOT NULL REFERENCES tenants(id), entity text NOT NULL DEFAULT 'task',
+  event text NOT NULL CHECK (event IN ('run_queued','run_started','waiting_approval','waiting_user','run_succeeded',
+                                       'run_failed','run_cancelled','deps_blocked','deps_ready','accepted','rework')),
+  to_status uuid NOT NULL REFERENCES status_defs(id), PRIMARY KEY (tenant_id, entity, event));
+CREATE TABLE dashboard_settings (tenant_id uuid PRIMARY KEY REFERENCES tenants(id), metrics jsonb NOT NULL, thresholds jsonb NOT NULL);
 
--- Quy tắc duyệt
-CREATE TABLE approval_rules (id uuid PRIMARY KEY, tenant_id uuid NOT NULL, name text, action_kind text,
-  conditions jsonb, scope jsonb, channel text, deadline_hours int, on_overdue text,
-  allow_edit_then_approve bool, enabled bool DEFAULT true, sort int);
+-- ===== Quy tắc duyệt (§24.5) =====
+CREATE TABLE approval_rules (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), tenant_id uuid NOT NULL REFERENCES tenants(id),
+  name text NOT NULL, action_kind text NOT NULL, conditions jsonb NOT NULL DEFAULT '[]', scope jsonb NOT NULL,
+  channel text NOT NULL DEFAULT 'inbox',              -- inbox | inbox_telegram
+  deadline_hours int NOT NULL, on_overdue text NOT NULL CHECK (on_overdue IN ('cancel','remind_dispatch','escalate','stop')),
+  allow_edit_then_approve boolean NOT NULL DEFAULT false, enabled boolean NOT NULL DEFAULT true, sort int);
 CREATE TABLE approval_rule_levels (rule_id uuid REFERENCES approval_rules(id) ON DELETE CASCADE,
-  level int, approver jsonb, condition jsonb, PRIMARY KEY (rule_id, level));
-CREATE TABLE approval_delegations (id uuid PRIMARY KEY, tenant_id uuid, from_user uuid, to_user uuid,
-  starts_at timestamptz, ends_at timestamptz);
+  tenant_id uuid NOT NULL REFERENCES tenants(id), level int NOT NULL, approver jsonb NOT NULL, condition jsonb,
+  PRIMARY KEY (rule_id, level));
+CREATE TABLE approval_delegations (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), tenant_id uuid NOT NULL REFERENCES tenants(id),
+  from_user uuid NOT NULL REFERENCES users(id), to_user uuid NOT NULL REFERENCES users(id),
+  starts_at timestamptz NOT NULL, ends_at timestamptz NOT NULL, CHECK (ends_at > starts_at), CHECK (from_user <> to_user));
+-- Một yêu cầu duyệt cho một hành động (gộp bước Workflow + Rule + quy tắc duyệt)
+CREATE TABLE approval_requests (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), tenant_id uuid NOT NULL REFERENCES tenants(id),
+  run_id uuid REFERENCES worker_runs(id), run_step int, task_id uuid, action_id text NOT NULL,
+  levels jsonb NOT NULL,                              -- chuỗi cấp đã gộp, kèm nguồn của từng cấp
+  current_level int NOT NULL DEFAULT 1, status text NOT NULL CHECK (status IN ('pending','approved','rejected','cancelled','expired')),
+  due_at timestamptz NOT NULL, decided_by uuid, decided_via text CHECK (decided_via IN ('web','telegram')), decided_at timestamptz,
+  created_at timestamptz NOT NULL DEFAULT now());
 
--- Danh mục Kho
-CREATE TABLE doc_kinds (id uuid PRIMARY KEY, tenant_id uuid NOT NULL, name text, icon text, description text,
-  default_state text CHECK (default_state IN ('active','archived')), suggest_confidential bool, chunking text, ocr bool, file_hints text[], visible bool, sort int);
-CREATE TABLE workflow_step_types (id uuid PRIMARY KEY, tenant_id uuid NOT NULL, name text, icon text,
-  system_action text, config_fields jsonb, default_deadline_hours int, on_error text, allowed_scope jsonb,
-  always_approve bool, log_to_report bool, enabled bool, is_system bool DEFAULT false);
-CREATE TABLE library_tags (id uuid PRIMARY KEY, tenant_id uuid NOT NULL, name citext, UNIQUE (tenant_id, name));
--- library_versions: knowledge.tier → knowledge.state ('active'|'archived')
--- library_items.tags text[] → library_item_tags(item_id, tag_id); library_items thêm: department_id, apply_to_function bool,
--- doc_kind_id, source_system_item_id, source_version; scope chỉ còn 'tenant' | 'unit_subtree'
+-- ===== Danh mục Kho (§24.7) =====
+CREATE TABLE doc_kinds (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), tenant_id uuid NOT NULL REFERENCES tenants(id),
+  name text NOT NULL, icon text, description text, default_state text NOT NULL CHECK (default_state IN ('active','archived')),
+  suggest_confidential boolean NOT NULL DEFAULT false, chunking text NOT NULL, ocr boolean NOT NULL DEFAULT false,
+  file_hints text[], visible boolean NOT NULL DEFAULT true, sort int);
+CREATE TABLE workflow_step_types (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), tenant_id uuid NOT NULL REFERENCES tenants(id),
+  name text NOT NULL, icon text,
+  system_action text NOT NULL CHECK (system_action IN ('worker','approval','skill','send_external','http','ask_requester','notify')),
+                                                      -- chỉ ánh xạ vào danh mục hành động của động cơ (§9.5.4), không có mã tuỳ ý
+  config_fields jsonb NOT NULL DEFAULT '[]', default_deadline_hours int, on_error text, allowed_scope jsonb,
+  always_approve boolean NOT NULL DEFAULT false, log_to_report boolean NOT NULL DEFAULT true,
+  enabled boolean NOT NULL DEFAULT true, is_system boolean NOT NULL DEFAULT false);
+CREATE TABLE library_tags (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), tenant_id uuid NOT NULL REFERENCES tenants(id),
+  name citext NOT NULL, UNIQUE (tenant_id, name));
+CREATE TABLE library_item_tags (item_id uuid REFERENCES library_items(id) ON DELETE CASCADE, tag_id uuid REFERENCES library_tags(id) ON DELETE CASCADE,
+  tenant_id uuid NOT NULL REFERENCES tenants(id), PRIMARY KEY (item_id, tag_id));
+-- library_versions.content.knowledge: tier → state ('active'|'archived')
+-- library_items thêm: department_function_id uuid, apply_to_function boolean, doc_kind_id uuid, source_version int;
+--   visibility chỉ còn 'tenant' | 'unit_subtree' | 'worker_private'
 
--- Rule toàn công ty, thời gian áp dụng, đồng bộ
--- policy_rules thêm: schedule jsonb (starts_at, ends_at, weekdays, time_window), check_mode ('code'|'ai'),
---   level ('warn'|'block'|'ask'), applies ('all_workers'|'planning_only'), status ('draft'|'active')
-CREATE TABLE rule_sync_status (rule_id uuid, worker_id uuid, synced_version int, synced_at timestamptz,
-  PRIMARY KEY (rule_id, worker_id));
+-- ===== Rule toàn công ty: thời gian áp dụng, cách thực thi (§24.4) — không có bảng đồng bộ (M3) =====
+-- policy_rules thêm: schedule jsonb (starts_at, ends_at, weekdays, time_window), applies text ('all_workers'|'planning_only'),
+--   status text ('draft'|'active'); nội dung Rule (text, severity warn|block|ask, enforcement prompt|hard|ai, hardCheck) ở library_versions
 
--- Mô hình AI theo tenant
-CREATE TABLE tenant_models (tenant_id uuid, model text REFERENCES model_pricing(model), enabled bool,
-  is_default bool, labels text[], PRIMARY KEY (tenant_id, model));
-CREATE TABLE tenant_model_policy (tenant_id uuid PRIMARY KEY, who_can_change jsonb, confirm_if_pricier_pct int,
-  fallback_model text, allow_confidential_via_byok bool);
+-- ===== Mô hình AI theo tenant (§24.9) =====
+CREATE TABLE tenant_models (tenant_id uuid NOT NULL REFERENCES tenants(id), model text NOT NULL REFERENCES model_pricing(model),
+  enabled boolean NOT NULL, is_default boolean NOT NULL DEFAULT false, labels text[], PRIMARY KEY (tenant_id, model));
+CREATE UNIQUE INDEX one_default_model ON tenant_models (tenant_id) WHERE is_default;
+CREATE TABLE tenant_model_policy (tenant_id uuid PRIMARY KEY REFERENCES tenants(id), who_can_change jsonb NOT NULL,
+  confirm_if_pricier_pct int NOT NULL DEFAULT 50, fallback_model text REFERENCES model_pricing(model));
+  -- không có cờ «tài liệu Mật qua khoá riêng»: quyền tài liệu do Worker và công việc quyết định (M10)
 
--- Worker: phiên bản cấu hình, giới hạn tuỳ chọn
--- workers thêm: owner_user_id (người phụ trách, NOT NULL trừ Orchestrator), config_version int,
---   max_tokens_enabled bool DEFAULT false, daily_cap_enabled bool DEFAULT false
-CREATE TABLE worker_config_versions (worker_id uuid, version int, snapshot jsonb, created_by uuid,
-  created_at timestamptz, PRIMARY KEY (worker_id, version));
+-- ===== Worker =====
+-- workers thêm: config_version int NOT NULL DEFAULT 1, social_agent boolean NOT NULL DEFAULT false,
+--   max_tokens_enabled boolean NOT NULL DEFAULT false, daily_cap_enabled boolean NOT NULL DEFAULT true   (M5)
+CREATE TABLE worker_config_versions (worker_id uuid REFERENCES workers(id) ON DELETE CASCADE, version int,
+  tenant_id uuid NOT NULL REFERENCES tenants(id), snapshot jsonb NOT NULL, created_by uuid REFERENCES users(id),
+  created_at timestamptz NOT NULL DEFAULT now(), PRIMARY KEY (worker_id, version));
 
--- Người dùng: phạm vi quản lý dạng tick
-CREATE TABLE user_manage_scopes (user_id uuid, kind text CHECK (kind IN ('department','unit_subtree','function')),
-  unit_id uuid, function_id uuid, PRIMARY KEY (user_id, kind, unit_id, function_id));
+-- ===== Người dùng: nhiều phạm vi quản lý (M7) =====
+CREATE TABLE user_manage_scopes (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), tenant_id uuid NOT NULL REFERENCES tenants(id),
+  user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  kind text NOT NULL CHECK (kind IN ('department','unit_subtree','function')),
+  department_id uuid REFERENCES departments(id), unit_id uuid REFERENCES units(id), function_id uuid REFERENCES functions(id),
+  CHECK ((kind = 'department' AND department_id IS NOT NULL) OR (kind = 'unit_subtree' AND unit_id IS NOT NULL)
+      OR (kind = 'function' AND function_id IS NOT NULL AND unit_id IS NOT NULL)),
+  UNIQUE NULLS NOT DISTINCT (user_id, kind, department_id, unit_id, function_id));
+-- users không có cột phạm vi; mọi phạm vi quản lý nằm ở bảng trên
 
--- Thanh toán
-CREATE TABLE payment_proofs (id uuid PRIMARY KEY, order_id uuid REFERENCES payment_orders(id), files jsonb,
-  paid_on date, bank_ref text, note text, submitted_by uuid, submitted_at timestamptz,
-  reviewed_by uuid, reviewed_at timestamptz, result text);
-CREATE TABLE plan_changes (id uuid PRIMARY KEY, tenant_id uuid, from_plan text, to_plan text, cycle text,
-  proration_credit bigint, vat bigint, amount_due bigint, effective text CHECK (effective IN ('now','next_cycle')),
-  order_id uuid, status text, created_at timestamptz);
+-- ===== Thanh toán (§24.12) =====
+CREATE TABLE payment_proofs (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), tenant_id uuid NOT NULL REFERENCES tenants(id),
+  order_id uuid NOT NULL REFERENCES payment_orders(id), files jsonb NOT NULL, paid_on date, bank_ref text, note text,
+  submitted_by uuid NOT NULL REFERENCES users(id), submitted_at timestamptz NOT NULL DEFAULT now(),
+  reviewed_by uuid, reviewed_at timestamptz, result text CHECK (result IN ('confirmed','rejected')), reject_reason text);
+CREATE TABLE plan_changes (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), tenant_id uuid NOT NULL REFERENCES tenants(id),
+  from_plan text NOT NULL REFERENCES plans(id), to_plan text NOT NULL REFERENCES plans(id), cycle text NOT NULL,
+  proration_credit bigint NOT NULL DEFAULT 0, amount_due bigint NOT NULL,           -- không có cột VAT ở v1 (M6)
+  effective text NOT NULL CHECK (effective IN ('now','next_cycle')), order_id uuid REFERENCES payment_orders(id),
+  status text NOT NULL, created_at timestamptz NOT NULL DEFAULT now());
+-- payment_orders.status thêm 'awaiting_confirmation'; payment_orders.gateway: 'payos' | 'manual'
 
--- Chat Social: phân quyền theo kênh (bảng kênh, hội thoại, tin nhắn ở tài liệu Workspace §21.10)
-CREATE TABLE social_channel_grants (id uuid PRIMARY KEY, tenant_id uuid NOT NULL, channel_id uuid,
-  grantee_kind text CHECK (grantee_kind IN ('user','group','department')), grantee_id uuid,
-  level text CHECK (level IN ('view','reply','assign','manage')), can_view_reports bool, created_by uuid, created_at timestamptz);
-CREATE TABLE social_settings (tenant_id uuid PRIMARY KEY, remind_after_min int, escalate_after_min int,
-  retention_months int, show_agent_name bool, label_bot_messages bool);
--- social_channels thêm: business_hours jsonb, after_hours text, handoff_to jsonb, greeting text, token_expires_at timestamptz
+-- ===== Chat Social: phân quyền theo kênh (bảng kênh, cuộc chat, tin nhắn: tài liệu Workspace §21.10) =====
+CREATE TABLE social_channel_grants (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), tenant_id uuid NOT NULL REFERENCES tenants(id),
+  channel_id uuid NOT NULL REFERENCES social_channels(id) ON DELETE CASCADE,
+  grantee_kind text NOT NULL CHECK (grantee_kind IN ('user','group','department')), grantee_id uuid NOT NULL,
+  level text NOT NULL CHECK (level IN ('view','reply','assign','manage')), can_view_reports boolean NOT NULL DEFAULT false,
+  created_by uuid NOT NULL REFERENCES users(id), created_at timestamptz NOT NULL DEFAULT now());
+CREATE TABLE social_settings (tenant_id uuid PRIMARY KEY REFERENCES tenants(id), remind_after_min int NOT NULL DEFAULT 5,
+  escalate_after_min int NOT NULL DEFAULT 15, retention_months int NOT NULL DEFAULT 12 CHECK (retention_months IN (12, 24)),
+  show_agent_name boolean NOT NULL DEFAULT true, label_bot_messages boolean NOT NULL DEFAULT true);
 
--- Đổi đơn vị cha
-CREATE TABLE unit_moves (id uuid PRIMARY KEY, unit_id uuid, from_parent uuid, to_parent uuid,
-  effective_at timestamptz, reason text, impact jsonb, created_by uuid);
+-- ===== Telegram (§25.2) =====
+CREATE TABLE telegram_bots (tenant_id uuid PRIMARY KEY REFERENCES tenants(id), bot_username text NOT NULL,
+  token_secret jsonb NOT NULL,                        -- {ciphertext, nonce, keyVersion} trong két (§13.3)
+  webhook_secret_hash bytea NOT NULL, status text NOT NULL DEFAULT 'ok', created_by uuid NOT NULL REFERENCES users(id),
+  created_at timestamptz NOT NULL DEFAULT now());
+CREATE TABLE telegram_links (user_id uuid PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE, tenant_id uuid NOT NULL REFERENCES tenants(id),
+  telegram_user_id bigint NOT NULL, linked_at timestamptz NOT NULL DEFAULT now(), UNIQUE (tenant_id, telegram_user_id));
+CREATE TABLE telegram_link_codes (code_hash bytea PRIMARY KEY, tenant_id uuid NOT NULL REFERENCES tenants(id),
+  user_id uuid NOT NULL REFERENCES users(id), expires_at timestamptz NOT NULL, used_at timestamptz);   -- hạn 10 phút, dùng 1 lần
+CREATE TABLE telegram_report_chats (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), tenant_id uuid NOT NULL REFERENCES tenants(id),
+  chat_id bigint NOT NULL, title text, kinds text[] NOT NULL,   -- daily_summary | plan_report | alerts …
+  added_by uuid NOT NULL REFERENCES users(id), UNIQUE (tenant_id, chat_id));
+
+-- ===== Đổi đơn vị cha (§24.10) =====
+CREATE TABLE unit_moves (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), tenant_id uuid NOT NULL REFERENCES tenants(id),
+  unit_id uuid NOT NULL REFERENCES units(id), from_parent uuid REFERENCES units(id), to_parent uuid NOT NULL REFERENCES units(id),
+  effective_at timestamptz NOT NULL, reason text NOT NULL, impact jsonb NOT NULL, created_by uuid NOT NULL REFERENCES users(id),
+  created_at timestamptz NOT NULL DEFAULT now());
 ```
 
 ### 24.14 API bổ sung (Admin)
@@ -1912,7 +2335,8 @@ CREATE TABLE unit_moves (id uuid PRIMARY KEY, unit_id uuid, from_parent uuid, to
 | Quy tắc duyệt | `GET/POST/PATCH/DELETE /admin/approval-rules` · `PUT /admin/approval-rules/defaults` · `/admin/approval-delegations` |
 | Danh mục Kho | `/admin/doc-kinds` (+ `POST /:id/reindex`) · `/admin/step-types` · `/admin/tags` (+ `POST /merge`) |
 | Kho | `POST /admin/library/items` (draft/publish) · `GET /admin/system-library/packs` · `POST /admin/library/import` · `GET /admin/library/items/:id/diff?from=&to=` |
-| Orchestrator | `GET/PATCH /admin/orchestrator` · `/admin/orchestrator/rules` (+ `POST /:id/sync`) · `GET /admin/orchestrator/rules/sync-status` |
+| Orchestrator | `GET/PATCH /admin/orchestrator` · `/admin/orchestrator/rules` (CRUD, trạng thái hiệu lực) |
+| Telegram | `PUT /admin/telegram/bot` (lưu token vào két, đặt webhook) · `DELETE /admin/telegram/bot` · `GET/POST/DELETE /admin/telegram/report-chats` · phía người dùng: `POST /me/telegram/link-code` · `DELETE /me/telegram/link` · webhook: `POST /api/v1/telegram/webhook` (kiểm `secret_token`) |
 | Mô hình | `GET/PATCH /admin/models` · `PUT /admin/models/policy` · `POST /admin/workers/:id/model` |
 | Worker | `PUT /admin/workers/:id` (một trang, tạo `config_version`) · `POST /admin/workers/:id/bindings` (hàng loạt từ Kho) |
 | Tổ chức | `POST /admin/units/:id/move` (dry-run trả `impact`) · `POST /admin/departments` |
@@ -1937,7 +2361,7 @@ CREATE TABLE unit_moves (id uuid PRIMARY KEY, unit_id uuid, from_parent uuid, to
 | 1 | Tầng tri thức | Bỏ T1–T4. Chỉ còn **Đang dùng / Lưu trữ** (§24.6, §15). Đã cập nhật thiết kế: Tạo mục, Phân loại tài liệu (bảng + modal thêm / sửa), Kho KWSR, trình tạo Worker bước 3 |
 | 2 | Chat Social | **Luôn có**, không tính hạn mức gói. Quyền xem / trả lời phân trong **Admin › Chat Social** theo từng kênh (§24.17); quyền bổ sung hiện ở Chi tiết người dùng |
 | 3 | Nhân sự & Worker (Workspace) | **Bỏ hẳn** — không có màn, không có số liệu riêng; board đã xoá khỏi thiết kế |
-| 4 | Hạn link lời mời / đặt mật khẩu | **72 giờ**, dùng một lần, ở mọi nơi (Thêm người dùng, email mời, màn Nhận lời mời) |
+| 4 | Hạn link | **Link lời mời** và **link đặt mật khẩu do Admin gửi**: 72 giờ, dùng một lần. **Link «Quên mật khẩu» người dùng tự yêu cầu**: 30 phút, dùng một lần. Hai loại link khác nhau, áp như nhau ở mọi màn |
 
 ### 24.17 Chat Social — quản trị (board 146, 147, 148)
 
@@ -1954,11 +2378,112 @@ Mục menu **KẾT NỐI › Chat Social**. Workspace: tài liệu Workspace §2
 **Quy tắc quyền:**
 - Người dùng chỉ thấy cuộc chat của kênh mình được cấp; chưa được cấp kênh nào thì mục Chat Social trên Workspace hiện trạng thái trống và hướng dẫn liên hệ quản trị viên (menu luôn hiện).
 - Quyền theo bộ phận áp cho mọi người trong bộ phận đó, kể cả người vào sau.
+- Chỉ **Worker gắn cờ Chat Social** chọn được làm Worker tự trả lời; Worker đó chỉ trả lời từ Knowledge gắn cho nó, không dùng tài liệu Mật, không trả lời bằng kiến thức chung (§9.5.12).
 - Người phụ trách Worker được giao tự trả lời một kênh **mặc định** có quyền Xem & trả lời kênh đó.
 - Quy tắc riêng tư U5 (hội thoại nội bộ chỉ chủ và `tenant_admin` xem) **không** áp cho Chat Social: cuộc chat khách hàng là dữ liệu của kênh, ai có quyền kênh thì xem được.
 - Mọi lần cấp / gỡ quyền, kết nối / ngắt kênh, dừng tay và trả lại Worker đều ghi nhật ký kiểm toán.
 - Tin Worker gửi vẫn theo Rule và **Quy tắc duyệt** (vd. gửi tin hàng loạt phải duyệt).
+- Giai đoạn: **GĐ 2** (Webchat, Zalo OA, Facebook). WhatsApp Business bật khi Meta duyệt xong số và ứng dụng. Webhook nhận tin của từng kênh là endpoint công khai: kiểm chữ ký của nền tảng, giới hạn tốc độ; Webchat có chống spam (giới hạn theo IP và phiên, captcha khi bất thường).
 
 ---
 
-*Tài liệu dựa trên khảo sát mã nguồn tại commit `c89a426`. Bước tiếp theo: Giai đoạn 0, mở đầu bằng commit gỡ Hermes/Mem0.*
+## 25. Quyết định 03/11/2026 (v2.1)
+
+> Chương này là **bản chốt cuối**: chỗ nào trong §1–§24 còn mâu thuẫn với chương này thì theo chương này. Các chương trước đã được sửa tại chỗ ở những điểm chính.
+
+### 25.1 Bảng quyết định
+
+| # | Chủ đề | Quyết định | Ở đâu |
+|---|---|---|---|
+| **M1** | Chat Social | Chỉ **Worker gắn cờ Chat Social** được tự trả lời khách. Quy tắc chặt: **chỉ trả lời từ Knowledge gắn cho Worker đó**, không dùng tài liệu Mật, không trả lời bằng kiến thức chung (thiếu tài liệu thì chuyển người). **GĐ 2** | §9.5.12, §24.17 |
+| **M2** | Telegram | GĐ 1b: tenant tạo **Telegram Bot riêng**; Bot **chỉ** nhận lệnh cho Orchestrator, gửi kế hoạch về Telegram để **duyệt rồi mới chạy**, và là kênh nhận báo cáo. GĐ 2: duyệt quy tắc duyệt qua Telegram | §25.2 |
+| **M3** | Rule toàn công ty | Không có bước «đồng bộ». Rule có hiệu lực từ lượt chạy kế tiếp; trạng thái Rule là Đang hiệu lực / Lên lịch / Hết hiệu lực | §24.0 TN4, §24.4 |
+| **M4** | Cách thực thi Rule | *Trong prompt* · *Bằng mã* (bắt buộc `hardCheck`, chốt chặn duy nhất) · *AI kiểm tra* (chỉ `warn` / `ask`, không phải chốt chặn) | §24.4, §9.5.4 |
+| **M5** | Ngân sách ngày của Worker | **Mặc định bật**, 50.000 credit, chạm trần thì tạm dừng; Admin sửa hoặc tắt được, có nhật ký | §24.8, §9.5.7 |
+| **M6** | Thanh toán v1 | Chỉ chuyển khoản QR (PayOS) và chuyển khoản kèm chứng từ (xác nhận thủ công). Không thẻ, không trả gói bằng Ví credit, chưa ghi VAT tới khi có hoá đơn điện tử (PL1) | §24.12 |
+| **M7** | Phạm vi quản lý | Một người giữ được **nhiều phạm vi**; quyền là hợp các phạm vi; vai trò tự suy ra để quyết định khu vực Quản trị | §24.11, §3.3 |
+| **M8** | Phê duyệt | Quá hạn làm theo `on_overdue` của quy tắc (kể cả chuyển cấp). Một hành động chỉ sinh **một** yêu cầu duyệt (gộp bước Workflow + Rule + quy tắc duyệt thành chuỗi cấp) | §24.5, §9.5.5 |
+| **M9** | Trạng thái và động cơ | Động cơ chỉ chuyển trạng thái theo **ánh xạ sự kiện → trạng thái kế tiếp** Admin đã cấu hình và chỉ khi bước chuyển nằm trong bảng chuyển được phép. Trạng thái tuỳ chỉnh chưa có quy tắc chuyển thì động cơ không đụng tới | §25.3 |
+| **M10** | Tài liệu Mật và model | Quyền dùng tài liệu Mật **chỉ thuộc về Worker** (theo công việc, §15); model — chính, dự phòng hay khoá riêng — chỉ là phần thực thi, không vượt được quyền hay Rule của Worker. Bỏ cờ «Mật qua khoá riêng» | §24.9, §15 |
+| **M11** | Chat nội bộ giữa nhân sự | **GĐ 3** | §25.4 |
+| **M12** | Phiên bản cấu hình Worker | Mỗi run ghi `config_version` và dùng đúng bản đó tới hết run | §9.5.2, §7.7 |
+| **R1** | Bản demo | Xây mới, không dùng lại mã, không di trú dữ liệu; tài liệu không mô tả lại bản demo | §2 |
+| **CH** | Chuỗi công việc | Việc kế tiếp tự bắt đầu khi việc trước **xong phần thực hiện** (hoặc tới giờ bắt đầu đã hẹn); không dừng chờ nghiệm thu từng bước trừ khi người dựng chuỗi đặt điểm kiểm tra; bước vướng hiện rõ trên chuỗi, xử lý xong tự chạy tiếp | §9.5.11, Workspace §8.7 |
+| — | Đồng nhất nhỏ | Link mời và link đặt mật khẩu do Admin gửi: **72 giờ**; link «Quên mật khẩu»: **30 phút**. Một quy tắc mật khẩu cho mọi màn (§6.2). Quyền của `viewer` theo Workspace §12.3. Chu kỳ thuê bao chỉ **tháng / năm** | §6, §24.16, Workspace §21.9 |
+
+### 25.2 Telegram Bot (GĐ 1b)
+
+**Thiết lập (Admin › Cài đặt › Tổ chức › Cổng điều khiển).**
+1. Admin tạo Bot bằng @BotFather, dán **token** vào AI OS. Token lưu trong két (§13.3), không bao giờ hiện lại.
+2. Hệ thống đặt webhook `https://{slug}.ai-os.vn/api/v1/telegram/webhook` với `secret_token` ngẫu nhiên; mọi cập nhật không có đúng `secret_token` bị bỏ.
+3. Mỗi tenant một Bot. Gỡ Bot thì huỷ mọi liên kết.
+
+**Liên kết người dùng (Tài khoản › Telegram).** Người dùng bấm «Liên kết Telegram», nhận link `t.me/<bot>?start=<mã>` (mã một lần, hạn 10 phút). Bot nhận `/start <mã>` từ **chat riêng** thì ghép `telegram_user_id` với tài khoản AI OS. Một tài khoản Telegram chỉ gắn với một người dùng trong một tenant. Người dùng tự huỷ liên kết bất cứ lúc nào; người dùng bị khoá hoặc vô hiệu thì liên kết ngừng tác dụng.
+
+**Ra lệnh (chỉ trong chat riêng, chỉ cho Orchestrator).**
+
+| Bước | Hành vi |
+|---|---|
+| 1 | Người dùng gửi tin nhắn tự nhiên cho Bot. Bot tra liên kết: chưa liên kết → hướng dẫn liên kết; đã liên kết nhưng **không có quyền ra lệnh Orchestrator** → từ chối |
+| 2 | Orchestrator lập kế hoạch như trên web (Workspace §21.3), không chạy gì |
+| 3 | Bot gửi **tóm tắt kế hoạch** (từng việc: Worker hoặc người, hạn, credit ước tính, việc nào cần duyệt) kèm nút **[✔ Duyệt chạy toàn bộ] [Mở trên web] [Huỷ]** |
+| 4 | Bấm Duyệt: hệ thống kiểm người bấm **đúng là người ra lệnh** (hoặc người nghiệm thu đã chỉ định của kế hoạch), kế hoạch còn hiệu lực, chưa ai duyệt → tạo công việc và chạy. Sửa từng việc chỉ làm trên web |
+| 5 | Mọi lệnh, lần duyệt, lần từ chối qua Telegram ghi nhật ký kiểm toán với kênh `telegram` |
+
+Bot **không** nhận lệnh cho từng Worker, không mở hội thoại với Worker, và **bỏ qua mọi lệnh trong nhóm chat**.
+
+**Báo cáo.** Bot gửi: báo cáo tổng hợp khi kế hoạch xong (hoặc theo lịch người ra lệnh chọn), tóm tắt mỗi sáng, cảnh báo (Worker lỗi hoặc tự dừng, Ví hoặc số dư nhà cung cấp thấp) tới (a) người dùng đã liên kết, theo cài đặt thông báo của họ, và (b) **nhóm chat nhận báo cáo** do Admin đăng ký (`telegram_report_chats`). Báo cáo gửi qua Telegram **không chứa nội dung tài liệu Mật** và không chứa nội dung hội thoại; chỉ có tiêu đề việc, trạng thái, số liệu và link mở trên web.
+
+**GĐ 2 — duyệt qua Telegram.** Yêu cầu duyệt (§24.5) có kênh `inbox_telegram` được gửi tới người duyệt đã liên kết, kèm nút Duyệt / Từ chối; «Sửa rồi duyệt» chỉ làm trên web. Hệ thống kiểm người bấm là người duyệt của cấp đang chờ (hoặc người được uỷ quyền).
+
+### 25.3 Trạng thái cấu hình được và động cơ chạy
+
+Động cơ (§9.5) phát ra **sự kiện**; mỗi sự kiện được Admin ánh xạ sang **trạng thái kế tiếp** (bảng `status_event_map`, Cài đặt › Cài đặt trạng thái). Bộ mặc định:
+
+| Sự kiện | Trạng thái kế tiếp mặc định |
+|---|---|
+| `run_queued` | Mới |
+| `run_started` | Đang thực hiện |
+| `waiting_approval` | Chờ duyệt |
+| `waiting_user` | Vướng (lý do «Thiếu thông tin đầu vào») |
+| `run_succeeded` | Chờ nghiệm thu |
+| `run_failed`, `run_cancelled` (do hệ thống) | Vướng (lý do theo `stop_reason`) |
+| `deps_blocked` | Chờ việc trước |
+| `deps_ready` | Mới (rồi xếp hàng) |
+| `accepted` | Hoàn tất |
+| `rework` | Làm lại |
+
+Quy tắc:
+- Động cơ **chỉ** chuyển khi sự kiện có trong ánh xạ **và** bước chuyển (trạng thái hiện tại → trạng thái kế tiếp) nằm trong bảng chuyển được phép. Không thoả thì giữ nguyên trạng thái, ghi nhật ký và đưa việc vào Điều phối với lý do «Cấu hình trạng thái không cho chuyển».
+- Trạng thái **tuỳ chỉnh** (vd. «Chờ khách phản hồi») mà chưa có dòng ánh xạ hay bước chuyển nào trỏ tới thì chỉ **người** đặt được; việc của Worker đang ở trạng thái đó **không chạy** cho tới khi người chuyển sang trạng thái thuộc nhóm «Mở» hoặc «Đang làm».
+- Trạng thái hệ thống 🔒 (Mới, Đang thực hiện, Chờ duyệt, Chờ nghiệm thu, Làm lại, Vướng, Tạm dừng, Hoàn tất, Đã huỷ, Chờ việc trước) không xoá được; Admin đổi được tên, màu, thứ tự và có thể trỏ một sự kiện sang trạng thái tuỳ chỉnh **cùng nhóm**.
+- Đổi cấu hình không sửa dữ liệu cũ (§24.3).
+
+### 25.4 Chat nội bộ giữa nhân sự (GĐ 3)
+
+Mục «Nhân sự nội bộ» trong modal «Hội thoại mới» (Workspace §21.5) **ẩn cho tới GĐ 3**. Khi làm, cần chốt thêm:
+- Mô hình dữ liệu riêng (`dm_threads`, `dm_messages`), tách khỏi `conversations` (hội thoại với Worker).
+- Quyền riêng tư: **đề xuất** chỉ người trong cuộc đọc được, `tenant_admin` **không** đọc (khác hội thoại với Worker); cần bạn xác nhận lúc bắt đầu GĐ 3.
+- Trạng thái trực tuyến, thông báo, lưu trữ và xoá.
+
+### 25.5 Phân kỳ các tính năng thêm từ bản thiết kế giao diện
+
+| Tính năng (§24 / Workspace §21) | GĐ |
+|---|---|
+| Khung điều hướng Admin và Workspace mới, Ví credit trên thanh bên (hiển thị) | 0b (Ví có số liệu từ 3) |
+| Cài đặt trạng thái, ánh xạ sự kiện, Dashboard settings | 1a |
+| Loại bước Workflow (4 loại hệ thống), Danh mục thẻ | 1a |
+| Global Rule ở Cấu hình Orchestrator, thời gian áp dụng, ba cách thực thi | 1a |
+| Người dùng nhiều phạm vi, Đổi đơn vị cha, Tạo bộ phận, sơ đồ Người dùng ↔ Worker | 1a |
+| Mô hình AI, Sửa Worker một trang, phiên bản cấu hình, Cấu hình Orchestrator (model, ngân sách) | 1b |
+| Orchestrator có ngữ cảnh và duyệt từng việc, chuỗi công việc, Telegram Bot | 1b |
+| Loại tài liệu, trạng thái Đang dùng / Lưu trữ, Nhập từ Kho hệ thống | 2 |
+| Quy tắc duyệt (chuỗi cấp, uỷ quyền), duyệt qua Telegram | 2 |
+| Chat Social (quản trị kênh, Workspace, Worker gắn cờ) | 2 |
+| Đổi gói có tính phần còn lại, gửi chứng từ chuyển khoản | 3 |
+| Chat nội bộ giữa nhân sự | 3 |
+| Bản di động (Hôm nay, Chat, Nghiệm thu) | Theo màn tương ứng, từ 1b |
+
+---
+
+*Tài liệu v2.1 — gộp v2.0 (thiết kế giao diện) và v1.4 (review kỹ thuật), áp quyết định 03/11/2026. Bước tiếp theo: lập kế hoạch triển khai chi tiết cho GĐ 0a.*
