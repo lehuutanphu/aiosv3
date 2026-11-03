@@ -2,7 +2,7 @@
 
 > **Phiên bản:** v1.0 (03/11/2026).
 > **Căn cứ:**
-> - `docs/ADMIN_PORTAL_DESIGN.md` v2.1. Thứ tự ưu tiên khi đọc: §25 → §24 → các chương trước.
+> - `docs/ADMIN_PORTAL_DESIGN.md` v2.2. Thứ tự ưu tiên khi đọc: §25 → §24 → các chương trước.
 > - `docs/USER_WORKSPACE_DESIGN.md` v2.1.
 > - Bản thiết kế giao diện «AI OS Portal — Thiết kế giao diện» (148 board, bản cập nhật 03/11).
 >
@@ -457,7 +457,7 @@ Số màn theo giai đoạn bắt đầu: **0b**: 16 · **1a**: 18 · **1b**: 72
 
 ---
 
-## 6. Điểm lệch còn lại giữa bản thiết kế (03/11) và tài liệu v2.1
+## 6. Điểm lệch giữa bản thiết kế (03/11) và tài liệu Admin v2.2
 
 Bản thiết kế đã sửa phần lớn các điểm tôi nêu lần trước:
 - Số liệu gói đã khớp: Starter / Standard / Business.
@@ -467,24 +467,23 @@ Bản thiết kế đã sửa phần lớn các điểm tôi nêu lần trước
 - Thêm trình dựng `hardCheck`.
 - Sửa dữ liệu mẫu ở Sơ đồ, bỏ TripX.
 
-Các điểm dưới đây vẫn lệch, phải chốt trước giai đoạn có màn đó. Không điểm nào chặn GĐ 0a.
+Hai điểm L2 và L4 đã chốt trong Admin v2.2. L1 và L3 là chỗ **thiết kế** còn khác quyết định đã chốt (M3, M6): tài liệu giữ nguyên quyết định, khi làm màn đó sẽ code theo tài liệu; bạn sửa thiết kế khi tiện. Không điểm nào chặn GĐ 0a.
 
-| # | Board | Thiết kế đang thể hiện | Tài liệu v2.1 | Đề xuất | Cần chốt trước |
+| # | Board | Thiết kế đang thể hiện | Tài liệu v2.2 | Đề xuất | Cần chốt trước |
 |---|---|---|---|---|---|
-| L1 | 127, 128 | «⟳ Đang đồng bộ 5/7», «đồng bộ 7 Worker», «Worker được đồng bộ gỡ Rule» | M3: không có bước đồng bộ; trạng thái Rule là Đang hiệu lực / Lên lịch / Hết hiệu lực | Theo tài liệu: thay cột «đồng bộ» bằng trạng thái hiệu lực + số Worker chịu ảnh hưởng | 1a |
-| L2 | 128, 130, 149 | Khi `hardCheck` vi phạm có 5 cách xử lý: chặn hẳn · chặn và chuyển Chờ duyệt · chỉ cảnh báo · **xếp lịch vào đầu khung giờ kế tiếp** · **chuyển hỏi lại người ra lệnh** | `hardCheck` chỉ có `denyIf` / `approvalIf` | Mở rộng `hardCheck` thành `{action, when, onViolation: deny \| approval \| warn \| defer_to_window \| ask, message}`. `defer_to_window` chỉ cho hành động gửi ra ngoài có điều kiện thời gian. Bổ sung vào §9.5.4 | 1a |
+| L1 | 127, 128 | «⟳ Đang đồng bộ 5/7», «đồng bộ 7 Worker», «Worker được đồng bộ gỡ Rule» | M3: không có bước đồng bộ; trạng thái Rule là Đang hiệu lực / Lên lịch / Hết hiệu lực | Giữ M3 (tài liệu v2.2 đã viết theo M3). Thiết kế cần sửa: thay cột «đồng bộ» bằng trạng thái hiệu lực + số Worker chịu ảnh hưởng | 1a |
+| L2 | 128, 130, 149 | Năm cách xử lý khi `hardCheck` vi phạm | — | **Đã chốt** (M13, §24.18): `onViolation` = `deny` · `approval` · `reschedule` · `ask` · `warn`; §9.5.4 đã cập nhật theo | — |
 | L3 | 138 | Dòng **VAT** và phương thức **«Trừ từ Ví credit»** | M6: chưa ghi VAT tới khi có hoá đơn điện tử (PL1); không trả gói bằng Ví | Theo tài liệu: bỏ hai dòng này, hoặc để sau cờ tắt cho tới khi có PL1 | 3 |
-| L4 | 38, 138 | Chu kỳ **tháng / 6 tháng / 12 tháng**, có chiết khấu | Chỉ tháng / năm | Theo thiết kế: chu kỳ lấy từ bảng Gói & Giá trên Console (1, 6, 12 tháng); cập nhật tài liệu | 3 |
+| L4 | 38, 138 | Chu kỳ 1 / 6 / 12 tháng có chiết khấu | — | **Đã chốt** (M14): theo thiết kế; tài liệu đã sửa | — |
 | L5 | 86 | Modal hội thoại mới có mục «Nhân sự (nội bộ)» | M11: GĐ 3 | Giữ trong thiết kế; mã ẩn mục này tới GĐ 3 | — |
 
-Bạn có nói đã gửi kèm **tài liệu Admin bản cập nhật**, nhưng tệp không tới được phiên này. Nếu bản đó đã chốt L1–L4 thì bảng trên sẽ được sửa theo khi commit.
+Tệp Admin bạn gửi lại ngày 03/11 được sửa từ bản v2.0, nên đã được gộp 3 chiều vào v2.1 thành **v2.2**, không chép đè.
 
 ---
 
 ## 7. Bước tiếp theo
 
-1. Commit tài liệu Admin bản cập nhật của bạn (khi nhận được tệp), rồi rà lại §6.
-2. Viết `docs/plan/GD-0a.md`. Nội dung:
+1. Viết `docs/plan/GD-0a.md`. Nội dung:
    - Từng WP với đầu vào và đầu ra.
    - Danh sách tệp tạo mới.
    - Migration `0001_core.sql` đầy đủ.
@@ -492,4 +491,4 @@ Bạn có nói đã gửi kèm **tài liệu Admin bản cập nhật**, nhưng 
    - Danh sách thành phần `js/ui/` kèm board tham chiếu.
    - Cấu hình CI.
    - Kịch bản kiểm thử nghiệm thu.
-3. Bắt đầu viết mã GĐ 0a sau khi bạn duyệt `GD-0a.md`.
+2. Bắt đầu viết mã GĐ 0a sau khi bạn duyệt `GD-0a.md`.

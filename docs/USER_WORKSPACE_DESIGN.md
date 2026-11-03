@@ -1048,4 +1048,4 @@ CREATE TABLE orchestrator_plan_items (plan_id uuid REFERENCES orchestrator_plans
 
 ---
 
-*Tài liệu v2.1, đi cặp với `ADMIN_PORTAL_DESIGN.md` v2.1 (Console SuperAdmin §22, cập nhật theo thiết kế §24, quyết định 03/11/2026 §25).*
+*Tài liệu v2.1, đi cặp với `ADMIN_PORTAL_DESIGN.md` v2.2 (Console SuperAdmin §22, cập nhật theo thiết kế §24, quyết định 03/11/2026 §25).*

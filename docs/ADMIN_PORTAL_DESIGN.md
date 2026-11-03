@@ -1,6 +1,6 @@
 # AI OS Admin Portal — Tài liệu mô tả & thiết kế (bản production)
 
-> **Phiên bản:** v2.1 (03/11/2026) — gộp **v2.0** (cập nhật theo thiết kế giao diện, [§24](#24-cập-nhật-theo-thiết-kế-giao-diện-v20--112026)) với **v1.4** (động cơ chạy Worker, ví theo lô, RLS, lộ trình 0a–1b) và áp các quyết định ngày 03/11 ([§25](#25-quyết-định-03112026-v21)). Đã chốt toàn bộ: D1–D9, Q1–Q7, C1–C4, U1–U13, M1–M12, R1. Việc **chưa làm có chủ đích**: pháp lý khi thu tiền (PL1). Thứ tự ưu tiên khi đọc: **§25 → §24 → các chương trước**.
+> **Phiên bản:** v2.2 (03/11/2026) — thêm §24.18 (`hardCheck`), §24.19 (dữ liệu mẫu), chu kỳ 1 / 6 / 12 tháng, Orchestrator luôn trình kế hoạch (M13, M14). Nền: v2.1 — gộp **v2.0** (cập nhật theo thiết kế giao diện, [§24](#24-cập-nhật-theo-thiết-kế-giao-diện-v20--112026)) với **v1.4** (động cơ chạy Worker, ví theo lô, RLS, lộ trình 0a–1b) và áp các quyết định ngày 03/11 ([§25](#25-quyết-định-03112026-v21)). Đã chốt toàn bộ: D1–D9, Q1–Q7, C1–C4, U1–U13, M1–M14, R1. Việc **chưa làm có chủ đích**: pháp lý khi thu tiền (PL1). Thứ tự ưu tiên khi đọc: **§25 → §24 → các chương trước**.
 > **Phạm vi:** thiết kế, chưa viết code.
 > **Lịch sử:** v0.1 là bản khảo sát và đề xuất. v1.0 bỏ Hermes và Mem0, thêm subdomain theo tenant, cơ cấu tổ chức phức hợp theo ngành dọc, Kho KWSR, thanh toán và ví token, email của tenant, và đưa 11 hạng mục bổ sung vào phạm vi. v1.1 chốt Q1–Q7: **PostgreSQL thay Firebase**, thêm lược đồ CSDL ([§7.7](#77-lưu-trữ-trên-postgresql)) và cấu hình server ([§3.1](#31-thành-phần-chạy-trên-server-riêng)). v1.2 thêm đặc tả đầy đủ **Console SuperAdmin** ([§22](#22-console-superadmin-consoleai-osvn)) và sơ đồ màn hình quản trị tenant ([§23](#23-sơ-đồ-màn-hình-quản-trị-tenant-tenantabcai-osvn)). **v2.0** gộp bản Admin và bản bổ sung Console thành một tài liệu, và đưa mọi điều chỉnh chức năng / logic phát sinh khi thiết kế giao diện vào [§24](#24-cập-nhật-theo-thiết-kế-giao-diện-v20--112026): logic thống nhất 3 khu vực, Cài đặt trạng thái, Quy tắc duyệt, danh mục Kho (loại tài liệu, loại bước, thẻ), Global Rule đồng bộ, Mô hình AI, Sửa Worker một trang, Người dùng theo sơ đồ tổ chức, đổi gói và chứng từ chuyển khoản. **v1.4** (31/10, nhánh review): §9.5 Động cơ chạy Worker, ví credit theo lô, ba role CSDL và RLS cho nội dung riêng tư, U13 (Worker không nhận lệnh từ Orchestrator), quy ước frontend/CI, lộ trình 0a/0b/1a/1b. **v2.1** gộp hai nhánh; bỏ hẳn bản demo (R1: xây mới, không di trú); chốt Chat Social chỉ cho Worker gắn cờ và chỉ trả lời từ Knowledge được gán; Telegram Bot ra lệnh Orchestrator; Rule không có bước đồng bộ; chuỗi công việc tự chạy tiếp; sửa lược đồ cho đủ `tenant_id` và RLS.
 
@@ -502,7 +502,7 @@ Ràng buộc duy nhất: `tenants.slug`; `users.email` (toàn hệ thống, ch�
 //   workflow:  { command: "/bao-cao-thang", description, steps[], markdown, requiresActions: [] }
 //   skill:     { slug, description, markdown, requiresActions: [] }   // SKILL.md; requiresActions = hành động cần dùng (§9.5.4)
 //   rule:      { text, severity: block|warn|ask, enforcement: prompt|hard|ai, allowLocalOverride: false,
-//                hardCheck: { action, denyIf?, approvalIf? } }   // bắt buộc khi enforcement = hard; khai báo dạng dữ liệu (§9.5.4). ai = chỉ cảnh báo / hỏi lại, không phải chốt chặn (§24.4)
+//                hardCheck: { action, conditions: [{ field, op, value }], onViolation, message } }   // bắt buộc khi enforcement = hard (§24.18); khai báo dạng dữ liệu (§9.5.4). ai = chỉ cảnh báo / hỏi lại, không phải chốt chặn (§24.4)
 
 // bindings — Worker dùng mục nào trong Kho
 { "workerId": "w_…", "itemId": "lib_…",
@@ -1074,9 +1074,9 @@ Loại tác động: **read** chỉ đọc; **write** đổi dữ liệu trong t
 |---|---|---|
 | 1 | Hành động nằm trong tập Worker được dùng | `deny NOT_ALLOWED` |
 | 2 | Worker `active`; tenant không `suspended`/`disabled`; **phiên hỗ trợ SuperAdmin không bao giờ chạy hành động external** | `deny STATE` |
-| 3 | **Rule `hard`** hiệu lực có `hardCheck` khớp hành động: `denyIf` đúng thì chặn; `approvalIf` đúng thì cần duyệt | `deny RULE_BLOCKED` (kèm id Rule) hoặc `needs_approval` |
+| 3 | **Rule `hard`** hiệu lực có `hardCheck` khớp hành động và **mọi** điều kiện vi phạm đều đúng → xử lý theo `onViolation` | `deny` → `deny RULE_BLOCKED` (kèm id Rule) · `approval` → `needs_approval` · `reschedule` → `defer` (hẹn giờ chạy lại bước này) · `ask` → `needs_user` · `warn` → cho qua, ghi cảnh báo |
 | 4 | Ngân sách: trần `maxCostCredit` của run, ngân sách ngày của Worker, Ví credit (Ví từ GĐ3) | `deny BUDGET` / `deny NO_CREDIT` |
-| 5 | Phê duyệt (B6): hành động external mà chính sách của (Worker, hành động) yêu cầu; hoặc run `tainted` (§9.5.6); hoặc `approvalIf` ở bước 3 | `needs_approval` |
+| 5 | Phê duyệt (B6): hành động external mà chính sách của (Worker, hành động) yêu cầu; hoặc run `tainted` (§9.5.6); hoặc `onViolation = approval` ở bước 3 | `needs_approval` |
 | 6 | Idempotency: khoá `(run_id, n)`; bước đã chạy thành công không chạy lại khi tiếp tục run | bỏ qua, dùng kết quả cũ |
 
 Hệ quả của Rule: `severity = block` thì `deny RULE_BLOCKED` **dừng cả run** (`stop_reason = rule_blocked`) và công việc vào Điều phối «Bị Rule chặn»; `severity = warn` thì vẫn cho chạy, ghi cảnh báo vào `run_steps` và báo người phụ trách Worker. Các từ chối khác trả về model dưới dạng kết quả hành động lỗi có mã và lý do để nó giải thích hoặc đổi cách làm; cùng một từ chối lặp lại sẽ bị phát hiện lặp (§9.5.7).
@@ -1087,15 +1087,25 @@ Hệ quả của Rule: `severity = block` thì `deny RULE_BLOCKED` **dừng cả
 // Cấm gửi email ra ngoài domain được phép
 { "text": "Không gửi dữ liệu nội bộ ra ngoài domain công ty", "severity": "block", "enforcement": "hard",
   "hardCheck": { "action": "email.send",
-                 "denyIf": { "field": "input.to[*].domain", "notIn": "$grant.allowedDomains" } } }
+                 "conditions": [ { "field": "input.to[*].domain", "op": "notIn", "value": "$grant.allowedDomains" } ],
+                 "onViolation": "deny", "message": "Không gửi ra ngoài domain công ty" } }
 
-// Chi phí một lần đăng bài lớn thì phải chờ duyệt
-{ "text": "Đăng bài có chi phí trên 50.000 credit phải chờ duyệt", "severity": "block", "enforcement": "hard",
-  "hardCheck": { "action": "publish.post",
-                 "approvalIf": { "field": "$run.costCredit", "gt": 50000 } } }
+// Bút toán trên 50 triệu chưa duyệt thì chặn và chuyển Chờ duyệt (board 130)
+{ "text": "Bút toán trên 50 triệu cần Kế toán trưởng duyệt", "severity": "block", "enforcement": "hard",
+  "hardCheck": { "action": "accounting.post",
+                 "conditions": [ { "field": "input.amount", "op": "gt", "value": 50000000 },
+                                 { "field": "input.approvalStatus", "op": "notExists" } ],
+                 "onViolation": "approval", "message": "Bút toán trên 50 triệu cần Kế toán trưởng duyệt trước khi ghi sổ" } }
+
+// Không gửi cho khách ngoài giờ: xếp lịch lại (board 128)
+{ "text": "Không gửi email cho khách ngoài giờ 08:00–18:00", "severity": "warn", "enforcement": "hard",
+  "hardCheck": { "action": "email.send",
+                 "conditions": [ { "field": "$now", "op": "outsideWindow", "value": "T2-T7 08:00-18:00" },
+                                 { "field": "input.to[*].domain", "op": "notIn", "value": ["abc.vn", "abc.com.vn"] } ],
+                 "onViolation": "reschedule", "message": "Ngoài giờ gửi cho khách — đã xếp lịch gửi lúc 08:00" } }
 ```
 
-Toán tử: `eq`, `ne`, `gt`, `gte`, `lt`, `lte`, `in`, `notIn`, `matches`; ghép bằng `allOf`/`anyOf`. Trường tham chiếu: `input.*` (tham số hành động), `$tenant.*` (cài đặt tenant), `$worker.*`, `$run.*`, `$integration.*`, `$grant.*` (quyền hộp thư hoặc kết nối đang dùng). Rule `enforcement = prompt` chỉ vào prompt và **không được bảo đảm**; giao diện gắn nhãn «Nhắc trong prompt» khác với «Chặn bằng mã» để người quản trị biết Rule nào thật sự chặn.
+Toán tử: `eq`, `ne`, `gt`, `gte`, `lt`, `lte`, `in`, `notIn`, `matches`, `exists`, `notExists`, `insideWindow`, `outsideWindow`. Các điều kiện trong `conditions` ghép theo **«thoả tất cả»**; cần «một trong các» thì tách thành nhiều Rule. Trường chỉ chọn từ danh mục hệ thống đọc được (§24.18): `input.*` (tham số hành động), `$now`, `$tenant.*` (cài đặt tenant), `$worker.*`, `$run.*`, `$integration.*`, `$grant.*` (quyền hộp thư hoặc kết nối đang dùng). Với Rule `hard`, `onViolation` quyết định kết quả (không dùng `severity`). Rule `enforcement = prompt` chỉ vào prompt và **không được bảo đảm**; giao diện gắn nhãn «Nhắc trong prompt» khác với «Chặn bằng mã» để người quản trị biết Rule nào thật sự chặn.
 
 #### 9.5.5 Trạng thái, hàng đợi, đồng thời
 
@@ -1156,14 +1166,14 @@ Email đến, nội dung tệp đính kèm trong chat hoặc công việc, kết
 | GĐ | Có trong động cơ |
 |---|---|
 | **1b** | Vòng lặp; Gate bước 1, 2, 3 (Rule `hard` với `hardCheck`), 4 (chỉ trần run và ngân sách ngày Worker), 6; `task.report`, `task.ask_user`; các kiểu run `chat`, `task`, `test`, `plan`; `worker_runs`, `run_steps`; hàng đợi và giới hạn đồng thời; thử lại, huỷ, nhặt lại sau sập; ghi `config_version`; **kích hoạt công việc và chuỗi chuyển giao** (§9.5.11); ánh xạ sự kiện → trạng thái (§25.3) |
-| **2** | `knowledge.search` và truy xuất tự động (Qdrant, §15); `file.generate`; `image.generate`; **Gate bước 5 cho phê duyệt nội bộ** (bước «Chờ người duyệt» của Workflow, `approvalIf`, quy tắc duyệt) và tiếp tục run sau duyệt; **run `social`** và hành động `social.reply`, `social.handoff` (§9.5.12) |
+| **2** | `knowledge.search` và truy xuất tự động (Qdrant, §15); `file.generate`; `image.generate`; **Gate bước 5 cho phê duyệt nội bộ** (bước «Chờ người duyệt» của Workflow, `onViolation = approval`, quy tắc duyệt) và tiếp tục run sau duyệt; **run `social`** và hành động `social.reply`, `social.handoff` (§9.5.12) |
 | **3** | Gate bước 4 đầy đủ: Ví credit, ngân sách tháng, tự tạm dừng khi hết credit |
 | **4** | `email.*`, `publish.post`, `http.call` (hành động external ra ngoài Chat Social) |
 
 #### 9.5.10 Kiểm thử bắt buộc
 
 - Gate: bảng test mỗi bước 1–6 với cả hai kết quả đạt và không đạt.
-- `hardCheck`: mỗi toán tử, ghép `allOf`/`anyOf`, và Rule `hard` thiếu `hardCheck` không phát hành được.
+- `hardCheck`: mỗi toán tử, nhiều điều kiện «thoả tất cả», đủ năm giá trị `onViolation` (`reschedule` chỉ nhận khi có điều kiện thời điểm), và Rule `hard` thiếu `hardCheck` hoặc không có điều kiện nào thì không phát hành được.
 - Chat và công việc cùng ngữ cảnh cho cùng kết quả Gate.
 - Run `tainted`: `email.send` luôn thành `needs_approval`.
 - Sập giữa chừng: trước và sau hành động external; không gửi trùng.
@@ -1603,7 +1613,7 @@ Không còn câu hỏi thiết kế nào chặn tiến độ. Các việc dướ
 | Tài khoản Resend (hoặc SMTP), xác minh domain gửi thư (SPF, DKIM, DMARC) | GĐ 0 | Email mời, OTP, quên mật khẩu |
 | Khoá OpenRouter **của Platform** (cho chế độ Platform) và nạp tiền | GĐ 2 | Q6 |
 | Đăng ký merchant **PayOS**, lấy khoá sandbox | GĐ 3 | Q2 |
-| Bảng giá gói (tháng/năm), credit tặng mỗi gói, hệ số giá token | GĐ 3 | Nhập trên Console, không cần sửa code |
+| Bảng giá gói (chu kỳ 1 / 6 / 12 tháng và chiết khấu), credit tặng mỗi gói, hệ số giá token | GĐ 3 | Nhập trên Console, không cần sửa code |
 | Thông tin bên bán cho phiếu thu (tên công ty, MST, địa chỉ) | GĐ 3 | Q3 |
 | Đăng ký ứng dụng Zalo OA (Zalo for Developers) và ứng dụng Meta (Facebook Messenger; WhatsApp Business cần xác minh doanh nghiệp và số điện thoại) cho Chat Social | GĐ 2 | Duyệt ứng dụng có thể mất vài tuần, nên bắt đầu từ GĐ 1 |
 | Đăng ký ứng dụng OAuth Google (và xin xác minh quyền Gmail) và Microsoft | GĐ 4 | Thủ tục xác minh của Google có thể mất vài tuần, nên bắt đầu sớm |
@@ -1861,7 +1871,7 @@ CREATE TABLE support_sessions (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), su
 
 | Màn | Nội dung | Ràng buộc |
 |---|---|---|
-| **Gói** | Danh sách gói; sửa giá tháng/năm, ngày dùng thử, credit tặng, hạn mức, tính năng; ẩn hoặc hiện gói trên trang đăng ký | Sửa gói **không** đổi ngay hạn mức của tenant đang dùng mà áp dụng từ kỳ gia hạn kế tiếp (có tuỳ chọn "áp dụng ngay cho mọi tenant" kèm cảnh báo số tenant sẽ vượt hạn mức). Gói đang có tenant dùng không xoá được, chỉ ẩn |
+| **Gói** | Danh sách gói; sửa giá theo chu kỳ 1 / 6 / 12 tháng và chiết khấu từng chu kỳ, ngày dùng thử, credit tặng, hạn mức, tính năng; ẩn hoặc hiện gói trên trang đăng ký | Sửa gói **không** đổi ngay hạn mức của tenant đang dùng mà áp dụng từ kỳ gia hạn kế tiếp (có tuỳ chọn "áp dụng ngay cho mọi tenant" kèm cảnh báo số tenant sẽ vượt hạn mức). Gói đang có tenant dùng không xoá được, chỉ ẩn |
 | **Giá model** | Model, giá gốc vào/ra của nhà cung cấp, hệ số (mặc định 1,3), credit/1M token tính sẵn, credit/ảnh; bật/tắt model | Đổi giá chỉ áp dụng cho lượt gọi sau thời điểm đổi; lưu lịch sử giá |
 | **Kho hệ thống** | Mục KWSR mẫu theo ngành và Mẫu Worker (§9.1, B4); soạn, phiên bản, phát hành | Tenant chỉ nhận bản đã phát hành; phát hành bản mới thì tenant đã nhập thấy badge "có cập nhật" |
 | **Kết nối hệ thống** | Khoá mô hình dùng cho chế độ Platform, Genful, email hệ thống, PayOS, dịch vụ embedding; trạng thái và **số dư** | Đây là nguồn của cảnh báo "Khoá Platform sắp hết tiền" trên Dashboard. Khoá chỉ hiện dạng che |
@@ -2054,11 +2064,11 @@ Nút "Sửa model & ngân sách" ở Sơ đồ tổ chức và dòng Orchestrato
 
 | Phần | Nội dung |
 |---|---|
-| **Model** | Model phân tích lệnh và lập kế hoạch (chọn trong Mô hình AI đã bật); model dự phòng |
+| **Model** | Model phân tích lệnh và lập kế hoạch (chọn trong Mô hình AI đã bật); model dự phòng; độ sáng tạo; số việc tối đa trong một kế hoạch. **Chế độ cố định: "Luôn trình kế hoạch trước khi giao"** — không có chế độ tự giao (bỏ tuỳ chọn "Tự giao khi kế hoạch dưới ngưỡng", chốt 03/11/2026) |
 | **Rule** | **Rule toàn công ty (Global Rule)**: tên, nội dung, mức, cách thực thi, **thời gian áp dụng**, cột **Hiệu lực** (Đang hiệu lực · Lên lịch từ ngày… · Hết hiệu lực). Không có cột hay thẻ «đồng bộ»: Rule áp từ lượt chạy kế tiếp của mọi Worker (§25.1 M3). Khối nhỏ riêng: **Rule chỉ dùng khi lập kế hoạch** (chỉ áp cho bước Orchestrator phân tích lệnh) |
 | **Ngân sách** | Giới hạn theo **credit hoặc token** (giống quy định usage của Worker khác): trần ngày, trần tháng, hành động khi chạm trần |
 
-**Màn Thêm / sửa Rule (board 128):** tên, nội dung, mức (`warn` / `block` / `ask` = hỏi lại), **cách thực thi** — *Trong prompt* · *Bằng mã* (bắt buộc dựng `hardCheck`: hành động + điều kiện trường – so sánh – giá trị, §9.5.4; đây là chốt chặn duy nhất) · *AI kiểm tra* (model kiểm trước khi hành động; chỉ được dùng với mức `warn` hoặc `ask`, **không** coi là chốt chặn), phạm vi (toàn công ty / chỉ khi lập kế hoạch); **thời gian áp dụng**: áp dụng ngay hoặc từ ngày, kết thúc không thời hạn hoặc đến ngày, chọn ngày trong tuần và khung giờ; nút **Lưu bản nháp** / **Lưu & áp dụng**.
+**Màn Thêm / sửa Rule (board 128):** tên, nội dung, mức (`warn` / `block` / `ask` = hỏi lại), **cách thực thi** — *Trong prompt* · *Bằng mã* (bắt buộc khối **Điều kiện kiểm bằng mã** — `hardCheck`, §24.18, §9.5.4; đây là chốt chặn duy nhất) · *AI đánh giá* (model kiểm trước khi hành động; chỉ được dùng với mức `warn` hoặc `ask`, **không** coi là chốt chặn), phạm vi (toàn công ty / chỉ khi lập kế hoạch); **thời gian áp dụng**: áp dụng ngay hoặc từ ngày, kết thúc **Không thời hạn** hoặc **Đến ngày** (chọn Đến ngày thì hiện ô chọn ngày; Rule chuyển sang «Hết hiệu lực» sau 23:59 ngày đó và không còn áp từ lượt chạy kế tiếp — không có bước đồng bộ, M3), chọn ngày trong tuần và khung giờ; nút **Lưu bản nháp** / **Lưu & áp dụng**.
 
 → Mục "Rule toàn công ty" (B3) không còn là mục menu riêng; B3 = tab Rule của Orchestrator.
 
@@ -2075,7 +2085,7 @@ Nút "Sửa model & ngân sách" ở Sơ đồ tổ chức và dòng Orchestrato
 
 - **Modal thêm / sửa:** tên, loại hành động, **điều kiện** (trường – so sánh – giá trị, thêm nhiều điều kiện), áp dụng cho, kênh duyệt (hộp Chờ duyệt + Telegram / chỉ hộp), người duyệt theo cấp (＋ Thêm cấp), hạn, quá hạn thì, **cho người duyệt sửa nội dung rồi duyệt**.
 - **Mặc định:** hạn duyệt mặc định, xử lý khi quá hạn, cho duyệt nhanh trên điện thoại / Telegram (Telegram duyệt từ **GĐ 2**, chỉ người dùng đã liên kết tài khoản và đúng là người duyệt, §25.2).
-- **Một hành động, một phê duyệt.** Khi bước «Chờ người duyệt» của Workflow, `approvalIf` của Rule và quy tắc duyệt cùng khớp một hành động, hệ thống gộp thành **một** yêu cầu duyệt có chuỗi cấp: người duyệt của bước Workflow là cấp 1, các cấp của quy tắc duyệt nối sau; người trùng chỉ duyệt một lần. Quá hạn làm theo `on_overdue` của cấp đang chờ.
+- **Một hành động, một phê duyệt.** Khi bước «Chờ người duyệt» của Workflow, `hardCheck` của Rule với `onViolation = approval` và quy tắc duyệt cùng khớp một hành động, hệ thống gộp thành **một** yêu cầu duyệt có chuỗi cấp: người duyệt của bước Workflow là cấp 1, các cấp của quy tắc duyệt nối sau; người trùng chỉ duyệt một lần. Quá hạn làm theo `on_overdue` của cấp đang chờ.
 - **Người được duyệt thay:** uỷ quyền tạm thời khi người duyệt nghỉ (từ ngày – đến ngày); mọi lần duyệt thay ghi nhật ký.
 - Link "Cấu hình quy tắc duyệt" ở màn Chờ duyệt mở thẳng tab này.
 - Giai đoạn đầu khuyến nghị bật hết, tắt dần khi đã tin kết quả.
@@ -2089,7 +2099,7 @@ Nút "Sửa model & ngân sách" ở Sơ đồ tổ chức và dòng Orchestrato
 | Knowledge | Nguồn: **Tải tệp lên** (≤ 20 MB) hoặc **Nhập văn bản** (ô Tên tài liệu + ô Nội dung, dán từ Word / Google Docs). **Bỏ nguồn "Kết nối MCP"**. Loại tài liệu (chọn từ danh mục, tự điền trạng thái mặc định), **Trạng thái tri thức: Đang dùng / Lưu trữ**, cờ 🔒 Mật (chỉ Knowledge), tiến trình lập chỉ mục (trích chữ → chia đoạn → nhúng vector → sẵn sàng) |
 | Workflow | Lệnh `/…`, mô tả, **danh sách bước**: tay kéo ⋮⋮ đổi thứ tự, tên bước, **Loại bước** (từ danh mục), ✕ xoá, "＋ Thêm bước"; dưới mỗi bước là phần cấu hình hành động theo loại (Worker tự làm: đầu ra · Gọi Skill: chọn Skill · Chờ người duyệt: người duyệt, hạn, quá hạn thì · Gửi ra ngoài: kênh, người duyệt gửi). **"Hướng dẫn thêm"** là ô soạn văn bản thường (B, I, danh sách, link) — người dùng không phải viết Markdown; hệ thống tự chuyển sang Markdown khi ghép prompt |
 | Skill | Slug, mô tả khi nào dùng, nội dung (soạn hoặc tải tệp; lưu dạng `SKILL.md`) |
-| Rule | Câu Rule, mức `block` / `warn`, thực thi trong prompt hoặc bằng mã (`hard`), có cho cấp dưới tắt cục bộ không (mặc định chỉ được siết) |
+| Rule | Câu Rule, mức `block` / `warn` / `ask`, cách thực thi *Trong prompt* · *Bằng mã* (`hard`) · *AI đánh giá*, có cho cấp dưới tắt cục bộ không (mặc định chỉ được siết). Chọn **bằng mã** thì hiện khối **"Điều kiện kiểm bằng mã"** (`hardCheck`, §24.18) — board 149 |
 | Chung | Tiêu đề, **Thẻ (chọn từ Danh mục thẻ, chip ✕ + "＋ Chọn thẻ")**, Đơn vị sở hữu, **Phòng ban + tick Dùng cho ngành dọc**, Phạm vi phát hành (Toàn công ty / Đơn vị và cấp dưới), Phân phối (gợi ý / bắt buộc, kèm số Worker bị ảnh hưởng), ghi chú phiên bản; xem trước; **Phát hành / Lưu nháp / Huỷ** (nháp chưa gắn được cho Worker) |
 
 **Nhập từ Kho hệ thống (board 131)** — thay chỗ trỏ tạm trước đây:
@@ -2188,7 +2198,7 @@ Giá lấy từ Console › Giá model (§22.9); tenant không sửa giá.
 ### 24.12 Kết nối API, Gói & thanh toán
 
 - **Kết nối API (board 20, 144):** nút ▦ Lưới / ☰ Danh sách. Dạng danh sách: lọc loại / trạng thái, tìm; bảng kết nối (tên, loại, cách xác thực), trạng thái, dùng bởi, ghi chú (số dư, hạn token), thao tác (Chi tiết / Nạp tiền / Phạm vi / Cấp lại / Cấu hình); dòng tổng kết số cần xử lý và hạn mức gói. Kênh chat khách hàng **không** quản lý ở đây mà ở mục riêng **Chat Social** (§24.17).
-- **Đổi gói (modal, board 138):** so sánh gói (gói hiện tại, gói chọn); chu kỳ **tháng / năm** (năm giảm theo cấu hình Console, mặc định 15%); bảng tính: giá gói mới − phần còn lại của gói cũ (tính theo ngày) = thanh toán hôm nay. **v1 chỉ một phương thức: chuyển khoản QR (PayOS) hoặc chuyển khoản thường kèm chứng từ để xác nhận thủ công**; không trả bằng thẻ, **không trừ Ví credit** (Ví chỉ dùng trả token). **Chưa hiện dòng VAT** cho tới khi có hoá đơn điện tử (PL1); chứng từ là phiếu thu (§25.1 M6). **Nâng gói hiệu lực ngay** sau khi thanh toán xác nhận; **hạ gói áp từ kỳ sau** và phải tắt bớt Worker / người dùng vượt hạn mức trước ngày chuyển.
+- **Đổi gói (modal, board 138):** so sánh gói (gói hiện tại, gói chọn); gói **Starter · Standard · Business** đúng hạn mức §10 (Enterprise: liên hệ); chu kỳ **1 tháng / 6 tháng / 12 tháng** (chiết khấu từng chu kỳ cấu hình ở Console › Gói & Giá); bảng tính: giá gói mới − phần còn lại của gói cũ (tính theo ngày) = thanh toán hôm nay. **v1 chỉ một phương thức: chuyển khoản QR (PayOS) hoặc chuyển khoản thường kèm chứng từ để xác nhận thủ công**; không trả bằng thẻ, **không trừ Ví credit** (Ví chỉ dùng trả token). **Chưa hiện dòng VAT** cho tới khi có hoá đơn điện tử (PL1); chứng từ là phiếu thu (§25.1 M6). **Nâng gói hiệu lực ngay** sau khi thanh toán xác nhận; **hạ gói áp từ kỳ sau** và phải tắt bớt Worker / người dùng vượt hạn mức trước ngày chuyển.
 - **Thanh toán đăng ký (board 04, 139):** nút đổi thành **"Đã chuyển khoản"**, mở popup **Gửi chứng từ chuyển khoản**: tóm tắt gói, số tiền, nội dung CK; đính kèm ảnh / PDF (≤ 10 MB, ≤ 5 tệp); ngày chuyển, mã giao dịch (tuỳ chọn), ghi chú. **Gửi** → về Dashboard; đơn ở trạng thái `awaiting_confirmation`; Console xác nhận ở hàng chờ chuyển khoản thủ công (§22.9), lệch số tiền thì không xác nhận; xác nhận xong kích hoạt gói và gửi email.
 
 ### 24.13 Mô hình dữ liệu bổ sung (PostgreSQL)
@@ -2349,7 +2359,7 @@ CREATE TABLE unit_moves (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), tenant_i
 | Màn Console | Bổ sung |
 |---|---|
 | Thanh toán (§22.9) | Hàng chờ xác nhận hiển thị **chứng từ** tenant gửi (ảnh / PDF, mã GD, ghi chú); xác nhận → kích hoạt gói + email; từ chối kèm lý do → tenant nhận email và thông báo |
-| Gói & Giá | Cấu hình chiết khấu chu kỳ năm (mặc định 15%), quy tắc proration khi nâng gói, VAT |
+| Gói & Giá | Hạn mức các gói phải đúng bảng §10 (nguồn duy nhất cho trang Đăng ký, Đổi gói, Gói & thanh toán); chiết khấu chu kỳ 6 / 12 tháng; quy tắc proration khi nâng gói; VAT (tắt cho tới khi có PL1) |
 | Kho hệ thống | Gói mẫu theo ngành gồm K/W/S/R + Mẫu Worker; dùng cùng danh mục mặc định Loại tài liệu / Loại bước / Thẻ; phát hành bản mới → tenant thấy "Có bản mới" |
 | Kết nối hệ thống | OAuth app cho kênh chat (Zalo OA, Facebook, WhatsApp Business) và Webchat widget dùng cho Chat Social |
 | Giá model | Nhãn phù hợp của model (Nhanh / Cân bằng / Suy luận sâu / Đọc ảnh / Ngữ cảnh dài) để tenant hiển thị ở Mô hình AI và Đổi model |
@@ -2362,6 +2372,9 @@ CREATE TABLE unit_moves (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), tenant_i
 | 2 | Chat Social | **Luôn có**, không tính hạn mức gói. Quyền xem / trả lời phân trong **Admin › Chat Social** theo từng kênh (§24.17); quyền bổ sung hiện ở Chi tiết người dùng |
 | 3 | Nhân sự & Worker (Workspace) | **Bỏ hẳn** — không có màn, không có số liệu riêng; board đã xoá khỏi thiết kế |
 | 4 | Hạn link | **Link lời mời** và **link đặt mật khẩu do Admin gửi**: 72 giờ, dùng một lần. **Link «Quên mật khẩu» người dùng tự yêu cầu**: 30 phút, dùng một lần. Hai loại link khác nhau, áp như nhau ở mọi màn |
+| 5 | Chế độ Orchestrator | **Luôn trình kế hoạch** trước khi giao; không có tự giao dưới ngưỡng. Mọi lệnh đều qua màn Kế hoạch để người ra lệnh duyệt (Workspace §21.3) |
+| 6 | Hạn mức gói | Một nguồn duy nhất: bảng §10 (Starter / Standard / Business / Enterprise). Console › Gói & Giá, trang Đăng ký và modal Đổi gói hiển thị đúng bảng này; không có gói "Pro". Giá tiền để `[GIÁ]` cho tới khi nhập trên Console |
+| 7 | Rule kiểm bằng mã | Bắt buộc khai báo **Điều kiện kiểm** (`hardCheck`) khi chọn thực thi bằng mã (§24.18) |
 
 ### 24.17 Chat Social — quản trị (board 146, 147, 148)
 
@@ -2385,6 +2398,33 @@ Mục menu **KẾT NỐI › Chat Social**. Workspace: tài liệu Workspace §2
 - Tin Worker gửi vẫn theo Rule và **Quy tắc duyệt** (vd. gửi tin hàng loạt phải duyệt).
 - Giai đoạn: **GĐ 2** (Webchat, Zalo OA, Facebook). WhatsApp Business bật khi Meta duyệt xong số và ứng dụng. Webhook nhận tin của từng kênh là endpoint công khai: kiểm chữ ký của nền tảng, giới hạn tốc độ; Webchat có chống spam (giới hạn theo IP và phiên, captcha khi bất thường).
 
+### 24.18 Điều kiện kiểm bằng mã (`hardCheck`) cho Rule (board 128, 149)
+
+Rule có `enforcement: hard` (§8.3) được hệ thống kiểm **bằng code trước khi** Worker thực hiện hành động ra ngoài, không dựa vào việc Worker tuân lời trong prompt. Một câu Rule viết bằng lời không tự thành phép kiểm, nên form Rule (Tạo mục Kho › Rule và Thêm Rule của Orchestrator) có thêm khối **"Điều kiện kiểm bằng mã"**, chỉ hiện khi chọn thực thi **Bằng mã**:
+
+| Ô | Ý nghĩa | Ví dụ |
+|---|---|---|
+| Áp cho hành động | Loại hành động bị kiểm | Gửi email ra ngoài · Gửi tin nhắn / ZNS · Đăng bài · Ghi dữ liệu kế toán · Ghi ra hệ thống ngoài · Chi phí tác vụ |
+| Điều kiện vi phạm (thoả tất cả) | Danh sách *trường – so sánh – giá trị*, thêm / xoá dòng | Số tiền bút toán **lớn hơn** 50.000.000 · Thời điểm gửi **ngoài khung** 08:00–18:00 T2–T7 · Domain người nhận **không thuộc** abc.vn |
+| Khi vi phạm | Hệ thống làm gì | Chặn hẳn · Chặn và chuyển Chờ duyệt · Xếp lịch lại · Chuyển hỏi lại · Chỉ cảnh báo |
+| Thông báo | Câu báo cho Worker / người dùng | "Bút toán trên 50 triệu cần Kế toán trưởng duyệt trước khi ghi sổ" |
+| Thử điều kiện | Nhập một ví dụ để xem kết quả trước khi lưu | "Bút toán 72.000.000đ, chưa duyệt" → ✖ vi phạm |
+
+- **Trường chỉ chọn từ danh mục hệ thống đọc được** (domain / số người nhận, số tiền, tài khoản kế toán, thời điểm, kênh, credit tác vụ, trạng thái duyệt…), không gõ tự do — code chỉ kiểm được dữ liệu nó có.
+- Không lưu được Rule "bằng mã" khi chưa có ít nhất một điều kiện. Chọn **AI đánh giá** / **Trong prompt** thì không cần khối này.
+- Lưu trong nội dung phiên bản Rule ở Kho (`library_versions.content.hardCheck`, §7.4), cả với Rule toàn công ty của Orchestrator (gắn qua `policy_rules`), để `hardCheck` có phiên bản và được kiểm khi phát hành. Action Gate (§9.5.4 bước 3) đọc `hardCheck` để kiểm trước mỗi hành động thuộc loại đã khai báo; mỗi lần vi phạm ghi `run_steps` và nhật ký kèm điều kiện vi phạm.
+- **Năm cách xử lý khi vi phạm** (`onViolation`): *Chặn hẳn* (`deny`) · *Chặn và chuyển Chờ duyệt* (`approval`, gộp vào một yêu cầu duyệt theo §24.5) · *Xếp lịch lại* (`reschedule`: hoãn hành động tới đầu khung giờ hợp lệ kế tiếp; chỉ dùng được khi có điều kiện thời điểm và hành động gửi ra ngoài) · *Chuyển hỏi lại* (`ask`: run dừng ở «Vướng — Thiếu thông tin đầu vào», hỏi người ra lệnh hoặc người giao việc) · *Chỉ cảnh báo* (`warn`: vẫn làm, ghi cảnh báo, báo người phụ trách Worker).
+
+### 24.19 Dữ liệu mẫu trong thiết kế (đã rà và sửa 03/11/2026)
+
+| Chỗ | Sửa |
+|---|---|
+| Hạn mức gói | Console › Gói & Giá sửa theo §10 (Starter 200 MB; Business 25 Worker, 20 đơn vị, 30 hộp thư). Modal Đổi gói bỏ gói "Pro", dùng Starter / Standard / Business. Màn quá hạn ghi "Gói Standard". Số tiền để `[GIÁ]` / `[SỐ TIỀN]` |
+| Số Worker của tenant mẫu | Tenant ABC (gói Standard) có **7 Worker** + Orchestrator: Rule toàn công ty áp cho "7 / 7 Worker"; Sơ đồ Người dùng ↔ Worker liệt kê đúng 7 Worker và người phụ trách |
+| Mức quan hệ | Ngô Thanh Mai (Kinh doanh – CN Hà Nội) chỉ **Trực tiếp** với Sales Agent, Lead Agent; Social Agent (Marketing) là **Qua yêu cầu** |
+| Gợi ý lệnh Orchestrator | Chỉ gợi ý việc mà Worker hiện có làm được (bỏ "Tuyển dụng", "Lọc CV") |
+| Tenant mẫu ở Console | Dùng tên hư cấu, không dùng tên doanh nghiệp thật |
+
 ---
 
 ## 25. Quyết định 03/11/2026 (v2.1)
@@ -2407,9 +2447,11 @@ Mục menu **KẾT NỐI › Chat Social**. Workspace: tài liệu Workspace §2
 | **M10** | Tài liệu Mật và model | Quyền dùng tài liệu Mật **chỉ thuộc về Worker** (theo công việc, §15); model — chính, dự phòng hay khoá riêng — chỉ là phần thực thi, không vượt được quyền hay Rule của Worker. Bỏ cờ «Mật qua khoá riêng» | §24.9, §15 |
 | **M11** | Chat nội bộ giữa nhân sự | **GĐ 3** | §25.4 |
 | **M12** | Phiên bản cấu hình Worker | Mỗi run ghi `config_version` và dùng đúng bản đó tới hết run | §9.5.2, §7.7 |
+| **M13** | Rule kiểm bằng mã | Khối **Điều kiện kiểm bằng mã** (`hardCheck`): hành động, điều kiện «thoả tất cả», **năm cách xử lý khi vi phạm** (chặn · chuyển duyệt · xếp lịch lại · hỏi lại · cảnh báo), câu thông báo, nút Thử | §24.18, §9.5.4 |
+| **M14** | Gói và chu kỳ | Hạn mức gói một nguồn duy nhất (§10: Starter / Standard / Business / Enterprise, không có «Pro»); chu kỳ **1 / 6 / 12 tháng**; Orchestrator **luôn trình kế hoạch**, không có tự giao | §10, §24.12, §24.4 |
 | **R1** | Bản demo | Xây mới, không dùng lại mã, không di trú dữ liệu; tài liệu không mô tả lại bản demo | §2 |
 | **CH** | Chuỗi công việc | Việc kế tiếp tự bắt đầu khi việc trước **xong phần thực hiện** (hoặc tới giờ bắt đầu đã hẹn); không dừng chờ nghiệm thu từng bước trừ khi người dựng chuỗi đặt điểm kiểm tra; bước vướng hiện rõ trên chuỗi, xử lý xong tự chạy tiếp | §9.5.11, Workspace §8.7 |
-| — | Đồng nhất nhỏ | Link mời và link đặt mật khẩu do Admin gửi: **72 giờ**; link «Quên mật khẩu»: **30 phút**. Một quy tắc mật khẩu cho mọi màn (§6.2). Quyền của `viewer` theo Workspace §12.3. Chu kỳ thuê bao chỉ **tháng / năm** | §6, §24.16, Workspace §21.9 |
+| — | Đồng nhất nhỏ | Link mời và link đặt mật khẩu do Admin gửi: **72 giờ**; link «Quên mật khẩu»: **30 phút**. Một quy tắc mật khẩu cho mọi màn (§6.2). Quyền của `viewer` theo Workspace §12.3. Chu kỳ thuê bao **1 / 6 / 12 tháng**, chiết khấu cấu hình ở Console (chốt bổ sung 03/11, thay cho «tháng / năm») | §6, §24.16, Workspace §21.9 |
 
 ### 25.2 Telegram Bot (GĐ 1b)
 
@@ -2484,6 +2526,7 @@ Mục «Nhân sự nội bộ» trong modal «Hội thoại mới» (Workspace �
 | Chat nội bộ giữa nhân sự | 3 |
 | Bản di động (Hôm nay, Chat, Nghiệm thu) | Theo màn tương ứng, từ 1b |
 
+
 ---
 
-*Tài liệu v2.1 — gộp v2.0 (thiết kế giao diện) và v1.4 (review kỹ thuật), áp quyết định 03/11/2026. Bước tiếp theo: lập kế hoạch triển khai chi tiết cho GĐ 0a.*
+*Tài liệu v2.2 — v2.1 (gộp v2.0 và v1.4, áp quyết định 03/11/2026) cộng các cập nhật của bạn ngày 03/11 (§24.18, §24.19, M13, M14). Kế hoạch triển khai: `docs/IMPLEMENTATION_PLAN.md`.*
